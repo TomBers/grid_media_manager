@@ -1,0 +1,285 @@
+{
+  "assets": [
+    {
+      "title": "What is the collective subconscious?",
+      "kind": "grid_card",
+      "url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/share-card.svg?v=1782312672&sv=17",
+      "mime_type": "image/svg+xml",
+      "recommended_platforms": [
+        "x",
+        "linkedin",
+        "substack",
+        "bluesky"
+      ]
+    },
+    {
+      "title": "Highlighted quote",
+      "text": "collective unconscious is an inherited structure",
+      "kind": "highlight_card",
+      "url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/121/share-card.svg?v=1778840827&sv=17",
+      "node_id": "9",
+      "mime_type": "image/svg+xml",
+      "recommended_platforms": [
+        "instagram",
+        "linkedin",
+        "x",
+        "bluesky"
+      ],
+      "highlight_id": 121
+    },
+    {
+      "title": "Highlighted quote",
+      "text": "conscious ego does not identify in itself.",
+      "kind": "highlight_card",
+      "url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/120/share-card.svg?v=1778842295&sv=17",
+      "node_id": "5",
+      "mime_type": "image/svg+xml",
+      "recommended_platforms": [
+        "instagram",
+        "linkedin",
+        "x",
+        "bluesky"
+      ],
+      "highlight_id": 120
+    },
+    {
+      "title": "Highlighted quote",
+      "text": "socialization",
+      "kind": "highlight_card",
+      "url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/119/share-card.svg?v=1778056945&sv=17",
+      "node_id": "5",
+      "mime_type": "image/svg+xml",
+      "recommended_platforms": [
+        "instagram",
+        "linkedin",
+        "x",
+        "bluesky"
+      ],
+      "highlight_id": 119
+    },
+    {
+      "title": "Highlighted quote",
+      "text": "unconscious aspect of the personality",
+      "kind": "highlight_card",
+      "url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/117/share-card.svg?v=1778056404&sv=17",
+      "node_id": "5",
+      "mime_type": "image/svg+xml",
+      "recommended_platforms": [
+        "instagram",
+        "linkedin",
+        "x",
+        "bluesky"
+      ],
+      "highlight_id": 117
+    },
+    {
+      "title": "Highlighted quote",
+      "text": "psychological reality",
+      "kind": "highlight_card",
+      "url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/116/share-card.svg?v=1778056341&sv=17",
+      "node_id": "5",
+      "mime_type": "image/svg+xml",
+      "recommended_platforms": [
+        "instagram",
+        "linkedin",
+        "x",
+        "bluesky"
+      ],
+      "highlight_id": 116
+    },
+    {
+      "title": "Highlighted quote",
+      "text": "collective unconscious",
+      "kind": "highlight_card",
+      "url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/115/share-card.svg?v=1775636951&sv=17",
+      "node_id": "7",
+      "mime_type": "image/svg+xml",
+      "recommended_platforms": [
+        "instagram",
+        "linkedin",
+        "x",
+        "bluesky"
+      ],
+      "highlight_id": 115
+    }
+  ],
+  "grid": {
+    "title": "What is the collective subconscious?",
+    "url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a",
+    "tags": [
+      "Psychology",
+      "Philosophy",
+      "Metaphysics",
+      "Consciousness"
+    ],
+    "node_count": 14,
+    "slug": "what-is-the-collective-subconscious-637e9a",
+    "inserted_at": "2026-04-08T08:20:34Z",
+    "updated_at": "2026-06-24T14:51:12Z",
+    "graph_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/graph"
+  },
+  "posts": [],
+  "raw": {
+    "follow_up_questions": [],
+    "highlights": [
+      {
+        "id": 121,
+        "text": "collective unconscious is an inherited structure",
+        "node_id": "9",
+        "note": "This was done to you what has been done",
+        "share_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a?node=9&highlight=121",
+        "image_svg_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/121/share-card.svg?v=1778840827&sv=17"
+      },
+      {
+        "id": 120,
+        "text": "conscious ego does not identify in itself.",
+        "node_id": "5",
+        "note": "ffdsdfsdfds",
+        "share_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a?node=5&highlight=120",
+        "image_svg_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/120/share-card.svg?v=1778842295&sv=17"
+      },
+      {
+        "id": 119,
+        "text": "socialization",
+        "node_id": "5",
+        "note": null,
+        "share_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a?node=5&highlight=119",
+        "image_svg_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/119/share-card.svg?v=1778056945&sv=17"
+      },
+      {
+        "id": 117,
+        "text": "unconscious aspect of the personality",
+        "node_id": "5",
+        "note": null,
+        "share_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a?node=5&highlight=117",
+        "image_svg_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/117/share-card.svg?v=1778056404&sv=17"
+      },
+      {
+        "id": 116,
+        "text": "psychological reality",
+        "node_id": "5",
+        "note": null,
+        "share_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a?node=5&highlight=116",
+        "image_svg_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/116/share-card.svg?v=1778056341&sv=17"
+      },
+      {
+        "id": 115,
+        "text": "collective unconscious",
+        "node_id": "7",
+        "note": null,
+        "share_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a?node=7&highlight=115",
+        "image_svg_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/115/share-card.svg?v=1775636951&sv=17"
+      },
+      {
+        "id": 114,
+        "text": "To what extent can modern genetics and \"epigenetic memory\" provide a physical mechanism for the transmission of Jungian archetypes?",
+        "node_id": "2",
+        "note": null,
+        "share_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a?node=2&highlight=114",
+        "image_svg_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/114/share-card.svg?v=1775636764&sv=17"
+      },
+      {
+        "id": 113,
+        "text": "Shadow",
+        "node_id": "2",
+        "note": null,
+        "share_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a?node=2&highlight=113",
+        "image_svg_url": "http://localhost:4000/g/what-is-the-collective-subconscious-637e9a/highlights/113/share-card.svg?v=1775636452&sv=17"
+      }
+    ],
+    "first_answer": {
+      "id": "9",
+      "title": "The Architecture of the Ancestral Mind: The Collective Unconscious",
+      "class": "answer",
+      "content": "# The Architecture of the Ancestral Mind: The Collective Unconscious\n\nImagine that your mind is not a blank slate written upon only by your life experiences, but rather a library containing books written by ancestors you never met. Carl Jung, the Swiss psychiatrist who founded analytical psychology, proposed that beneath our personal memories lies a deeper, universal layer of the psyche: the **collective unconscious**.\n\n## The Shared Blueprint of Humanity\n\nWhile the **personal unconscious** consists of forgotten or repressed individual experiences, the collective unconscious is an inherited structure. Jung argued that just as the human body has a common morphology—two arms, a heart, a brain—the human psyche possesses a common evolutionary framework.\n\n\u003E \"The collective unconscious is a part of the psyche which can be negatively distinguished from a personal unconscious by the fact that it does not, like the latter, owe its existence to personal experience and consequently is not a personal acquisition.\"\n\u003E — Carl Jung, [*The Archetypes and the Collective Unconscious*](https://archive.org/details/collectedworksof91cgju)\n\nTo visualize this, consider a series of islands in the ocean. To an observer on the surface, each island appears isolated. However, if one drains the water, it becomes clear that every island sits upon the same seafloor. The islands are our individual egos; the seafloor is the collective unconscious.\n\n## Archetypes: The Primordial Patterns\n\nThe contents of this shared layer are known as **archetypes**. These are not inherited ideas, but rather inherited *possibilities* of representation. They function like psychic \"blueprints\" or \"instincts of the imagination\" that organize how we perceive the world. Common archetypes include:\n\n- **The Hero:** The universal drive to overcome obstacles and achieve self-actualization.\n- **The Shadow:** The hidden, darker side of the personality containing repressed traits.\n- **The Great Mother:** The dual symbol of both nourishment and destruction.\n\nThese patterns explain why strikingly similar myths, symbols, and religious motifs appear in cultures that had no historical contact with one another.\n\n## Competing Frameworks and Modern Critiques\n\nThe concept of the collective unconscious remains a point of significant debate between different schools of thought:\n\n1.  **Psychoanalytic Divide:** Sigmund Freud viewed the unconscious as strictly personal and pathological. In contrast, Jung saw the collective unconscious as a source of wisdom and [psychic health](https://www.britannica.com/science/analytical-psychology).\n2.  **Evolutionary Psychology:** Modern scientists often reframe Jung’s \"archetypes\" as evolved cognitive modules or \"hardwired\" biological predispositions. Where Jung saw mystical symbols, evolutionary biologists see survival strategies encoded in our DNA.\n3.  **Sociological Perspective:** Some critics argue that \"universal\" symbols are actually the result of cultural diffusion or shared environmental pressures rather than an inherited psychic structure.\n\n## Questions for Further Exploration\n\nIf we accept the existence of a collective unconscious, we must ask: In an era of digital connectivity, is humanity developing a new, \"technological\" collective unconscious? Furthermore, if our psyche is shaped by ancestral experiences, to what extent are we truly the authors of our own thoughts?",
+      "excerpt": "The Architecture of the Ancestral Mind: The Collective Unconscious Imagine that your mind is not a blank slate written upon only by your life experiences, but rather a library containing books written by ancestors you never met. Carl Jung, the Swiss psychiatri..."
+    },
+    "origin_question": "What is the collective subconscious?",
+    "key_nodes": [
+      {
+        "id": "1",
+        "title": "What is the collective subconscious?",
+        "class": "origin",
+        "excerpt": "What is the collective subconscious?",
+        "sort_class": 0
+      },
+      {
+        "id": "35",
+        "title": "Comment",
+        "class": "user",
+        "excerpt": "Comment",
+        "sort_class": 1
+      },
+      {
+        "id": "4",
+        "title": "Please explain: Shadow",
+        "class": "question",
+        "excerpt": "Please explain: Shadow",
+        "sort_class": 1
+      },
+      {
+        "id": "6",
+        "title": "Please explain: To what extent can modern genetics and \"epigenetic memory\" provide a physical me...",
+        "class": "question",
+        "excerpt": "Please explain: To what extent can modern genetics and \"epigenetic memory\" provide a physical mechanism for the transmission of Jungian archetypes?",
+        "sort_class": 1
+      },
+      {
+        "id": "8",
+        "title": "Please explain: collective unconscious",
+        "class": "question",
+        "excerpt": "Please explain: collective unconscious",
+        "sort_class": 1
+      },
+      {
+        "id": "32",
+        "title": "The Architects of the Social Self",
+        "class": "says_who",
+        "excerpt": "The Architects of the Social Self Imagine a child raised entirely in isolation, away from human speech, touch, or culture. Would they still \"act human\"? History shows us they wouldn't. This transformation from a biological infant into a social being is called ...",
+        "sort_class": 1
+      },
+      {
+        "id": "9",
+        "title": "The Architecture of the Ancestral Mind: The Collective Unconscious",
+        "class": "answer",
+        "excerpt": "The Architecture of the Ancestral Mind: The Collective Unconscious Imagine that your mind is not a blank slate written upon only by your life experiences, but rather a library containing books written by ancestors you never met. Carl Jung, the Swiss psychiatri...",
+        "sort_class": 1
+      },
+      {
+        "id": "5",
+        "title": "The Architecture of the Shadow: Unmasking the Hidden Self",
+        "class": "answer",
+        "excerpt": "The Architecture of the Shadow: Unmasking the Hidden Self Imagine that you are followed by a silent twin who embodies every impulse, desire, and trait you have spent your life trying to hide. This is not a ghost, but a psychological reality. Most of us believe...",
+        "sort_class": 1
+      },
+      {
+        "id": "7",
+        "title": "The Biological Bridge: Epigenetics and the Collective Unconscious",
+        "class": "answer",
+        "excerpt": "The Biological Bridge: Epigenetics and the Collective Unconscious Imagine inheriting not just your grandfather’s eye color, but his visceral, unexplained terror of the deep ocean or his instinctive reverence for the \"Wise Old Man\" figure. For decades, Carl Jun...",
+        "sort_class": 1
+      },
+      {
+        "id": "34",
+        "title": "The Echoes in Our DNA: The Cascading Power of Archetypes",
+        "class": "second_order",
+        "excerpt": "The Echoes in Our DNA: The Cascading Power of Archetypes Imagine if your deepest fears and most heroic aspirations weren't actually yours, but were \"pre-installed\" software running on your brain's hardware. If the collective unconscious—a term coined by psychi...",
+        "sort_class": 1
+      },
+      {
+        "id": "29",
+        "title": "The Gravity of the Invisible: Why the Shadow is a Scientific Reality",
+        "class": "steel_man",
+        "excerpt": "The Gravity of the Invisible: Why the Shadow is a Scientific Reality If you have ever felt a sudden surge of \"irrational\" anger or found yourself repeating a self-destructive habit you thought you had conquered, you have felt the weight of a psychological real...",
+        "sort_class": 1
+      },
+      {
+        "id": "33",
+        "title": "The Invisible Scaffolding of the Self",
+        "class": "assumptions",
+        "excerpt": "The Invisible Scaffolding of the Self Imagine waking up in a room with no windows, no mirrors, and no memory of ever having seen another human being. In this total isolation, would you have a sense of \"I\"? The claim that the conscious ego does not identify in ...",
+        "sort_class": 1
+      }
+    ]
+  }
+}
