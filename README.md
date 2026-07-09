@@ -92,10 +92,11 @@ Generated SVG asset routes:
 
 ```text
 GET /campaigns/:id/share-card.svg
+GET /campaigns/:id/nodes/:node_id/share-card.svg
 GET /campaigns/:id/highlights/:highlight_id/share-card.svg
 ```
 
-When the RationalGrid payload does not provide legacy `assets`, the importer creates local generated assets from the campaign title and content highlights.
+When the RationalGrid payload does not provide legacy `assets`, the importer creates local generated assets from the campaign title and content highlights. Key-node cards are generated on demand from the Share Studio key-node panel.
 
 ## Start the Phoenix server
 

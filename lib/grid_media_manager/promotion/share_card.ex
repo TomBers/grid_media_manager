@@ -50,6 +50,17 @@ defmodule GridMediaManager.Promotion.ShareCard do
     "/campaigns/#{id}/highlights/#{highlight_id}/share-card.svg"
   end
 
+  def node_image_path(%Campaign{id: id}, node_id) do
+    encoded_node_id = URI.encode(to_string(node_id), &URI.char_unreserved?/1)
+    "/campaigns/#{id}/nodes/#{encoded_node_id}/share-card.svg"
+  end
+
+  def find_key_node(%Campaign{} = campaign, node_id) do
+    campaign.raw_payload
+    |> MediaPayload.key_nodes()
+    |> Enum.find(fn node -> to_string(get(node, "id")) == to_string(node_id) end)
+  end
+
   def find_highlight(%Campaign{} = campaign, highlight_id) do
     with {:ok, parsed_id} <- parse_integer(highlight_id) do
       campaign.raw_payload
@@ -118,6 +129,90 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <text fill="#111827" font-size="#{title_layout.font_size}" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="-0.55" paint-order="stroke" stroke="#ffffff" stroke-width="2" stroke-opacity="0.38">
         #{title_markup}
       </text>
+    </svg>
+    """
+  end
+
+  def node_image_svg(%Campaign{} = campaign, node) when is_map(node) do
+    node_title = node |> get("title") |> sanitize_text(260) |> fallback("Key node")
+
+    node_excerpt =
+      node
+      |> get("excerpt")
+      |> fallback(get(node, "content"))
+      |> sanitize_text(920)
+
+    node_class =
+      node |> get("class") |> sanitize_text(48) |> fallback("node") |> String.replace("_", " ")
+
+    layout = node_card_layout(node_title, node_excerpt)
+
+    title_markup =
+      layout.title_lines
+      |> Enum.with_index()
+      |> Enum.map_join("", fn {line, index} ->
+        y = layout.title_start_y + index * layout.title_line_gap
+        ~s(<tspan x="112" y="#{y}">#{escape_xml(line)}</tspan>)
+      end)
+
+    excerpt_markup =
+      layout.body_lines
+      |> Enum.with_index()
+      |> Enum.map_join("", fn {line, index} ->
+        y = layout.body_start_y + index * layout.body_line_gap
+        ~s(<tspan x="112" y="#{y}">#{escape_xml(line)}</tspan>)
+      end)
+
+    """
+    <svg xmlns="http://www.w3.org/2000/svg" width="#{@image_width}" height="#{@image_height}" viewBox="0 0 #{@image_width} #{@image_height}" role="img" aria-labelledby="title desc">
+      <title id="title">#{escape_xml(node_title)} · #{escape_xml(campaign.title)} · RationalGrid</title>
+      <desc id="desc">Key node card from #{escape_xml(campaign.title)} on RationalGrid</desc>
+      <defs>
+        <linearGradient id="nodeCanvas" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0f172a" />
+          <stop offset="46%" stop-color="#1e1b4b" />
+          <stop offset="100%" stop-color="#312e81" />
+        </linearGradient>
+        <radialGradient id="nodeViolet" cx="16%" cy="12%" r="72%">
+          <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.48" />
+          <stop offset="100%" stop-color="#a78bfa" stop-opacity="0" />
+        </radialGradient>
+        <radialGradient id="nodeSky" cx="88%" cy="16%" r="66%">
+          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.42" />
+          <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
+        </radialGradient>
+        <linearGradient id="nodeAccent" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#a78bfa" />
+          <stop offset="54%" stop-color="#38bdf8" />
+          <stop offset="100%" stop-color="#34d399" />
+        </linearGradient>
+        <filter id="nodeShadow" x="-8%" y="-10%" width="116%" height="124%">
+          <feDropShadow dx="0" dy="28" stdDeviation="24" flood-color="#000000" flood-opacity="0.34" />
+        </filter>
+      </defs>
+
+      <rect width="1200" height="630" fill="url(#nodeCanvas)" />
+      <rect width="1200" height="630" fill="url(#nodeViolet)" />
+      <rect width="1200" height="630" fill="url(#nodeSky)" />
+      <path d="M-44 470 C186 382 364 598 602 474 C790 376 966 408 1252 250" fill="none" stroke="#a78bfa" stroke-opacity="0.2" stroke-width="2" />
+      <path d="M-22 166 C198 246 318 38 552 150 C802 270 942 92 1224 122" fill="none" stroke="#38bdf8" stroke-opacity="0.18" stroke-width="2" />
+
+      <rect x="48" y="42" width="1104" height="546" rx="42" fill="#020617" fill-opacity="0.72" filter="url(#nodeShadow)" />
+      <rect x="48.5" y="42.5" width="1103" height="545" rx="41.5" fill="none" stroke="#ffffff" stroke-opacity="0.13" />
+      <rect x="76" y="70" width="1048" height="490" rx="30" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.12" />
+
+      <text x="112" y="118" fill="#e0f2fe" font-size="17" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0.35">RationalGrid.ai</text>
+      <text x="1088" y="118" text-anchor="end" fill="#c4b5fd" font-size="15" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="1.2" text-transform="uppercase">#{escape_xml(node_class)}</text>
+      <line x1="112" y1="144" x2="1088" y2="144" stroke="#ffffff" stroke-width="1" stroke-opacity="0.13" />
+      <rect x="112" y="516" width="344" height="6" rx="3" fill="url(#nodeAccent)" opacity="0.96" />
+
+      <text fill="#f8fafc" font-size="#{layout.title_font_size}" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="-0.5" paint-order="stroke" stroke="#020617" stroke-width="2.2" stroke-opacity="0.35">
+        #{title_markup}
+      </text>
+      <text fill="#cbd5e1" font-size="#{layout.body_font_size}" font-weight="500" font-family="#{@ui_font_family}" letter-spacing="0" opacity="0.92">
+        #{excerpt_markup}
+      </text>
+      <text x="112" y="548" fill="#94a3b8" font-size="16" font-weight="700" font-family="#{@ui_font_family}" letter-spacing="0.2">Key node from #{escape_xml(sanitize_text(campaign.title, 110))}</text>
     </svg>
     """
   end
@@ -256,6 +351,24 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end)
   end
 
+  def key_node_asset_attr(%Campaign{} = campaign, node) do
+    with node_id when is_binary(node_id) and node_id != "" <- node |> get("id") |> string_value(),
+         title when is_binary(title) and title != "" <- node |> get("title") |> sanitize_text(nil) do
+      %{
+        title: title,
+        kind: "key_node_card",
+        url: node_image_path(campaign, node_id),
+        mime_type: "image/svg+xml",
+        text: node |> get("excerpt") |> sanitize_text(nil) |> fallback(title),
+        node_id: node_id,
+        highlight_id: nil,
+        recommended_platforms: ["instagram", "linkedin", "x", "bluesky"]
+      }
+    else
+      _ -> nil
+    end
+  end
+
   defp highlight_asset_attr(%Campaign{} = campaign, highlight) do
     with highlight_id when not is_nil(highlight_id) <- parse_highlight_id(highlight),
          text when is_binary(text) and text != "" <- highlight_text(highlight) do
@@ -330,6 +443,100 @@ defmodule GridMediaManager.Promotion.ShareCard do
       start_y: quote_start_y(block_height, font_size),
       lines: lines
     }
+  end
+
+  defp node_card_layout(title, excerpt) do
+    title_text = sanitize_text(title, @max_svg_title_chars)
+    body_text = sanitize_text(excerpt, 920)
+    body_present? = body_text != "" and body_text != title_text
+
+    node_card_layout_candidates(title_text, body_text, body_present?)
+    |> Enum.max_by(&node_card_layout_score/1, fn -> nil end)
+    |> case do
+      nil -> fallback_node_card_layout(title_text, body_text, body_present?)
+      layout -> layout
+    end
+  end
+
+  defp node_card_layout_candidates(title_text, body_text, body_present?) do
+    for title_font <- [62, 58, 54, 50, 46, 42, 38, 34],
+        body_font <- [26, 24, 22, 20, 18],
+        reduce: [] do
+      acc ->
+        case build_node_card_layout(title_text, body_text, body_present?, title_font, body_font) do
+          nil -> acc
+          layout -> [layout | acc]
+        end
+    end
+  end
+
+  defp build_node_card_layout(title_text, body_text, body_present?, title_font, body_font) do
+    title_line_gap = round(title_font * 1.12)
+    title_lines = wrap_lines_by_width(title_text, 910 / title_font, 3)
+    title_start_y = 200
+    title_last_y = title_start_y + (length(title_lines) - 1) * title_line_gap
+    body_start_y = title_last_y + round(title_font * 0.82) + 28
+    body_line_gap = round(body_font * 1.42)
+    max_body_lines = max_body_lines(body_start_y, body_line_gap, body_present?)
+
+    cond do
+      title_last_y > 360 ->
+        nil
+
+      body_present? and max_body_lines < 3 ->
+        nil
+
+      true ->
+        body_lines =
+          if body_present? do
+            wrap_lines_by_width(body_text, 910 / body_font, max_body_lines)
+          else
+            []
+          end
+
+        %{
+          title_font_size: title_font,
+          title_line_gap: title_line_gap,
+          title_start_y: title_start_y,
+          title_lines: title_lines,
+          body_font_size: body_font,
+          body_line_gap: body_line_gap,
+          body_start_y: body_start_y,
+          body_lines: body_lines,
+          body_present?: body_present?
+        }
+    end
+  end
+
+  defp max_body_lines(_body_start_y, _body_line_gap, false), do: 0
+
+  defp max_body_lines(body_start_y, body_line_gap, true) do
+    max(div(494 - body_start_y, body_line_gap) + 1, 0)
+    |> min(8)
+  end
+
+  defp node_card_layout_score(layout) do
+    title_score = layout.title_font_size / 62
+    body_score = if layout.body_present?, do: layout.body_font_size / 26, else: 1
+    body_lines_score = if layout.body_present?, do: min(length(layout.body_lines), 8) / 8, else: 1
+    title_lines_penalty = max(length(layout.title_lines) - 2, 0) * 0.08
+
+    title_score * 0.38 + body_score * 0.2 + body_lines_score * 0.42 - title_lines_penalty
+  end
+
+  defp fallback_node_card_layout(title_text, body_text, body_present?) do
+    build_node_card_layout(title_text, body_text, body_present?, 34, 18) ||
+      %{
+        title_font_size: 34,
+        title_line_gap: 38,
+        title_start_y: 200,
+        title_lines: wrap_lines_by_width(title_text, 910 / 34, 3),
+        body_font_size: 18,
+        body_line_gap: 26,
+        body_start_y: 336,
+        body_lines: if(body_present?, do: wrap_lines_by_width(body_text, 910 / 18, 6), else: []),
+        body_present?: body_present?
+      }
   end
 
   defp grid_title_layout(text) do
@@ -548,6 +755,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
   rescue
     ArgumentError -> Map.get(map, key)
   end
+
+  defp fallback(nil, fallback), do: fallback
+  defp fallback("", fallback), do: fallback
+  defp fallback(value, _fallback), do: value
 
   defp string_value(nil), do: nil
   defp string_value(value) when is_binary(value), do: value

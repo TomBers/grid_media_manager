@@ -13,6 +13,36 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert response(conn, 200) =~ "RationalGrid.ai"
   end
 
+  test "serves a generated key-node share-card SVG", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    conn = get(conn, ~p"/campaigns/#{campaign.id}/nodes/2/share-card.svg")
+
+    assert response_content_type(conn, :svg) == "image/svg+xml; charset=utf-8"
+    assert response(conn, 200) =~ "What Can a Brave New World Teach Us?"
+    assert response(conn, 200) =~ "A dystopian lesson about comfort."
+    assert response(conn, 200) =~ "RationalGrid.ai"
+  end
+
+  test "keeps long key-node content inside the generated SVG text area", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(long_key_node_payload(), "long-node")
+
+    conn = get(conn, ~p"/campaigns/#{campaign.id}/nodes/long-node/share-card.svg")
+    svg = response(conn, 200)
+
+    assert response_content_type(conn, :svg) == "image/svg+xml; charset=utf-8"
+    assert svg =~ "…"
+
+    tspan_y_values =
+      ~r/<tspan x="112" y="(\d+)">/
+      |> Regex.scan(svg, capture: :all_but_first)
+      |> List.flatten()
+      |> Enum.map(&String.to_integer/1)
+
+    assert tspan_y_values != []
+    assert Enum.all?(tspan_y_values, &(&1 <= 494))
+  end
+
   test "serves a generated highlight share-card SVG", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
 
@@ -23,12 +53,62 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert response(conn, 200) =~ "RationalGrid.ai"
   end
 
+  test "returns 404 for a missing key-node card", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    conn = get(conn, ~p"/campaigns/#{campaign.id}/nodes/999/share-card.svg")
+
+    assert response(conn, 404) == "Key node not found"
+  end
+
   test "returns 404 for a missing highlight card", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
 
     conn = get(conn, ~p"/campaigns/#{campaign.id}/highlights/999/share-card.svg")
 
     assert response(conn, 404) == "Highlight not found"
+  end
+
+  defp long_key_node_payload do
+    title =
+      "The Extremely Detailed Social Mechanism by Which Comfort, Algorithmic Recommendation, Institutional Incentives, and Personal Fear Can Mutually Reinforce Each Other"
+
+    excerpt =
+      Enum.map_join(1..36, " ", fn index ->
+        "This is sentence #{index} explaining how a longer key node can contain enough nuanced argumentation to overflow a naive social card layout unless the card adapts its type size and line count."
+      end)
+
+    %{
+      "grid" => %{
+        "title" => "What can a brave new world teach us?",
+        "slug" => "what-can-a-brave-new-world-teach-us-1964bc",
+        "url" => "https://rationalgrid.com/g/what-can-a-brave-new-world-teach-us-1964bc",
+        "tags" => ["Dystopian Literature", "Social Philosophy"],
+        "node_count" => 5,
+        "inserted_at" => "2026-07-01T00:00:00Z",
+        "updated_at" => "2026-07-02T00:00:00Z"
+      },
+      "content" => %{
+        "origin_question" => "What can a brave new world teach us?",
+        "first_answer" => %{
+          "node_id" => "long-node",
+          "title" => title,
+          "content" => excerpt,
+          "excerpt" => excerpt
+        },
+        "follow_up_questions" => [],
+        "user_questions" => [],
+        "highlights" => [],
+        "key_nodes" => [
+          %{
+            "id" => "long-node",
+            "class" => "second_order",
+            "title" => title,
+            "excerpt" => excerpt
+          }
+        ]
+      }
+    }
   end
 
   defp simplified_payload do

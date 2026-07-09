@@ -29,7 +29,7 @@ defmodule GridMediaManager.Social.Templates do
       media_assets
       |> Enum.flat_map(fn asset ->
         platforms = asset_platforms(asset)
-        angle = if asset.text in [nil, ""], do: "visual", else: "highlight"
+        angle = asset_angle(asset)
 
         Enum.map(platforms, fn platform ->
           %{
@@ -49,6 +49,7 @@ defmodule GridMediaManager.Social.Templates do
   def angle_label("explainer"), do: "Explainer"
   def angle_label("discussion"), do: "Discussion prompt"
   def angle_label("highlight"), do: "Highlight-first"
+  def angle_label("key_node"), do: "Key node"
   def angle_label("visual"), do: "Visual asset"
 
   def angle_label(angle) when is_binary(angle) do
@@ -71,6 +72,26 @@ defmodule GridMediaManager.Social.Templates do
 
       _ ->
         "“#{quote}”\n\nA RationalGrid highlight from #{truncate(campaign.title, 84)}.\n#{link}"
+    end
+  end
+
+  def body(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "key_node") do
+    link = asset_link(campaign, asset)
+    node_title = asset.title |> fallback("Key node") |> truncate(120)
+    excerpt = asset.text |> fallback(campaign.title) |> truncate(platform_quote_limit(platform))
+
+    case platform do
+      "linkedin" ->
+        "Key node from #{campaign.title}: #{node_title}\n\n#{excerpt}\n\nExplore the full RationalGrid map:\n#{link}"
+
+      "instagram" ->
+        "Key node: #{node_title}\n\n#{excerpt}\n\nFrom the RationalGrid: #{campaign.title}\n\n#{hashtags(campaign)}"
+
+      "substack" ->
+        "A key node from #{campaign.title}:\n\n#{node_title}\n\n#{excerpt}\n\nThe full grid shows how this node connects to the surrounding argument.\n\n#{link}"
+
+      _ ->
+        "Key node from #{truncate(campaign.title, 88)}:\n#{node_title}\n\n#{link}"
     end
   end
 
@@ -145,13 +166,18 @@ defmodule GridMediaManager.Social.Templates do
     end
   end
 
+  defp asset_angle(%MediaAsset{kind: "key_node_card"}), do: "key_node"
+  defp asset_angle(%MediaAsset{text: text}) when text in [nil, ""], do: "visual"
+  defp asset_angle(%MediaAsset{}), do: "highlight"
+
   defp asset_platforms(%MediaAsset{recommended_platforms: platforms}) do
     platforms = Enum.filter(platforms || [], &(&1 in Platforms.ids()))
     if platforms == [], do: Platforms.ids(), else: platforms
   end
 
   defp asset_link(%Campaign{} = campaign, %MediaAsset{} = asset) do
-    highlight_link(campaign, asset) || campaign.grid_url || asset.url
+    highlight_link(campaign, asset) || node_link(campaign, asset) || campaign.grid_url ||
+      asset.url
   end
 
   defp highlight_link(%Campaign{} = campaign, %MediaAsset{highlight_id: highlight_id})
@@ -173,6 +199,14 @@ defmodule GridMediaManager.Social.Templates do
   end
 
   defp highlight_link(_campaign, _asset), do: nil
+
+  defp node_link(%Campaign{grid_url: grid_url}, %MediaAsset{node_id: node_id})
+       when is_binary(grid_url) and grid_url != "" and is_binary(node_id) and node_id != "" do
+    separator = if String.contains?(grid_url, "?"), do: "&", else: "?"
+    grid_url <> separator <> URI.encode_query(%{node: node_id})
+  end
+
+  defp node_link(_campaign, _asset), do: nil
 
   defp ensure_question(title) do
     title = String.trim(title || "")

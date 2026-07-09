@@ -12,6 +12,20 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
     |> send_resp(200, ShareCard.graph_image_svg(campaign))
   end
 
+  def node_card(conn, %{"id" => id, "node_id" => node_id}) do
+    campaign = Campaigns.get_campaign!(id)
+
+    case ShareCard.find_key_node(campaign, node_id) do
+      nil ->
+        send_resp(conn, 404, "Key node not found")
+
+      node ->
+        conn
+        |> put_svg_cache_headers()
+        |> send_resp(200, ShareCard.node_image_svg(campaign, node))
+    end
+  end
+
   def highlight_card(conn, %{"id" => id, "highlight_id" => highlight_id}) do
     campaign = Campaigns.get_campaign!(id)
 

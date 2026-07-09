@@ -29,6 +29,7 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
       |> assign(:follow_up_questions, Campaigns.follow_up_questions(campaign) |> Enum.take(6))
       |> assign(:user_questions, Campaigns.user_questions(campaign) |> Enum.take(6))
       |> assign(:highlights, Campaigns.highlights(campaign) |> Enum.take(8))
+      |> assign(:generated_key_node_ids, generated_key_node_ids(media_assets))
       |> assign(:asset_count, length(media_assets))
       |> assign(:draft_count, Campaigns.list_post_drafts(campaign) |> length())
       |> stream_configure(:post_drafts, dom_id: &"post-draft-#{&1.id}")
@@ -57,6 +58,29 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
      |> assign(:selected_asset_id, asset_id)
      |> assign(:selected_asset, selected_asset)
      |> refresh_drafts()}
+  end
+
+  def handle_event("generate_key_node_asset", %{"id" => node_id}, socket) do
+    case Campaigns.generate_key_node_asset(socket.assigns.campaign, node_id) do
+      {:ok, asset} ->
+        media_assets = Campaigns.list_media_assets(socket.assigns.campaign)
+        draft_count = Campaigns.list_post_drafts(socket.assigns.campaign) |> length()
+
+        {:noreply,
+         socket
+         |> assign(:asset_count, length(media_assets))
+         |> assign(:draft_count, draft_count)
+         |> assign(
+           :generated_key_node_ids,
+           MapSet.put(socket.assigns.generated_key_node_ids, to_string(asset.node_id))
+         )
+         |> stream_insert(:media_assets, asset)
+         |> refresh_drafts()
+         |> put_flash(:info, "Generated image card for #{asset.title}")}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Could not find that key node.")}
+    end
   end
 
   def handle_event("save_draft", %{"id" => id, "post_draft" => %{"body" => body}}, socket) do
@@ -260,17 +284,40 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                     :for={node <- @key_nodes}
                     class="rounded-2xl border border-base-content/10 bg-base-100 p-3"
                   >
-                    <div class="flex items-center justify-between gap-3">
-                      <p class="text-sm font-semibold text-base-content">
-                        {Map.get(node, "title")}
-                      </p>
-                      <span class="rounded-full bg-base-200 px-2 py-0.5 text-[0.68rem] font-medium uppercase tracking-wide text-base-content/50">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="min-w-0">
+                        <p class="text-sm font-semibold text-base-content">
+                          {Map.get(node, "title")}
+                        </p>
+                        <p class="mt-1 text-xs leading-5 text-base-content/55">
+                          {Map.get(node, "excerpt")}
+                        </p>
+                      </div>
+                      <span class="shrink-0 rounded-full bg-base-200 px-2 py-0.5 text-[0.68rem] font-medium uppercase tracking-wide text-base-content/50">
                         {Map.get(node, "class")}
                       </span>
                     </div>
-                    <p class="mt-1 text-xs leading-5 text-base-content/55">
-                      {Map.get(node, "excerpt")}
-                    </p>
+                    <div class="mt-3 flex justify-end">
+                      <button
+                        id={"generate-key-node-image-#{dom_id_part(key_node_id(node))}"}
+                        type="button"
+                        phx-click="generate_key_node_asset"
+                        phx-value-id={key_node_id(node)}
+                        disabled={generated_key_node?(@generated_key_node_ids, key_node_id(node))}
+                        class={
+                          generate_key_node_button_class(
+                            generated_key_node?(@generated_key_node_ids, key_node_id(node))
+                          )
+                        }
+                      >
+                        <.icon name="hero-photo" class="mr-1.5 size-3.5" />
+                        <%= if generated_key_node?(@generated_key_node_ids, key_node_id(node)) do %>
+                          Image generated
+                        <% else %>
+                          Generate image
+                        <% end %>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -551,6 +598,41 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
 
   defp asset_title(%PostDraft{media_asset: %MediaAsset{} = asset}), do: asset.title
   defp asset_title(_draft), do: "Campaign-level draft"
+
+  defp generated_key_node_ids(media_assets) do
+    media_assets
+    |> Enum.filter(&(&1.kind == "key_node_card"))
+    |> Enum.map(&to_string(&1.node_id))
+    |> MapSet.new()
+  end
+
+  defp key_node_id(node) when is_map(node) do
+    (Map.get(node, "id") || Map.get(node, :id) || "")
+    |> to_string()
+  end
+
+  defp generated_key_node?(generated_key_node_ids, node_id) do
+    MapSet.member?(generated_key_node_ids, to_string(node_id))
+  end
+
+  defp dom_id_part(value) do
+    value
+    |> to_string()
+    |> String.replace(~r/[^A-Za-z0-9_-]+/, "-")
+    |> String.trim("-")
+    |> case do
+      "" -> "unknown"
+      dom_id -> dom_id
+    end
+  end
+
+  defp generate_key_node_button_class(true) do
+    "inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-200"
+  end
+
+  defp generate_key_node_button_class(false) do
+    "inline-flex items-center rounded-full border border-base-content/15 px-3 py-1.5 text-xs font-semibold text-base-content/70 transition hover:-translate-y-0.5 hover:bg-base-200"
+  end
 
   defp asset_filter_class(active?) do
     [

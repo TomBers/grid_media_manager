@@ -83,6 +83,21 @@ defmodule GridMediaManager.Campaigns do
     update_post_draft(post_draft, %{status: "copied", copied_at: now})
   end
 
+  def generate_key_node_asset(%Campaign{} = campaign, node_id) do
+    campaign = get_campaign!(campaign.id)
+
+    with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
+         attrs when is_map(attrs) <- ShareCard.key_node_asset_attr(campaign, node) do
+      Repo.transaction(fn ->
+        asset = upsert_media_asset(campaign, attrs)
+        ensure_post_drafts(campaign, [asset])
+        asset
+      end)
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
   def origin_question(%Campaign{raw_payload: raw_payload}),
     do: MediaPayload.origin_question(raw_payload)
 
@@ -121,24 +136,27 @@ defmodule GridMediaManager.Campaigns do
 
     MediaAsset
     |> where([a], a.campaign_id == ^campaign.id)
+    |> where([a], a.kind != "key_node_card")
     |> maybe_where_stale_asset(incoming_urls)
     |> Repo.delete_all()
 
-    Enum.map(asset_attrs, fn attrs ->
-      attrs = Map.put(attrs, :campaign_id, campaign.id)
+    Enum.map(asset_attrs, &upsert_media_asset(campaign, &1))
+  end
 
-      case Repo.get_by(MediaAsset, campaign_id: campaign.id, url: attrs.url) do
-        nil ->
-          %MediaAsset{}
-          |> MediaAsset.changeset(attrs)
-          |> Repo.insert!()
+  defp upsert_media_asset(%Campaign{} = campaign, attrs) do
+    attrs = Map.put(attrs, :campaign_id, campaign.id)
 
-        %MediaAsset{} = media_asset ->
-          media_asset
-          |> MediaAsset.changeset(attrs)
-          |> Repo.update!()
-      end
-    end)
+    case Repo.get_by(MediaAsset, campaign_id: campaign.id, url: attrs.url) do
+      nil ->
+        %MediaAsset{}
+        |> MediaAsset.changeset(attrs)
+        |> Repo.insert!()
+
+      %MediaAsset{} = media_asset ->
+        media_asset
+        |> MediaAsset.changeset(attrs)
+        |> Repo.update!()
+    end
   end
 
   defp maybe_where_stale_asset(query, []), do: query

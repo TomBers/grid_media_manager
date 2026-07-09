@@ -27,8 +27,23 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     assert has_element?(view, "#follow-up-questions-section")
     assert has_element?(view, "#user-questions-section")
     assert has_element?(view, "#highlights-section")
+    assert has_element?(view, "#generate-key-node-image-1")
     assert has_element?(view, "#media-assets article")
     refute has_element?(view, "#empty-media-assets:only-child")
+  end
+
+  test "generates a key-node image from the key-node button", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}")
+
+    view
+    |> element("#generate-key-node-image-1")
+    |> render_click()
+
+    assets = Campaigns.list_media_assets(campaign)
+    assert Enum.any?(assets, &(&1.kind == "key_node_card" and &1.node_id == "1"))
+    assert has_element?(view, "#generate-key-node-image-1[disabled]")
   end
 
   test "saves edited draft copy", %{conn: conn} do

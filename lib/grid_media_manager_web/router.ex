@@ -19,6 +19,7 @@ defmodule GridMediaManagerWeb.Router do
 
     live "/", GridImportLive, :new
     get "/campaigns/:id/share-card.svg", PromotionAssetController, :grid_card
+    get "/campaigns/:id/nodes/:node_id/share-card.svg", PromotionAssetController, :node_card
 
     get "/campaigns/:id/highlights/:highlight_id/share-card.svg",
         PromotionAssetController,
