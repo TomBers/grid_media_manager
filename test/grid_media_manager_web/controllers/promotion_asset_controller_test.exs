@@ -2,6 +2,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
   use GridMediaManagerWeb.ConnCase
 
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Promotion.ShareCard
 
   test "serves a generated grid share-card SVG", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
@@ -13,6 +14,15 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert response(conn, 200) =~ "RationalGrid.ai"
   end
 
+  test "serves styled grid title card variants", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    conn = get(conn, ~p"/campaigns/#{campaign.id}/share-card.svg?style=gradient_poster")
+
+    assert response(conn, 200) =~ "#2e1065"
+    assert response(conn, 200) =~ "#f0abfc"
+  end
+
   test "serves a generated key-node share-card SVG", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
 
@@ -22,6 +32,15 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert response(conn, 200) =~ "What Can a Brave New World Teach Us?"
     assert response(conn, 200) =~ "A dystopian lesson about comfort."
     assert response(conn, 200) =~ "RationalGrid.ai"
+  end
+
+  test "serves styled key-node card variants", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    conn = get(conn, ~p"/campaigns/#{campaign.id}/nodes/2/share-card.svg?style=minimal_academic")
+
+    assert response(conn, 200) =~ "#f8fafc"
+    assert response(conn, 200) =~ "#0f172a"
   end
 
   test "keeps long key-node content inside the generated SVG text area", %{conn: conn} do
@@ -43,6 +62,33 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert Enum.all?(tspan_y_values, &(&1 <= 494))
   end
 
+  test "serves a generated question quote-card SVG", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+    question = "If a drug like soma existed today..."
+    question_id = ShareCard.question_id(question)
+
+    conn = get(conn, ~p"/campaigns/#{campaign.id}/questions/#{question_id}/share-card.svg")
+
+    assert response_content_type(conn, :svg) == "image/svg+xml; charset=utf-8"
+    assert response(conn, 200) =~ question
+    assert response(conn, 200) =~ "RationalGrid.ai"
+  end
+
+  test "serves styled question quote-card variants", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+    question = "If a drug like soma existed today..."
+    question_id = ShareCard.question_id(question)
+
+    conn =
+      get(
+        conn,
+        ~p"/campaigns/#{campaign.id}/questions/#{question_id}/share-card.svg?style=gradient_poster"
+      )
+
+    assert response(conn, 200) =~ "#2e1065"
+    assert response(conn, 200) =~ "#f0abfc"
+  end
+
   test "serves a generated highlight share-card SVG", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
 
@@ -59,6 +105,14 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     conn = get(conn, ~p"/campaigns/#{campaign.id}/nodes/999/share-card.svg")
 
     assert response(conn, 404) == "Key node not found"
+  end
+
+  test "returns 404 for a missing question quote card", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    conn = get(conn, ~p"/campaigns/#{campaign.id}/questions/missing-question/share-card.svg")
+
+    assert response(conn, 404) == "Question not found"
   end
 
   test "returns 404 for a missing highlight card", %{conn: conn} do

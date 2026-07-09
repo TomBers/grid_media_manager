@@ -8,6 +8,7 @@ defmodule GridMediaManager.RationalGrid.Client do
     * `RATIONAL_GRID_INDEX_PATH` - defaults to `/api/promotion/grids`
     * `RATIONAL_GRID_MEDIA_PATH_TEMPLATE` - defaults to `/api/promotion/grids/:slug`
     * `RATIONALGRID_PROMOTION_API_TOKEN` - optional bearer token for authenticated requests
+      (or `config :grid_media_manager, :rational_grid, promotion_api_token: ...`)
 
   Internal users may also paste a direct promotion endpoint URL, in which case it
   is fetched as-is.
@@ -57,9 +58,24 @@ defmodule GridMediaManager.RationalGrid.Client do
   end
 
   def request_headers do
-    case System.get_env(@promotion_api_token_env) |> string_value() do
+    case promotion_api_token() do
       nil -> []
       token -> [{"authorization", "Bearer #{token}"}]
+    end
+  end
+
+  def promotion_api_token do
+    System.get_env(@promotion_api_token_env)
+    |> string_value()
+    |> case do
+      nil ->
+        :grid_media_manager
+        |> Application.get_env(:rational_grid, [])
+        |> get_in([:promotion_api_token])
+        |> string_value()
+
+      token ->
+        token
     end
   end
 
@@ -149,8 +165,10 @@ defmodule GridMediaManager.RationalGrid.Client do
   defp decode_any_response(_response), do: {:error, :invalid_payload}
 
   defp normalize_grid_summary(grid) do
+    metadata = first_value(grid, ["metadata", :metadata]) || grid
+
     slug =
-      grid
+      metadata
       |> first_string(["graph_name", :graph_name, "slug", :slug, "name", :name, "id", :id])
       |> clean_slug()
 
@@ -159,13 +177,13 @@ defmodule GridMediaManager.RationalGrid.Client do
         id: slug,
         slug: slug,
         title:
-          first_string(grid, ["title", :title, "question", :question, "name", :name]) || slug,
-        url: first_string(grid, ["url", :url, "grid_url", :grid_url]),
-        graph_url: first_string(grid, ["graph_url", :graph_url]),
-        tags: string_list(first_value(grid, ["tags", :tags])),
-        node_count: integer_value(first_value(grid, ["node_count", :node_count])),
-        updated_at: first_string(grid, ["updated_at", :updated_at]),
-        inserted_at: first_string(grid, ["inserted_at", :inserted_at]),
+          first_string(metadata, ["title", :title, "question", :question, "name", :name]) || slug,
+        url: first_string(metadata, ["url", :url, "grid_url", :grid_url]),
+        graph_url: first_string(metadata, ["graph_url", :graph_url]),
+        tags: string_list(first_value(metadata, ["tags", :tags])),
+        node_count: integer_value(first_value(metadata, ["node_count", :node_count])),
+        updated_at: first_string(metadata, ["updated_at", :updated_at]),
+        inserted_at: first_string(metadata, ["inserted_at", :inserted_at]),
         source: slug
       }
     end

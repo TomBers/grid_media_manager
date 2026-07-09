@@ -4,6 +4,7 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Campaigns.PostDraft
+  alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Social.Templates
 
@@ -20,16 +21,21 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
       |> assign(:page_title, campaign.title)
       |> assign(:campaign, campaign)
       |> assign(:platforms, Platforms.all())
+      |> assign(:card_styles, ShareCard.styles())
+      |> assign(:selected_card_style, ShareCard.default_style())
       |> assign(:selected_platform, selected_platform)
       |> assign(:selected_asset_id, selected_asset_id)
       |> assign(:selected_asset, nil)
       |> assign(:origin_question, Campaigns.origin_question(campaign))
       |> assign(:key_nodes, Campaigns.key_nodes(campaign) |> Enum.take(8))
       |> assign(:first_answer_excerpt, Campaigns.first_answer_excerpt(campaign))
-      |> assign(:follow_up_questions, Campaigns.follow_up_questions(campaign) |> Enum.take(6))
-      |> assign(:user_questions, Campaigns.user_questions(campaign) |> Enum.take(6))
+      |> assign(:follow_up_questions, Campaigns.follow_up_questions(campaign))
+      |> assign(:user_questions, Campaigns.user_questions(campaign))
       |> assign(:highlights, Campaigns.highlights(campaign) |> Enum.take(8))
+      |> assign(:generated_grid_styles, generated_grid_styles(media_assets))
+      |> assign(:generated_highlight_ids, generated_highlight_ids(media_assets))
       |> assign(:generated_key_node_ids, generated_key_node_ids(media_assets))
+      |> assign(:generated_question_ids, generated_question_ids(media_assets))
       |> assign(:asset_count, length(media_assets))
       |> assign(:draft_count, Campaigns.list_post_drafts(campaign) |> length())
       |> stream_configure(:post_drafts, dom_id: &"post-draft-#{&1.id}")
@@ -50,6 +56,61 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
      |> refresh_drafts()}
   end
 
+  def handle_event("select_card_style", %{"style" => style}, socket) do
+    {:noreply, assign(socket, :selected_card_style, ShareCard.normalize_style(style))}
+  end
+
+  def handle_event("generate_grid_asset", %{"style" => style}, socket) do
+    style = ShareCard.normalize_style(style || socket.assigns.selected_card_style)
+
+    case Campaigns.generate_grid_asset(socket.assigns.campaign, style) do
+      {:ok, asset} ->
+        media_assets = Campaigns.list_media_assets(socket.assigns.campaign)
+        draft_count = Campaigns.list_post_drafts(socket.assigns.campaign) |> length()
+
+        {:noreply,
+         socket
+         |> assign(:asset_count, length(media_assets))
+         |> assign(:draft_count, draft_count)
+         |> assign(
+           :generated_grid_styles,
+           MapSet.put(socket.assigns.generated_grid_styles, style)
+         )
+         |> stream_insert(:media_assets, asset)
+         |> refresh_drafts()
+         |> put_flash(:info, "Generated title image card")}
+    end
+  end
+
+  def handle_event("generate_highlight_asset", %{"id" => highlight_id} = params, socket) do
+    style =
+      ShareCard.normalize_style(Map.get(params, "style") || socket.assigns.selected_card_style)
+
+    case Campaigns.generate_highlight_asset(socket.assigns.campaign, highlight_id, style) do
+      {:ok, asset} ->
+        media_assets = Campaigns.list_media_assets(socket.assigns.campaign)
+        draft_count = Campaigns.list_post_drafts(socket.assigns.campaign) |> length()
+
+        {:noreply,
+         socket
+         |> assign(:asset_count, length(media_assets))
+         |> assign(:draft_count, draft_count)
+         |> assign(
+           :generated_highlight_ids,
+           MapSet.put(
+             socket.assigns.generated_highlight_ids,
+             styled_source_key(asset.highlight_id, style)
+           )
+         )
+         |> stream_insert(:media_assets, asset)
+         |> refresh_drafts()
+         |> put_flash(:info, "Generated highlight image card")}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Could not find that highlight.")}
+    end
+  end
+
   def handle_event("select_asset", %{"id" => asset_id}, socket) do
     selected_asset = selected_asset(asset_id)
 
@@ -60,8 +121,40 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
      |> refresh_drafts()}
   end
 
-  def handle_event("generate_key_node_asset", %{"id" => node_id}, socket) do
-    case Campaigns.generate_key_node_asset(socket.assigns.campaign, node_id) do
+  def handle_event("generate_question_asset", %{"id" => question_id} = params, socket) do
+    style =
+      ShareCard.normalize_style(Map.get(params, "style") || socket.assigns.selected_card_style)
+
+    case Campaigns.generate_question_asset(socket.assigns.campaign, question_id, style) do
+      {:ok, asset} ->
+        media_assets = Campaigns.list_media_assets(socket.assigns.campaign)
+        draft_count = Campaigns.list_post_drafts(socket.assigns.campaign) |> length()
+
+        {:noreply,
+         socket
+         |> assign(:asset_count, length(media_assets))
+         |> assign(:draft_count, draft_count)
+         |> assign(
+           :generated_question_ids,
+           MapSet.put(
+             socket.assigns.generated_question_ids,
+             styled_source_key(question_id, style)
+           )
+         )
+         |> stream_insert(:media_assets, asset)
+         |> refresh_drafts()
+         |> put_flash(:info, "Generated question quote card")}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Could not find that question.")}
+    end
+  end
+
+  def handle_event("generate_key_node_asset", %{"id" => node_id} = params, socket) do
+    style =
+      ShareCard.normalize_style(Map.get(params, "style") || socket.assigns.selected_card_style)
+
+    case Campaigns.generate_key_node_asset(socket.assigns.campaign, node_id, style) do
       {:ok, asset} ->
         media_assets = Campaigns.list_media_assets(socket.assigns.campaign)
         draft_count = Campaigns.list_post_drafts(socket.assigns.campaign) |> length()
@@ -72,7 +165,10 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
          |> assign(:draft_count, draft_count)
          |> assign(
            :generated_key_node_ids,
-           MapSet.put(socket.assigns.generated_key_node_ids, to_string(asset.node_id))
+           MapSet.put(
+             socket.assigns.generated_key_node_ids,
+             styled_source_key(asset.node_id, style)
+           )
          )
          |> stream_insert(:media_assets, asset)
          |> refresh_drafts()
@@ -80,6 +176,27 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
 
       {:error, :not_found} ->
         {:noreply, put_flash(socket, :error, "Could not find that key node.")}
+    end
+  end
+
+  def handle_event("delete_media_asset", %{"id" => asset_id}, socket) do
+    case Campaigns.delete_generated_media_asset(asset_id) do
+      {:ok, asset} ->
+        media_assets = Campaigns.list_media_assets(socket.assigns.campaign)
+        draft_count = Campaigns.list_post_drafts(socket.assigns.campaign) |> length()
+        socket = maybe_clear_selected_asset(socket, asset)
+
+        {:noreply,
+         socket
+         |> assign(:asset_count, length(media_assets))
+         |> assign(:draft_count, draft_count)
+         |> assign_generated_asset_state(media_assets)
+         |> stream_delete(:media_assets, asset)
+         |> refresh_drafts()
+         |> put_flash(:info, "Deleted generated image")}
+
+      {:error, :not_generated} ->
+        {:noreply, put_flash(socket, :error, "Only generated images can be deleted.")}
     end
   end
 
@@ -169,6 +286,49 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                 </div>
               </div>
 
+              <div
+                id="card-style-picker"
+                class="rounded-3xl border border-base-content/10 bg-base-100 p-4"
+              >
+                <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">
+                  Card style
+                </h2>
+                <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    :for={style <- @card_styles}
+                    id={"card-style-#{style.id}"}
+                    type="button"
+                    phx-click="select_card_style"
+                    phx-value-style={style.id}
+                    class={card_style_button_class(@selected_card_style == style.id)}
+                  >
+                    <span class="block text-sm font-semibold">{style.label}</span>
+                    <span class="block text-[0.68rem] text-current/60">{style.description}</span>
+                  </button>
+                </div>
+                <div class="mt-4 flex justify-end">
+                  <button
+                    id="generate-title-image"
+                    type="button"
+                    phx-click="generate_grid_asset"
+                    phx-value-style={@selected_card_style}
+                    disabled={generated_grid?(@generated_grid_styles, @selected_card_style)}
+                    class={
+                      generate_grid_button_class(
+                        generated_grid?(@generated_grid_styles, @selected_card_style)
+                      )
+                    }
+                  >
+                    <.icon name="hero-photo" class="mr-1.5 size-3.5" />
+                    <%= if generated_grid?(@generated_grid_styles, @selected_card_style) do %>
+                      Title image generated
+                    <% else %>
+                      Generate title image
+                    <% end %>
+                  </button>
+                </div>
+              </div>
+
               <div class="space-y-3 rounded-3xl bg-base-200/50 p-4">
                 <a
                   id="grid-source-link"
@@ -222,12 +382,46 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                   Follow-up questions
                 </h2>
                 <div class="mt-3 space-y-2">
-                  <p
+                  <div
                     :for={question <- @follow_up_questions}
-                    class="rounded-2xl border border-base-content/10 bg-base-100 p-3 text-sm leading-6 text-base-content/70"
+                    class="rounded-2xl border border-base-content/10 bg-base-100 p-3"
                   >
-                    {question}
-                  </p>
+                    <p class="text-sm leading-6 text-base-content/70">
+                      {question}
+                    </p>
+                    <div class="mt-3 flex justify-end">
+                      <button
+                        id={"generate-question-quote-#{question_dom_id(question)}"}
+                        type="button"
+                        phx-click="generate_question_asset"
+                        phx-value-id={question_id(question)}
+                        phx-value-style={@selected_card_style}
+                        disabled={
+                          generated_question?(
+                            @generated_question_ids,
+                            question_id(question),
+                            @selected_card_style
+                          )
+                        }
+                        class={
+                          generate_question_button_class(
+                            generated_question?(
+                              @generated_question_ids,
+                              question_id(question),
+                              @selected_card_style
+                            )
+                          )
+                        }
+                      >
+                        <.icon name="hero-chat-bubble-left-right" class="mr-1.5 size-3.5" />
+                        <%= if generated_question?(@generated_question_ids, question_id(question), @selected_card_style) do %>
+                          Quote generated
+                        <% else %>
+                          Generate quote
+                        <% end %>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -241,14 +435,43 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                     class="rounded-2xl border border-base-content/10 bg-base-100 p-3"
                   >
                     <p class="text-sm leading-6 text-base-content/70">
-                      {Map.get(question, "question") || Map.get(question, :question)}
+                      {question_text(question)}
                     </p>
-                    <p
-                      :if={Map.get(question, "node_id") || Map.get(question, :node_id)}
-                      class="mt-1 text-xs text-base-content/45"
-                    >
-                      node {Map.get(question, "node_id") || Map.get(question, :node_id)}
+                    <p :if={question_node_id(question)} class="mt-1 text-xs text-base-content/45">
+                      node {question_node_id(question)}
                     </p>
+                    <div class="mt-3 flex justify-end">
+                      <button
+                        id={"generate-question-quote-#{question_dom_id(question)}"}
+                        type="button"
+                        phx-click="generate_question_asset"
+                        phx-value-id={question_id(question)}
+                        phx-value-style={@selected_card_style}
+                        disabled={
+                          generated_question?(
+                            @generated_question_ids,
+                            question_id(question),
+                            @selected_card_style
+                          )
+                        }
+                        class={
+                          generate_question_button_class(
+                            generated_question?(
+                              @generated_question_ids,
+                              question_id(question),
+                              @selected_card_style
+                            )
+                          )
+                        }
+                      >
+                        <.icon name="hero-chat-bubble-left-right" class="mr-1.5 size-3.5" />
+                        <%= if generated_question?(@generated_question_ids, question_id(question), @selected_card_style) do %>
+                          Quote generated
+                        <% else %>
+                          Generate quote
+                        <% end %>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -271,6 +494,38 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                     >
                       {Map.get(highlight, "note") || Map.get(highlight, :note)}
                     </p>
+                    <div class="mt-3 flex justify-end">
+                      <button
+                        id={"generate-highlight-image-#{highlight_id(highlight)}"}
+                        type="button"
+                        phx-click="generate_highlight_asset"
+                        phx-value-id={highlight_id(highlight)}
+                        phx-value-style={@selected_card_style}
+                        disabled={
+                          generated_highlight?(
+                            @generated_highlight_ids,
+                            highlight_id(highlight),
+                            @selected_card_style
+                          )
+                        }
+                        class={
+                          generate_highlight_button_class(
+                            generated_highlight?(
+                              @generated_highlight_ids,
+                              highlight_id(highlight),
+                              @selected_card_style
+                            )
+                          )
+                        }
+                      >
+                        <.icon name="hero-photo" class="mr-1.5 size-3.5" />
+                        <%= if generated_highlight?(@generated_highlight_ids, highlight_id(highlight), @selected_card_style) do %>
+                          Image generated
+                        <% else %>
+                          Generate image
+                        <% end %>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -303,15 +558,26 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                         type="button"
                         phx-click="generate_key_node_asset"
                         phx-value-id={key_node_id(node)}
-                        disabled={generated_key_node?(@generated_key_node_ids, key_node_id(node))}
+                        phx-value-style={@selected_card_style}
+                        disabled={
+                          generated_key_node?(
+                            @generated_key_node_ids,
+                            key_node_id(node),
+                            @selected_card_style
+                          )
+                        }
                         class={
                           generate_key_node_button_class(
-                            generated_key_node?(@generated_key_node_ids, key_node_id(node))
+                            generated_key_node?(
+                              @generated_key_node_ids,
+                              key_node_id(node),
+                              @selected_card_style
+                            )
                           )
                         }
                       >
                         <.icon name="hero-photo" class="mr-1.5 size-3.5" />
-                        <%= if generated_key_node?(@generated_key_node_ids, key_node_id(node)) do %>
+                        <%= if generated_key_node?(@generated_key_node_ids, key_node_id(node), @selected_card_style) do %>
                           Image generated
                         <% else %>
                           Generate image
@@ -391,7 +657,9 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                     <div class="flex items-start justify-between gap-3">
                       <div>
                         <p class="text-sm font-semibold text-base-content">{asset.title}</p>
-                        <p class="text-xs text-base-content/50">{asset.kind}</p>
+                        <p class="text-xs text-base-content/50">
+                          {asset.kind}<span :if={asset.style}> · {asset.style}</span>
+                        </p>
                       </div>
                       <span
                         :if={asset.highlight_id}
@@ -411,7 +679,7 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                         {platform}
                       </span>
                     </div>
-                    <div class="mt-3 flex gap-2">
+                    <div class="mt-3 flex flex-wrap gap-2">
                       <a
                         href={asset.url}
                         target="_blank"
@@ -429,6 +697,17 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                         class="inline-flex items-center rounded-full border border-base-content/15 px-3 py-1.5 text-xs font-semibold text-base-content/70 transition hover:-translate-y-0.5 hover:bg-base-200"
                       >
                         Copy URL
+                      </button>
+                      <button
+                        :if={generated_asset?(asset)}
+                        id={"delete-media-asset-#{asset.id}"}
+                        type="button"
+                        phx-click="delete_media_asset"
+                        phx-value-id={asset.id}
+                        data-confirm="Delete this generated image and its drafts?"
+                        class="inline-flex items-center rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:-translate-y-0.5 hover:bg-red-500/15 dark:text-red-200"
+                      >
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -579,6 +858,34 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     Campaigns.get_media_asset!(asset_id)
   end
 
+  defp maybe_clear_selected_asset(socket, %MediaAsset{id: id}) do
+    if socket.assigns.selected_asset_id == Integer.to_string(id) do
+      socket
+      |> assign(:selected_asset_id, "all")
+      |> assign(:selected_asset, nil)
+    else
+      socket
+    end
+  end
+
+  defp assign_generated_asset_state(socket, media_assets) do
+    socket
+    |> assign(:generated_grid_styles, generated_grid_styles(media_assets))
+    |> assign(:generated_highlight_ids, generated_highlight_ids(media_assets))
+    |> assign(:generated_key_node_ids, generated_key_node_ids(media_assets))
+    |> assign(:generated_question_ids, generated_question_ids(media_assets))
+  end
+
+  defp generated_asset?(%MediaAsset{source_type: source_type})
+       when is_binary(source_type) and source_type != "",
+       do: true
+
+  defp generated_asset?(%MediaAsset{url: url}) when is_binary(url) do
+    String.starts_with?(url, "/campaigns/")
+  end
+
+  defp generated_asset?(_asset), do: false
+
   defp draft_items(drafts), do: Enum.map(drafts, &draft_item/1)
 
   defp draft_item(%PostDraft{} = draft) do
@@ -599,11 +906,73 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
   defp asset_title(%PostDraft{media_asset: %MediaAsset{} = asset}), do: asset.title
   defp asset_title(_draft), do: "Campaign-level draft"
 
+  defp generated_grid_styles(media_assets) do
+    media_assets
+    |> Enum.filter(&(&1.kind == "grid_card" and &1.source_type == "grid"))
+    |> Enum.map(&ShareCard.normalize_style(&1.style))
+    |> MapSet.new()
+  end
+
+  defp generated_highlight_ids(media_assets) do
+    media_assets
+    |> Enum.filter(&(&1.kind == "highlight_card" and &1.source_type == "highlight"))
+    |> Enum.map(&styled_source_key(&1.highlight_id, &1.style))
+    |> MapSet.new()
+  end
+
   defp generated_key_node_ids(media_assets) do
     media_assets
     |> Enum.filter(&(&1.kind == "key_node_card"))
-    |> Enum.map(&to_string(&1.node_id))
+    |> Enum.map(&styled_source_key(&1.node_id, &1.style))
     |> MapSet.new()
+  end
+
+  defp generated_question_ids(media_assets) do
+    media_assets
+    |> Enum.filter(&(&1.kind == "question_quote_card"))
+    |> Enum.map(fn asset ->
+      styled_source_key(ShareCard.question_id(asset.text, asset.node_id), asset.style)
+    end)
+    |> MapSet.new()
+  end
+
+  defp highlight_id(highlight) when is_map(highlight) do
+    Map.get(highlight, "id") || Map.get(highlight, :id)
+  end
+
+  defp generated_grid?(generated_grid_styles, style) do
+    MapSet.member?(generated_grid_styles, ShareCard.normalize_style(style))
+  end
+
+  defp generated_highlight?(generated_highlight_ids, highlight_id, style) do
+    MapSet.member?(generated_highlight_ids, styled_source_key(highlight_id, style))
+  end
+
+  defp question_id(question) when is_binary(question), do: ShareCard.question_id(question)
+
+  defp question_id(question) when is_map(question) do
+    ShareCard.question_id(question_text(question), question_node_id(question))
+  end
+
+  defp question_dom_id(question), do: question |> question_id() |> dom_id_part()
+
+  defp question_text(question) when is_binary(question), do: question
+
+  defp question_text(question) when is_map(question) do
+    (Map.get(question, "question") || Map.get(question, :question) || "")
+    |> to_string()
+  end
+
+  defp question_node_id(question) when is_map(question) do
+    case Map.get(question, "node_id") || Map.get(question, :node_id) do
+      nil -> nil
+      "" -> nil
+      node_id -> to_string(node_id)
+    end
+  end
+
+  defp generated_question?(generated_question_ids, question_id, style) do
+    MapSet.member?(generated_question_ids, styled_source_key(question_id, style))
   end
 
   defp key_node_id(node) when is_map(node) do
@@ -611,8 +980,12 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     |> to_string()
   end
 
-  defp generated_key_node?(generated_key_node_ids, node_id) do
-    MapSet.member?(generated_key_node_ids, to_string(node_id))
+  defp generated_key_node?(generated_key_node_ids, node_id, style) do
+    MapSet.member?(generated_key_node_ids, styled_source_key(node_id, style))
+  end
+
+  defp styled_source_key(source_id, style) do
+    "#{source_id}|#{ShareCard.normalize_style(style)}"
   end
 
   defp dom_id_part(value) do
@@ -626,11 +999,45 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     end
   end
 
+  defp card_style_button_class(active?) do
+    [
+      "rounded-2xl px-3 py-2 text-left transition duration-200 hover:-translate-y-0.5",
+      if(active?,
+        do: "bg-base-content text-base-100 shadow-lg shadow-base-content/10",
+        else: "border border-base-content/10 bg-base-100 text-base-content/65 hover:bg-base-200"
+      )
+    ]
+  end
+
+  defp generate_grid_button_class(true) do
+    "inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-200"
+  end
+
+  defp generate_grid_button_class(false) do
+    "inline-flex items-center rounded-full border border-base-content/15 px-3 py-1.5 text-xs font-semibold text-base-content/70 transition hover:-translate-y-0.5 hover:bg-base-200"
+  end
+
+  defp generate_highlight_button_class(true) do
+    "inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-200"
+  end
+
+  defp generate_highlight_button_class(false) do
+    "inline-flex items-center rounded-full border border-base-content/15 px-3 py-1.5 text-xs font-semibold text-base-content/70 transition hover:-translate-y-0.5 hover:bg-base-200"
+  end
+
   defp generate_key_node_button_class(true) do
     "inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-200"
   end
 
   defp generate_key_node_button_class(false) do
+    "inline-flex items-center rounded-full border border-base-content/15 px-3 py-1.5 text-xs font-semibold text-base-content/70 transition hover:-translate-y-0.5 hover:bg-base-200"
+  end
+
+  defp generate_question_button_class(true) do
+    "inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-200"
+  end
+
+  defp generate_question_button_class(false) do
     "inline-flex items-center rounded-full border border-base-content/15 px-3 py-1.5 text-xs font-semibold text-base-content/70 transition hover:-translate-y-0.5 hover:bg-base-200"
   end
 

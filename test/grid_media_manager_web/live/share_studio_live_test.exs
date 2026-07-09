@@ -4,6 +4,7 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
   import Phoenix.LiveViewTest
 
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Promotion.ShareCard
 
   test "renders grid summary, media assets, and draft composer", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(sample_payload(), "res.json")
@@ -27,9 +28,69 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     assert has_element?(view, "#follow-up-questions-section")
     assert has_element?(view, "#user-questions-section")
     assert has_element?(view, "#highlights-section")
+    assert has_element?(view, "#generate-title-image")
+    assert has_element?(view, "#generate-highlight-image-123")
     assert has_element?(view, "#generate-key-node-image-1")
-    assert has_element?(view, "#media-assets article")
-    refute has_element?(view, "#empty-media-assets:only-child")
+    assert has_element?(view, "#empty-media-assets")
+    refute has_element?(view, "#media-assets article")
+  end
+
+  test "generates title and highlight images on demand", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}")
+
+    view
+    |> element("#generate-title-image")
+    |> render_click()
+
+    assert Campaigns.list_media_assets(campaign) |> Enum.any?(&(&1.kind == "grid_card"))
+    assert has_element?(view, "#generate-title-image[disabled]")
+
+    view
+    |> element("#generate-highlight-image-123")
+    |> render_click()
+
+    assert Campaigns.list_media_assets(campaign) |> Enum.any?(&(&1.kind == "highlight_card"))
+    assert has_element?(view, "#generate-highlight-image-123[disabled]")
+  end
+
+  test "deletes a generated image from the asset gallery", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}")
+
+    view
+    |> element("#generate-title-image")
+    |> render_click()
+
+    [asset] = Campaigns.list_media_assets(campaign) |> Enum.filter(&(&1.kind == "grid_card"))
+
+    assert has_element?(view, "#delete-media-asset-#{asset.id}")
+
+    view
+    |> element("#delete-media-asset-#{asset.id}")
+    |> render_click()
+
+    refute Campaigns.list_media_assets(campaign) |> Enum.any?(&(&1.id == asset.id))
+    refute has_element?(view, "#delete-media-asset-#{asset.id}")
+    assert has_element?(view, "#generate-title-image:not([disabled])")
+  end
+
+  test "generates a question quote image from an identified question", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}")
+
+    question_id = ShareCard.question_id("If a drug like soma existed today...")
+
+    view
+    |> element("#generate-question-quote-#{question_id}")
+    |> render_click()
+
+    assets = Campaigns.list_media_assets(campaign)
+    assert Enum.any?(assets, &(&1.kind == "question_quote_card"))
+    assert has_element?(view, "[id^='generate-question-quote-'][disabled]")
   end
 
   test "generates a key-node image from the key-node button", %{conn: conn} do

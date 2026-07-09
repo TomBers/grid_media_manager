@@ -50,6 +50,7 @@ defmodule GridMediaManager.Social.Templates do
   def angle_label("discussion"), do: "Discussion prompt"
   def angle_label("highlight"), do: "Highlight-first"
   def angle_label("key_node"), do: "Key node"
+  def angle_label("question_quote"), do: "Question quote"
   def angle_label("visual"), do: "Visual asset"
 
   def angle_label(angle) when is_binary(angle) do
@@ -72,6 +73,25 @@ defmodule GridMediaManager.Social.Templates do
 
       _ ->
         "“#{quote}”\n\nA RationalGrid highlight from #{truncate(campaign.title, 84)}.\n#{link}"
+    end
+  end
+
+  def body(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "question_quote") do
+    link = asset_link(campaign, asset)
+    question = asset.text |> fallback(campaign.title)
+
+    case platform do
+      "linkedin" ->
+        "#{question}\n\nA question surfaced from the RationalGrid: #{campaign.title}\n\nExplore the full map:\n#{link}"
+
+      "instagram" ->
+        "#{question}\n\nFrom the RationalGrid: #{campaign.title}\n\n#{hashtags(campaign)}"
+
+      "substack" ->
+        "A question worth exploring from #{campaign.title}:\n\n#{question}\n\nThe full grid shows the surrounding argument and related paths.\n\n#{link}"
+
+      _ ->
+        "#{question}\n\n#{link}"
     end
   end
 
@@ -167,6 +187,7 @@ defmodule GridMediaManager.Social.Templates do
   end
 
   defp asset_angle(%MediaAsset{kind: "key_node_card"}), do: "key_node"
+  defp asset_angle(%MediaAsset{kind: "question_quote_card"}), do: "question_quote"
   defp asset_angle(%MediaAsset{text: text}) when text in [nil, ""], do: "visual"
   defp asset_angle(%MediaAsset{}), do: "highlight"
 

@@ -35,3 +35,6 @@ grid_media_manager-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# Local development secrets.
+/config/dev.secret.exs
+

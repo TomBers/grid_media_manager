@@ -39,6 +39,15 @@ Authorization: Bearer $RATIONALGRID_PROMOTION_API_TOKEN
 
 Do not commit real tokens; keep them in your shell environment, `.envrc`, or another local secret manager.
 
+If your dev server does not inherit shell environment variables, create an ignored local file at `config/dev.secret.exs`:
+
+```elixir
+import Config
+
+config :grid_media_manager, :rational_grid,
+  promotion_api_token: "your-dev-token"
+```
+
 With that configuration you can click **Load grids** on the import screen, choose a grid from the index endpoint, or paste a bare graph name such as:
 
 ```text
@@ -61,42 +70,54 @@ Expected show response:
 
 ```json
 {
-  "grid": {
+  "metadata": {
     "title": "What can a brave new world teach us?",
     "slug": "what-can-a-brave-new-world-teach-us-1964bc",
     "url": "https://rationalgrid.com/g/what-can-a-brave-new-world-teach-us-1964bc",
+    "api_url": "https://rationalgrid.com/api/promotion/grids/what-can-a-brave-new-world-teach-us-1964bc",
     "tags": ["Dystopian Literature", "Social Philosophy"],
     "node_count": 5,
     "inserted_at": "...",
     "updated_at": "..."
   },
-  "content": {
-    "origin_question": "What can a brave new world teach us?",
-    "first_answer": {
-      "node_id": "2",
-      "title": "What Can a Brave New World Teach Us?",
-      "content": "...",
-      "excerpt": "..."
-    },
-    "follow_up_questions": [],
-    "user_questions": [],
-    "highlights": [],
-    "key_nodes": []
-  }
+  "graph": {
+    "nodes": [],
+    "edges": []
+  },
+  "highlights": []
 }
 ```
 
-The importer still understands the older `raw`/`assets` response shape during transition.
+The importer derives the Share Studio context from this raw graph data:
+
+- `metadata` becomes the campaign summary.
+- `graph.nodes` becomes key-node source material.
+- the first node with class `answer` becomes the first answer excerpt source.
+- nodes with class `question` or `user` become user questions.
+- question sentences found in graph node content are extracted as follow-up questions.
+- top-level `highlights` become generated highlight-card source material.
+
+The importer still understands the older `grid`/`content` and `raw`/`assets` response shapes during transition.
 
 Generated SVG asset routes:
 
 ```text
 GET /campaigns/:id/share-card.svg
 GET /campaigns/:id/nodes/:node_id/share-card.svg
+GET /campaigns/:id/questions/:question_id/share-card.svg
 GET /campaigns/:id/highlights/:highlight_id/share-card.svg
 ```
 
-When the RationalGrid payload does not provide legacy `assets`, the importer creates local generated assets from the campaign title and content highlights. Key-node cards are generated on demand from the Share Studio key-node panel.
+The importer does not generate images on load. Title/grid cards, highlight cards, key-node cards, and identified-question quote cards are generated on demand from the Share Studio context panel.
+
+Share Studio includes a card style picker. The same key node or question can be generated in multiple styles, currently:
+
+- `editorial_dark`
+- `gradient_poster`
+- `minimal_academic`
+- `warm_paper`
+
+Generated style variants are persisted as separate media assets. Generated assets can be deleted from the asset gallery, which also removes their associated generated drafts so variants can be regenerated during testing. Extracted question text is preserved in full; generated question drafts may exceed platform character limits and will show the normal character-count warning.
 
 ## Start the Phoenix server
 

@@ -4,15 +4,15 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Promotion.ShareCard
 
-  def grid_card(conn, %{"id" => id}) do
+  def grid_card(conn, %{"id" => id} = params) do
     campaign = Campaigns.get_campaign!(id)
 
     conn
     |> put_svg_cache_headers()
-    |> send_resp(200, ShareCard.graph_image_svg(campaign))
+    |> send_resp(200, ShareCard.graph_image_svg(campaign, Map.get(params, "style")))
   end
 
-  def node_card(conn, %{"id" => id, "node_id" => node_id}) do
+  def node_card(conn, %{"id" => id, "node_id" => node_id} = params) do
     campaign = Campaigns.get_campaign!(id)
 
     case ShareCard.find_key_node(campaign, node_id) do
@@ -22,11 +22,28 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
       node ->
         conn
         |> put_svg_cache_headers()
-        |> send_resp(200, ShareCard.node_image_svg(campaign, node))
+        |> send_resp(200, ShareCard.node_image_svg(campaign, node, Map.get(params, "style")))
     end
   end
 
-  def highlight_card(conn, %{"id" => id, "highlight_id" => highlight_id}) do
+  def question_card(conn, %{"id" => id, "question_id" => question_id} = params) do
+    campaign = Campaigns.get_campaign!(id)
+
+    case ShareCard.find_question(campaign, question_id) do
+      nil ->
+        send_resp(conn, 404, "Question not found")
+
+      question ->
+        conn
+        |> put_svg_cache_headers()
+        |> send_resp(
+          200,
+          ShareCard.question_image_svg(campaign, question, Map.get(params, "style"))
+        )
+    end
+  end
+
+  def highlight_card(conn, %{"id" => id, "highlight_id" => highlight_id} = params) do
     campaign = Campaigns.get_campaign!(id)
 
     case ShareCard.find_highlight(campaign, highlight_id) do
@@ -36,7 +53,10 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
       highlight ->
         conn
         |> put_svg_cache_headers()
-        |> send_resp(200, ShareCard.highlight_image_svg(campaign, highlight))
+        |> send_resp(
+          200,
+          ShareCard.highlight_image_svg(campaign, highlight, Map.get(params, "style"))
+        )
     end
   end
 

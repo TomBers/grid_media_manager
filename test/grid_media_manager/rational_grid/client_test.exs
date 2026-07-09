@@ -66,14 +66,36 @@ defmodule GridMediaManager.RationalGrid.ClientTest do
     assert Client.request_headers() == []
   end
 
+  test "uses the configured promotion token when the environment token is absent" do
+    Application.put_env(:grid_media_manager, :rational_grid,
+      base_url: "http://localhost:4000",
+      promotion_api_token: "configured-dev-token"
+    )
+
+    assert Client.request_headers() == [{"authorization", "Bearer configured-dev-token"}]
+  end
+
+  test "environment token takes precedence over configured promotion token" do
+    Application.put_env(:grid_media_manager, :rational_grid,
+      base_url: "http://localhost:4000",
+      promotion_api_token: "configured-dev-token"
+    )
+
+    System.put_env("RATIONALGRID_PROMOTION_API_TOKEN", "env-token")
+
+    assert Client.request_headers() == [{"authorization", "Bearer env-token"}]
+  end
+
   test "normalizes flexible grid index payloads" do
     payload = %{
       "grids" => [
         %{
-          "graph_name" => "what-is-the-collective-subconscious-637e9a",
-          "title" => "What is the collective subconscious?",
-          "node_count" => 14,
-          "tags" => ["Psychology", "Philosophy"]
+          "metadata" => %{
+            "slug" => "what-is-the-collective-subconscious-637e9a",
+            "title" => "What is the collective subconscious?",
+            "node_count" => 14,
+            "tags" => ["Psychology", "Philosophy"]
+          }
         }
       ]
     }

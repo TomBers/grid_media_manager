@@ -36,7 +36,7 @@ defmodule GridMediaManager.Campaigns do
 
     Repo.transaction(fn ->
       campaign = upsert_campaign(attrs)
-      assets = refresh_assets(campaign, asset_attrs_for_campaign(campaign, asset_attrs))
+      assets = refresh_assets(campaign, asset_attrs)
       ensure_post_drafts(campaign, assets)
       campaign
     end)
@@ -83,18 +83,68 @@ defmodule GridMediaManager.Campaigns do
     update_post_draft(post_draft, %{status: "copied", copied_at: now})
   end
 
-  def generate_key_node_asset(%Campaign{} = campaign, node_id) do
+  def generate_grid_asset(%Campaign{} = campaign, style \\ ShareCard.default_style()) do
+    campaign = get_campaign!(campaign.id)
+
+    campaign
+    |> ShareCard.grid_asset_attr(style)
+    |> then(&upsert_generated_asset_with_drafts(campaign, &1))
+  end
+
+  def generate_highlight_asset(
+        %Campaign{} = campaign,
+        highlight_id,
+        style \\ ShareCard.default_style()
+      ) do
+    campaign = get_campaign!(campaign.id)
+
+    with highlight when is_map(highlight) <- ShareCard.find_highlight(campaign, highlight_id),
+         attrs when is_map(attrs) <- ShareCard.highlight_asset_attr(campaign, highlight, style) do
+      upsert_generated_asset_with_drafts(campaign, attrs)
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def generate_key_node_asset(%Campaign{} = campaign, node_id, style \\ ShareCard.default_style()) do
     campaign = get_campaign!(campaign.id)
 
     with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
-         attrs when is_map(attrs) <- ShareCard.key_node_asset_attr(campaign, node) do
-      Repo.transaction(fn ->
-        asset = upsert_media_asset(campaign, attrs)
-        ensure_post_drafts(campaign, [asset])
-        asset
-      end)
+         attrs when is_map(attrs) <- ShareCard.key_node_asset_attr(campaign, node, style) do
+      upsert_generated_asset_with_drafts(campaign, attrs)
     else
       _ -> {:error, :not_found}
+    end
+  end
+
+  def generate_question_asset(
+        %Campaign{} = campaign,
+        question_id,
+        style \\ ShareCard.default_style()
+      ) do
+    campaign = get_campaign!(campaign.id)
+
+    with question when is_map(question) <- ShareCard.find_question(campaign, question_id),
+         attrs when is_map(attrs) <- ShareCard.question_asset_attr(campaign, question, style) do
+      upsert_generated_asset_with_drafts(campaign, attrs)
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def delete_generated_media_asset(id) do
+    asset = get_media_asset!(id)
+
+    if generated_media_asset?(asset) do
+      Repo.transaction(fn ->
+        PostDraft
+        |> where([d], d.media_asset_id == ^asset.id)
+        |> Repo.delete_all()
+
+        Repo.delete!(asset)
+      end)
+    else
+      {:error, :not_generated}
     end
   end
 
@@ -128,19 +178,34 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
-  defp asset_attrs_for_campaign(%Campaign{} = campaign, []), do: ShareCard.asset_attrs(campaign)
-  defp asset_attrs_for_campaign(_campaign, asset_attrs), do: asset_attrs
-
   defp refresh_assets(%Campaign{} = campaign, asset_attrs) do
     incoming_urls = Enum.map(asset_attrs, & &1.url)
 
     MediaAsset
     |> where([a], a.campaign_id == ^campaign.id)
-    |> where([a], a.kind != "key_node_card")
+    |> where([a], is_nil(a.source_type))
     |> maybe_where_stale_asset(incoming_urls)
     |> Repo.delete_all()
 
     Enum.map(asset_attrs, &upsert_media_asset(campaign, &1))
+  end
+
+  defp generated_media_asset?(%MediaAsset{source_type: source_type})
+       when is_binary(source_type) and source_type != "",
+       do: true
+
+  defp generated_media_asset?(%MediaAsset{url: url}) when is_binary(url) do
+    String.starts_with?(url, "/campaigns/")
+  end
+
+  defp generated_media_asset?(_asset), do: false
+
+  defp upsert_generated_asset_with_drafts(%Campaign{} = campaign, attrs) do
+    Repo.transaction(fn ->
+      asset = upsert_media_asset(campaign, attrs)
+      ensure_post_drafts(campaign, [asset])
+      asset
+    end)
   end
 
   defp upsert_media_asset(%Campaign{} = campaign, attrs) do
