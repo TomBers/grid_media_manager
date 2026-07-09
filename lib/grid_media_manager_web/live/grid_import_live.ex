@@ -2,6 +2,7 @@ defmodule GridMediaManagerWeb.GridImportLive do
   use GridMediaManagerWeb, :live_view
 
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.RationalGrid.Client
 
   @impl true
   def mount(_params, _session, socket) do
@@ -9,6 +10,10 @@ defmodule GridMediaManagerWeb.GridImportLive do
       socket
       |> assign(:page_title, "RationalGrid Share Studio")
       |> assign(:form, to_form(%{"source" => ""}, as: :import))
+      |> assign(:remote_grids_loaded?, false)
+      |> assign(:remote_grids_error, nil)
+      |> stream_configure(:remote_grids, dom_id: &"remote-grid-#{&1.id}")
+      |> stream(:remote_grids, [])
       |> stream(:campaigns, Campaigns.list_campaigns())
 
     {:ok, socket}
@@ -16,18 +21,28 @@ defmodule GridMediaManagerWeb.GridImportLive do
 
   @impl true
   def handle_event("import", %{"import" => %{"source" => source}}, socket) do
-    case Campaigns.import_grid(source) do
-      {:ok, campaign} ->
+    import_source(socket, source)
+  end
+
+  def handle_event("import_remote_grid", %{"source" => source}, socket) do
+    import_source(socket, source)
+  end
+
+  def handle_event("load_remote_grids", _params, socket) do
+    case Client.fetch_grid_index() do
+      {:ok, grids} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Loaded #{campaign.title}")
-         |> push_navigate(to: ~p"/campaigns/#{campaign.id}")}
+         |> assign(:remote_grids_loaded?, true)
+         |> assign(:remote_grids_error, nil)
+         |> stream(:remote_grids, grids, reset: true)}
 
       {:error, reason} ->
         {:noreply,
          socket
-         |> assign(:form, to_form(%{"source" => source}, as: :import))
-         |> put_flash(:error, error_message(reason))}
+         |> assign(:remote_grids_loaded?, true)
+         |> assign(:remote_grids_error, error_message(reason))
+         |> stream(:remote_grids, [], reset: true)}
     end
   end
 
@@ -80,6 +95,97 @@ defmodule GridMediaManagerWeb.GridImportLive do
                 </button>
               </div>
             </.form>
+
+            <div class="mt-6 rounded-3xl border border-base-content/10 bg-base-100/70 p-4 shadow-lg shadow-base-content/5 sm:p-5">
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 class="text-lg font-semibold text-base-content">Browse RationalGrid</h2>
+                  <p class="mt-1 text-sm leading-6 text-base-content/60">
+                    Fetch the promotion grid index and click a grid to import its materials into Share Studio.
+                  </p>
+                </div>
+                <button
+                  id="load-remote-grids-button"
+                  type="button"
+                  phx-click="load_remote_grids"
+                  class="inline-flex items-center justify-center rounded-2xl border border-base-content/15 bg-base-100 px-4 py-2.5 text-sm font-semibold text-base-content/75 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-base-200 hover:text-base-content phx-click-loading:opacity-60"
+                >
+                  Load grids
+                  <.icon name="hero-arrow-path" class="ml-2 size-4 phx-click-loading:animate-spin" />
+                </button>
+              </div>
+
+              <p
+                :if={@remote_grids_error}
+                id="remote-grids-error"
+                class="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200"
+              >
+                {@remote_grids_error}
+              </p>
+
+              <div
+                id="remote-grids"
+                phx-update="stream"
+                class="mt-5 max-h-[28rem] space-y-3 overflow-y-auto pr-1"
+              >
+                <div
+                  id="empty-remote-grids"
+                  class="hidden rounded-2xl border border-dashed border-base-content/20 bg-base-200/40 p-5 text-sm text-base-content/60 only:block"
+                >
+                  <%= if @remote_grids_loaded? do %>
+                    No grids were returned by the promotion index endpoint.
+                  <% else %>
+                    Click “Load grids” to fetch available RationalGrid promotion materials.
+                  <% end %>
+                </div>
+
+                <article
+                  :for={{id, grid} <- @streams.remote_grids}
+                  id={id}
+                  class="group rounded-2xl border border-base-content/10 bg-base-100 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-950/5"
+                >
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <button
+                      id={"import-remote-grid-#{grid.id}"}
+                      type="button"
+                      phx-click="import_remote_grid"
+                      phx-value-source={grid.source}
+                      class="min-w-0 flex-1 text-left"
+                    >
+                      <h3 class="font-semibold leading-6 text-base-content group-hover:text-orange-700 dark:group-hover:text-orange-200">
+                        {grid.title}
+                      </h3>
+                      <p class="mt-1 text-xs text-base-content/50">/{grid.slug}</p>
+                    </button>
+
+                    <a
+                      :if={grid.url}
+                      href={grid.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex shrink-0 items-center rounded-full bg-base-200 px-3 py-1.5 text-xs font-semibold text-base-content/65 transition hover:bg-base-content hover:text-base-100"
+                    >
+                      Open source <.icon name="hero-arrow-up-right" class="ml-1 size-3" />
+                    </a>
+                  </div>
+
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <span
+                      :if={grid.node_count}
+                      class="rounded-full bg-base-200 px-2.5 py-1 text-xs text-base-content/60"
+                    >
+                      {grid.node_count} nodes
+                    </span>
+                    <span
+                      :for={tag <- grid.tags}
+                      class="rounded-full bg-orange-500/10 px-2.5 py-1 text-xs font-medium text-orange-700 dark:text-orange-200"
+                    >
+                      {tag}
+                    </span>
+                  </div>
+                </article>
+              </div>
+            </div>
           </section>
 
           <aside class="rounded-[2rem] border border-base-content/10 bg-base-100/70 p-6 shadow-xl shadow-base-content/5 backdrop-blur md:p-8">
@@ -138,6 +244,22 @@ defmodule GridMediaManagerWeb.GridImportLive do
       </div>
     </Layouts.app>
     """
+  end
+
+  defp import_source(socket, source) do
+    case Campaigns.import_grid(source) do
+      {:ok, campaign} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Loaded #{campaign.title}")
+         |> push_navigate(to: ~p"/campaigns/#{campaign.id}")}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> assign(:form, to_form(%{"source" => source}, as: :import))
+         |> put_flash(:error, error_message(reason))}
+    end
   end
 
   defp error_message(:blank), do: "Enter a RationalGrid URL or slug."

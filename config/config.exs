@@ -13,7 +13,8 @@ config :grid_media_manager,
 
 config :grid_media_manager, :rational_grid,
   base_url: "https://rationalgrid.ai",
-  media_path_template: "/g/:slug/media.json"
+  index_path: "/api/promotion/grids",
+  media_path_template: "/api/promotion/grids/:slug"
 
 # Configures the endpoint
 config :grid_media_manager, GridMediaManagerWeb.Endpoint,

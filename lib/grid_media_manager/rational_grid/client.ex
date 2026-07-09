@@ -1,26 +1,40 @@
 defmodule GridMediaManager.RationalGrid.Client do
   @moduledoc """
-  Fetches RationalGrid media payloads with Req.
+  Fetches RationalGrid promotion payloads with Req.
 
-  Configure the endpoint with environment variables when needed:
+  Configure the endpoints with environment variables when needed:
 
     * `RATIONAL_GRID_BASE_URL` - defaults to `https://rationalgrid.ai`
-    * `RATIONAL_GRID_MEDIA_PATH_TEMPLATE` - defaults to `/g/:slug/media.json`
+    * `RATIONAL_GRID_INDEX_PATH` - defaults to `/api/promotion/grids`
+    * `RATIONAL_GRID_MEDIA_PATH_TEMPLATE` - defaults to `/api/promotion/grids/:slug`
 
-  Internal users may also paste a direct media endpoint URL, in which case it is
-  fetched as-is.
+  Internal users may also paste a direct promotion endpoint URL, in which case it
+  is fetched as-is.
   """
 
   alias GridMediaManager.RationalGrid.Slug
 
   @default_base_url "https://rationalgrid.ai"
-  @default_media_path_template "/g/:slug/media.json"
+  @default_index_path "/api/promotion/grids"
+  @default_media_path_template "/api/promotion/grids/:slug"
 
   def fetch_media(input) when is_binary(input) do
     with {:ok, url} <- media_url(input),
          {:ok, response} <- request(url) do
-      decode_response(response)
+      decode_media_response(response)
     end
+  end
+
+  def fetch_grid_index do
+    with {:ok, url} <- index_url(),
+         {:ok, response} <- request(url),
+         {:ok, decoded} <- decode_any_response(response) do
+      {:ok, normalize_grid_index(decoded)}
+    end
+  end
+
+  def index_url do
+    {:ok, build_url(index_path())}
   end
 
   def media_url(input) when is_binary(input) do
@@ -40,23 +54,53 @@ defmodule GridMediaManager.RationalGrid.Client do
     end
   end
 
+  def normalize_grid_index(decoded) do
+    grids =
+      cond do
+        is_list(decoded) -> decoded
+        is_map(decoded) and is_list(decoded["grids"]) -> decoded["grids"]
+        is_map(decoded) and is_list(decoded["data"]) -> decoded["data"]
+        is_map(decoded) and is_list(decoded[:grids]) -> decoded[:grids]
+        is_map(decoded) and is_list(decoded[:data]) -> decoded[:data]
+        true -> []
+      end
+
+    grids
+    |> Enum.filter(&is_map/1)
+    |> Enum.map(&normalize_grid_summary/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
   defp build_media_url(slug) do
-    base_url =
-      System.get_env("RATIONAL_GRID_BASE_URL") ||
-        get_in(Application.get_env(:grid_media_manager, :rational_grid, []), [:base_url]) ||
-        @default_base_url
+    media_path_template()
+    |> String.replace(":slug", URI.encode(slug))
+    |> String.replace(":graph_name", URI.encode(slug))
+    |> build_url()
+  end
 
-    path_template =
-      System.get_env("RATIONAL_GRID_MEDIA_PATH_TEMPLATE") ||
-        get_in(Application.get_env(:grid_media_manager, :rational_grid, []), [
-          :media_path_template
-        ]) ||
-        @default_media_path_template
+  defp build_url(path) do
+    base_url() <> ensure_leading_slash(path)
+  end
 
-    base_url = String.trim_trailing(base_url, "/")
-    path = String.replace(path_template, ":slug", URI.encode(slug))
+  defp base_url do
+    (System.get_env("RATIONAL_GRID_BASE_URL") ||
+       get_in(Application.get_env(:grid_media_manager, :rational_grid, []), [:base_url]) ||
+       @default_base_url)
+    |> String.trim_trailing("/")
+  end
 
-    base_url <> ensure_leading_slash(path)
+  defp index_path do
+    System.get_env("RATIONAL_GRID_INDEX_PATH") ||
+      get_in(Application.get_env(:grid_media_manager, :rational_grid, []), [:index_path]) ||
+      @default_index_path
+  end
+
+  defp media_path_template do
+    System.get_env("RATIONAL_GRID_MEDIA_PATH_TEMPLATE") ||
+      get_in(Application.get_env(:grid_media_manager, :rational_grid, []), [
+        :media_path_template
+      ]) ||
+      @default_media_path_template
   end
 
   defp ensure_leading_slash("/" <> _rest = path), do: path
@@ -75,15 +119,94 @@ defmodule GridMediaManager.RationalGrid.Client do
     end
   end
 
-  defp decode_response(%{body: body}) when is_map(body), do: {:ok, body}
-
-  defp decode_response(%{body: body}) when is_binary(body) do
-    case Jason.decode(body) do
+  defp decode_media_response(response) do
+    case decode_any_response(response) do
       {:ok, decoded} when is_map(decoded) -> {:ok, decoded}
+      {:ok, _decoded} -> {:error, :invalid_payload}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp decode_any_response(%{body: body}) when is_map(body) or is_list(body), do: {:ok, body}
+
+  defp decode_any_response(%{body: body}) when is_binary(body) do
+    case Jason.decode(body) do
+      {:ok, decoded} when is_map(decoded) or is_list(decoded) -> {:ok, decoded}
       {:ok, _decoded} -> {:error, :invalid_payload}
       {:error, reason} -> {:error, {:invalid_json, reason}}
     end
   end
 
-  defp decode_response(_response), do: {:error, :invalid_payload}
+  defp decode_any_response(_response), do: {:error, :invalid_payload}
+
+  defp normalize_grid_summary(grid) do
+    slug =
+      grid
+      |> first_string(["graph_name", :graph_name, "slug", :slug, "name", :name, "id", :id])
+      |> clean_slug()
+
+    if slug do
+      %{
+        id: slug,
+        slug: slug,
+        title:
+          first_string(grid, ["title", :title, "question", :question, "name", :name]) || slug,
+        url: first_string(grid, ["url", :url, "grid_url", :grid_url]),
+        graph_url: first_string(grid, ["graph_url", :graph_url]),
+        tags: string_list(first_value(grid, ["tags", :tags])),
+        node_count: integer_value(first_value(grid, ["node_count", :node_count])),
+        updated_at: first_string(grid, ["updated_at", :updated_at]),
+        inserted_at: first_string(grid, ["inserted_at", :inserted_at]),
+        source: slug
+      }
+    end
+  end
+
+  defp first_string(map, keys) do
+    map
+    |> first_value(keys)
+    |> string_value()
+  end
+
+  defp first_value(map, keys) do
+    Enum.find_value(keys, &Map.get(map, &1))
+  end
+
+  defp clean_slug(nil), do: nil
+
+  defp clean_slug(value) do
+    value
+    |> Slug.normalize()
+    |> case do
+      {:ok, slug} -> slug
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp string_value(value) when is_binary(value) do
+    value = String.trim(value)
+    if value == "", do: nil, else: value
+  end
+
+  defp string_value(value) when is_integer(value), do: Integer.to_string(value)
+  defp string_value(_value), do: nil
+
+  defp string_list(values) when is_list(values) do
+    values
+    |> Enum.map(&string_value/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp string_list(_values), do: []
+
+  defp integer_value(value) when is_integer(value), do: value
+
+  defp integer_value(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {number, ""} -> number
+      _ -> nil
+    end
+  end
+
+  defp integer_value(_value), do: nil
 end

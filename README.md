@@ -15,34 +15,34 @@ No authentication, LLM support, scheduling, or direct posting is included yet.
 
 ## RationalGrid endpoint configuration
 
-By default the importer builds media URLs like:
+By default the importer uses the RationalGrid promotion endpoints:
 
 ```text
-https://rationalgrid.ai/g/:slug/media.json
+GET https://rationalgrid.ai/api/promotion/grids
+GET https://rationalgrid.ai/api/promotion/grids/:graph_name
 ```
 
-Override this locally when needed. If local RationalGrid is already using port `4000`, start this app on another port:
+For local testing against RationalGrid on port `4000`, start this app on another port and point the base URL at the local app:
 
 ```sh
 PORT=4001 \
 RATIONAL_GRID_BASE_URL=http://localhost:4000 \
-RATIONAL_GRID_MEDIA_PATH_TEMPLATE=/api/promotion/grids/:slug/materials \
 mix phx.server
 ```
 
-With that configuration, paste a bare slug such as:
+With that configuration you can click **Load grids** on the import screen, choose a grid from the index endpoint, or paste a bare graph name such as:
 
 ```text
 what-is-the-collective-subconscious-637e9a
 ```
 
-You can also paste the full local endpoint directly:
+You can also paste the full local show endpoint directly:
 
 ```text
-http://localhost:4000/api/promotion/grids/what-is-the-collective-subconscious-637e9a/materials
+http://localhost:4000/api/promotion/grids/what-is-the-collective-subconscious-637e9a
 ```
 
-Direct URLs ending in `.json`, using a `/media` path segment, or using a `/materials` path segment are fetched as-is.
+Direct URLs ending in `.json`, using a `/media` path segment, using a `/materials` path segment, or matching `/api/promotion/grids/:graph_name` are fetched as-is.
 
 ## Start the Phoenix server
 

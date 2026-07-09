@@ -23,9 +23,16 @@ defmodule GridMediaManager.RationalGrid.SlugTest do
                {:ok, "what-is-the-collective-subconscious-637e9a"}
     end
 
-    test "extracts the slug from the promotion materials API route" do
+    test "extracts the slug from the legacy promotion materials API route" do
       assert Slug.normalize(
                "http://localhost:4000/api/promotion/grids/what-is-the-collective-subconscious-637e9a/materials"
+             ) ==
+               {:ok, "what-is-the-collective-subconscious-637e9a"}
+    end
+
+    test "extracts the slug from the simplified promotion show route" do
+      assert Slug.normalize(
+               "http://localhost:4000/api/promotion/grids/what-is-the-collective-subconscious-637e9a"
              ) ==
                {:ok, "what-is-the-collective-subconscious-637e9a"}
     end
@@ -43,6 +50,12 @@ defmodule GridMediaManager.RationalGrid.SlugTest do
     test "detects direct promotion materials endpoints" do
       assert Slug.direct_media_url?(
                "http://localhost:4000/api/promotion/grids/what-is-the-collective-subconscious-637e9a/materials"
+             )
+    end
+
+    test "detects direct simplified promotion show endpoints" do
+      assert Slug.direct_media_url?(
+               "http://localhost:4000/api/promotion/grids/what-is-the-collective-subconscious-637e9a"
              )
     end
 

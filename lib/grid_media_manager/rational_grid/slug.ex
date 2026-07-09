@@ -45,7 +45,7 @@ defmodule GridMediaManager.RationalGrid.Slug do
       segments = String.split(path, "/", trim: true)
 
       String.ends_with?(path, ".json") or "media" in segments or "media.json" in segments or
-        "materials" in segments
+        "materials" in segments or promotion_grid_show_url?(segments)
     else
       _ -> false
     end
@@ -75,6 +75,16 @@ defmodule GridMediaManager.RationalGrid.Slug do
   end
 
   defp normalize_uri(_uri), do: {:error, :invalid}
+
+  defp promotion_grid_show_url?(segments) do
+    case Enum.find_index(segments, &(&1 == "grids")) do
+      nil ->
+        false
+
+      index ->
+        "promotion" in segments and is_binary(Enum.at(segments, index + 1))
+    end
+  end
 
   defp slug_after(segments, marker) do
     case Enum.find_index(segments, &(&1 == marker)) do
