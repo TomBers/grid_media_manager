@@ -264,6 +264,13 @@ defmodule GridMediaManagerWeb.GridImportLive do
 
   defp error_message(:blank), do: "Enter a RationalGrid URL or slug."
   defp error_message(:invalid), do: "That does not look like a valid RationalGrid URL or slug."
+
+  defp error_message({:http_error, 401}),
+    do: "RationalGrid rejected the request. Check RATIONALGRID_PROMOTION_API_TOKEN."
+
+  defp error_message({:http_error, 403}),
+    do: "RationalGrid denied access. Check the promotion API token permissions."
+
   defp error_message({:http_error, 404}), do: "RationalGrid did not find media for that grid."
   defp error_message({:http_error, status}), do: "RationalGrid returned HTTP #{status}."
 

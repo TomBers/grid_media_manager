@@ -18,6 +18,12 @@ defmodule GridMediaManagerWeb.Router do
     pipe_through :browser
 
     live "/", GridImportLive, :new
+    get "/campaigns/:id/share-card.svg", PromotionAssetController, :grid_card
+
+    get "/campaigns/:id/highlights/:highlight_id/share-card.svg",
+        PromotionAssetController,
+        :highlight_card
+
     live "/campaigns/:id", ShareStudioLive, :show
   end
 

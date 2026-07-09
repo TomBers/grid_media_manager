@@ -7,6 +7,7 @@ defmodule GridMediaManager.RationalGrid.Client do
     * `RATIONAL_GRID_BASE_URL` - defaults to `https://rationalgrid.ai`
     * `RATIONAL_GRID_INDEX_PATH` - defaults to `/api/promotion/grids`
     * `RATIONAL_GRID_MEDIA_PATH_TEMPLATE` - defaults to `/api/promotion/grids/:slug`
+    * `RATIONALGRID_PROMOTION_API_TOKEN` - optional bearer token for authenticated requests
 
   Internal users may also paste a direct promotion endpoint URL, in which case it
   is fetched as-is.
@@ -17,6 +18,7 @@ defmodule GridMediaManager.RationalGrid.Client do
   @default_base_url "https://rationalgrid.ai"
   @default_index_path "/api/promotion/grids"
   @default_media_path_template "/api/promotion/grids/:slug"
+  @promotion_api_token_env "RATIONALGRID_PROMOTION_API_TOKEN"
 
   def fetch_media(input) when is_binary(input) do
     with {:ok, url} <- media_url(input),
@@ -51,6 +53,13 @@ defmodule GridMediaManager.RationalGrid.Client do
         with {:ok, slug} <- Slug.normalize(input) do
           {:ok, build_media_url(slug)}
         end
+    end
+  end
+
+  def request_headers do
+    case System.get_env(@promotion_api_token_env) |> string_value() do
+      nil -> []
+      token -> [{"authorization", "Bearer #{token}"}]
     end
   end
 
@@ -107,7 +116,7 @@ defmodule GridMediaManager.RationalGrid.Client do
   defp ensure_leading_slash(path), do: "/" <> path
 
   defp request(url) do
-    case Req.get(url: url, receive_timeout: 15_000, retry: :transient) do
+    case Req.get(url: url, headers: request_headers(), receive_timeout: 15_000, retry: :transient) do
       {:ok, %{status: status} = response} when status in 200..299 ->
         {:ok, response}
 

@@ -17,6 +17,20 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     assert has_element?(view, "#post-drafts")
   end
 
+  test "renders simplified content payload sections without assets", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}")
+
+    assert has_element?(view, "#origin-question-section")
+    assert has_element?(view, "#first-answer-excerpt-section")
+    assert has_element?(view, "#follow-up-questions-section")
+    assert has_element?(view, "#user-questions-section")
+    assert has_element?(view, "#highlights-section")
+    assert has_element?(view, "#media-assets article")
+    refute has_element?(view, "#empty-media-assets:only-child")
+  end
+
   test "saves edited draft copy", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(sample_payload(), "res.json")
     [draft | _] = Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: "campaign")
@@ -34,5 +48,48 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     "res.json"
     |> File.read!()
     |> Jason.decode!()
+  end
+
+  defp simplified_payload do
+    %{
+      "grid" => %{
+        "title" => "What can a brave new world teach us?",
+        "slug" => "what-can-a-brave-new-world-teach-us-1964bc",
+        "url" => "https://rationalgrid.com/g/what-can-a-brave-new-world-teach-us-1964bc",
+        "tags" => ["Dystopian Literature", "Social Philosophy"],
+        "node_count" => 5,
+        "inserted_at" => "2026-07-01T00:00:00Z",
+        "updated_at" => "2026-07-02T00:00:00Z"
+      },
+      "content" => %{
+        "origin_question" => "What can a brave new world teach us?",
+        "first_answer" => %{
+          "node_id" => "2",
+          "title" => "What Can a Brave New World Teach Us?",
+          "content" => "Long answer",
+          "excerpt" => "A dystopian lesson about comfort."
+        },
+        "follow_up_questions" => ["If a drug like soma existed today..."],
+        "user_questions" => [
+          %{"node_id" => "4", "question" => "If a drug like soma existed today..."}
+        ],
+        "highlights" => [
+          %{
+            "id" => 123,
+            "node_id" => "2",
+            "text" => "Perfect comfort can become a cage.",
+            "note" => nil
+          }
+        ],
+        "key_nodes" => [
+          %{
+            "id" => "1",
+            "class" => "origin",
+            "title" => "What can a brave new world teach us?",
+            "excerpt" => "What can a brave new world teach us?"
+          }
+        ]
+      }
+    }
   end
 end

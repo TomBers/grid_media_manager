@@ -8,6 +8,7 @@ defmodule GridMediaManager.Campaigns do
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Campaigns.PostDraft
+  alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.RationalGrid.Client
   alias GridMediaManager.RationalGrid.MediaPayload
   alias GridMediaManager.Repo
@@ -35,7 +36,7 @@ defmodule GridMediaManager.Campaigns do
 
     Repo.transaction(fn ->
       campaign = upsert_campaign(attrs)
-      assets = refresh_assets(campaign, asset_attrs)
+      assets = refresh_assets(campaign, asset_attrs_for_campaign(campaign, asset_attrs))
       ensure_post_drafts(campaign, assets)
       campaign
     end)
@@ -82,10 +83,19 @@ defmodule GridMediaManager.Campaigns do
     update_post_draft(post_draft, %{status: "copied", copied_at: now})
   end
 
+  def origin_question(%Campaign{raw_payload: raw_payload}),
+    do: MediaPayload.origin_question(raw_payload)
+
   def key_nodes(%Campaign{raw_payload: raw_payload}), do: MediaPayload.key_nodes(raw_payload)
 
   def first_answer_excerpt(%Campaign{raw_payload: raw_payload}),
     do: MediaPayload.first_answer_excerpt(raw_payload)
+
+  def follow_up_questions(%Campaign{raw_payload: raw_payload}),
+    do: MediaPayload.follow_up_questions(raw_payload)
+
+  def user_questions(%Campaign{raw_payload: raw_payload}),
+    do: MediaPayload.user_questions(raw_payload)
 
   def highlights(%Campaign{raw_payload: raw_payload}), do: MediaPayload.highlights(raw_payload)
 
@@ -102,6 +112,9 @@ defmodule GridMediaManager.Campaigns do
         |> Repo.update!()
     end
   end
+
+  defp asset_attrs_for_campaign(%Campaign{} = campaign, []), do: ShareCard.asset_attrs(campaign)
+  defp asset_attrs_for_campaign(_campaign, asset_attrs), do: asset_attrs
 
   defp refresh_assets(%Campaign{} = campaign, asset_attrs) do
     incoming_urls = Enum.map(asset_attrs, & &1.url)

@@ -24,6 +24,46 @@ defmodule GridMediaManager.CampaignsTest do
              )
     end
 
+    test "imports the simplified content payload without pre-rendered assets" do
+      payload = simplified_payload()
+
+      assert {:ok, campaign} =
+               Campaigns.import_payload(payload, "what-can-a-brave-new-world-teach-us-1964bc")
+
+      assert campaign.slug == "what-can-a-brave-new-world-teach-us-1964bc"
+      assert campaign.title == "What can a brave new world teach us?"
+
+      assets = Campaigns.list_media_assets(campaign)
+      assert length(assets) == 2
+
+      assert Enum.any?(
+               assets,
+               &(&1.kind == "grid_card" and &1.url == "/campaigns/#{campaign.id}/share-card.svg")
+             )
+
+      assert Enum.any?(
+               assets,
+               &(&1.kind == "highlight_card" and
+                   &1.url == "/campaigns/#{campaign.id}/highlights/123/share-card.svg")
+             )
+
+      drafts = Campaigns.list_post_drafts(campaign)
+      assert Enum.any?(drafts, &(&1.platform == "linkedin" and &1.angle == "explainer"))
+
+      assert Campaigns.origin_question(campaign) == "What can a brave new world teach us?"
+      assert Campaigns.first_answer_excerpt(campaign) == "A dystopian lesson about comfort."
+
+      assert Campaigns.follow_up_questions(campaign) == [
+               "If a drug like soma existed today...",
+               "How do modern social media algorithms mimic..."
+             ]
+
+      assert [%{"question" => "If a drug like soma existed today..."}] =
+               Campaigns.user_questions(campaign)
+
+      assert [%{"text" => "Perfect comfort can become a cage."}] = Campaigns.highlights(campaign)
+    end
+
     test "does not overwrite an edited draft when the payload is imported again" do
       payload = sample_payload()
       assert {:ok, campaign} = Campaigns.import_payload(payload, "res.json")
@@ -44,5 +84,54 @@ defmodule GridMediaManager.CampaignsTest do
     "res.json"
     |> File.read!()
     |> Jason.decode!()
+  end
+
+  defp simplified_payload do
+    %{
+      "grid" => %{
+        "title" => "What can a brave new world teach us?",
+        "slug" => "what-can-a-brave-new-world-teach-us-1964bc",
+        "url" => "https://rationalgrid.com/g/what-can-a-brave-new-world-teach-us-1964bc",
+        "tags" => ["Dystopian Literature", "Social Philosophy"],
+        "node_count" => 5,
+        "inserted_at" => "2026-07-01T00:00:00Z",
+        "updated_at" => "2026-07-02T00:00:00Z"
+      },
+      "content" => %{
+        "origin_question" => "What can a brave new world teach us?",
+        "first_answer" => %{
+          "node_id" => "2",
+          "title" => "What Can a Brave New World Teach Us?",
+          "content" => "Long answer",
+          "excerpt" => "A dystopian lesson about comfort."
+        },
+        "follow_up_questions" => [
+          "If a drug like soma existed today...",
+          "How do modern social media algorithms mimic..."
+        ],
+        "user_questions" => [
+          %{
+            "node_id" => "4",
+            "question" => "If a drug like soma existed today..."
+          }
+        ],
+        "highlights" => [
+          %{
+            "id" => 123,
+            "node_id" => "2",
+            "text" => "Perfect comfort can become a cage.",
+            "note" => nil
+          }
+        ],
+        "key_nodes" => [
+          %{
+            "id" => "1",
+            "class" => "origin",
+            "title" => "What can a brave new world teach us?",
+            "excerpt" => "What can a brave new world teach us?"
+          }
+        ]
+      }
+    }
   end
 end

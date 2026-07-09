@@ -23,8 +23,12 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
       |> assign(:selected_platform, selected_platform)
       |> assign(:selected_asset_id, selected_asset_id)
       |> assign(:selected_asset, nil)
+      |> assign(:origin_question, Campaigns.origin_question(campaign))
       |> assign(:key_nodes, Campaigns.key_nodes(campaign) |> Enum.take(8))
       |> assign(:first_answer_excerpt, Campaigns.first_answer_excerpt(campaign))
+      |> assign(:follow_up_questions, Campaigns.follow_up_questions(campaign) |> Enum.take(6))
+      |> assign(:user_questions, Campaigns.user_questions(campaign) |> Enum.take(6))
+      |> assign(:highlights, Campaigns.highlights(campaign) |> Enum.take(8))
       |> assign(:asset_count, length(media_assets))
       |> assign(:draft_count, Campaigns.list_post_drafts(campaign) |> length())
       |> stream_configure(:post_drafts, dom_id: &"post-draft-#{&1.id}")
@@ -101,7 +105,7 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                   {@campaign.title}
                 </h1>
                 <p class="mt-3 max-w-3xl text-sm leading-6 text-base-content/65 sm:text-base">
-                  Review the RationalGrid source, pair a share card with deterministic post templates, edit the draft, then copy it for manual publishing.
+                  Review the RationalGrid source content, generate deterministic post templates, edit the draft, then copy it for manual publishing. Visual asset generation now belongs here rather than the RationalGrid API.
                 </p>
               </div>
 
@@ -171,7 +175,16 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                 </a>
               </div>
 
-              <div :if={@first_answer_excerpt}>
+              <div :if={@origin_question} id="origin-question-section">
+                <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">
+                  Origin question
+                </h2>
+                <p class="mt-3 rounded-3xl border border-base-content/10 bg-base-100 p-4 text-sm font-semibold leading-6 text-base-content/80">
+                  {@origin_question}
+                </p>
+              </div>
+
+              <div :if={@first_answer_excerpt} id="first-answer-excerpt-section">
                 <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">
                   First answer excerpt
                 </h2>
@@ -180,7 +193,65 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                 </p>
               </div>
 
-              <div>
+              <div :if={@follow_up_questions != []} id="follow-up-questions-section">
+                <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">
+                  Follow-up questions
+                </h2>
+                <div class="mt-3 space-y-2">
+                  <p
+                    :for={question <- @follow_up_questions}
+                    class="rounded-2xl border border-base-content/10 bg-base-100 p-3 text-sm leading-6 text-base-content/70"
+                  >
+                    {question}
+                  </p>
+                </div>
+              </div>
+
+              <div :if={@user_questions != []} id="user-questions-section">
+                <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">
+                  User questions
+                </h2>
+                <div class="mt-3 space-y-2">
+                  <div
+                    :for={question <- @user_questions}
+                    class="rounded-2xl border border-base-content/10 bg-base-100 p-3"
+                  >
+                    <p class="text-sm leading-6 text-base-content/70">
+                      {Map.get(question, "question") || Map.get(question, :question)}
+                    </p>
+                    <p
+                      :if={Map.get(question, "node_id") || Map.get(question, :node_id)}
+                      class="mt-1 text-xs text-base-content/45"
+                    >
+                      node {Map.get(question, "node_id") || Map.get(question, :node_id)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div :if={@highlights != []} id="highlights-section">
+                <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">
+                  Highlights
+                </h2>
+                <div class="mt-3 space-y-2">
+                  <div
+                    :for={highlight <- @highlights}
+                    class="rounded-2xl border border-base-content/10 bg-base-100 p-3"
+                  >
+                    <p class="text-sm font-medium leading-6 text-base-content/75">
+                      “{Map.get(highlight, "text") || Map.get(highlight, :text)}”
+                    </p>
+                    <p
+                      :if={Map.get(highlight, "note") || Map.get(highlight, :note)}
+                      class="mt-1 text-xs leading-5 text-base-content/55"
+                    >
+                      {Map.get(highlight, "note") || Map.get(highlight, :note)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div id="key-nodes-section">
                 <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">
                   Key nodes
                 </h2>
@@ -217,7 +288,7 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                   Choose the visual context
                 </h2>
                 <p class="mt-1 text-sm text-base-content/60">
-                  SVG previews are used directly for now. PNG export can come next.
+                  RationalGrid now returns source content only. Generated cards and image exports will be produced here.
                 </p>
               </div>
 
@@ -247,7 +318,7 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                   id="empty-media-assets"
                   class="hidden rounded-3xl border border-dashed border-base-content/20 bg-base-200/40 p-5 text-sm text-base-content/60 only:block"
                 >
-                  No media assets were returned for this grid.
+                  No generated assets yet. This app now owns share-card/image generation from the grid content payload.
                 </div>
 
                 <article

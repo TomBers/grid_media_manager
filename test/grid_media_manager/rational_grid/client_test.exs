@@ -5,10 +5,19 @@ defmodule GridMediaManager.RationalGrid.ClientTest do
 
   setup do
     previous_config = Application.get_env(:grid_media_manager, :rational_grid)
+    previous_token = System.get_env("RATIONALGRID_PROMOTION_API_TOKEN")
 
     on_exit(fn ->
       Application.put_env(:grid_media_manager, :rational_grid, previous_config)
+
+      if previous_token do
+        System.put_env("RATIONALGRID_PROMOTION_API_TOKEN", previous_token)
+      else
+        System.delete_env("RATIONALGRID_PROMOTION_API_TOKEN")
+      end
     end)
+
+    System.delete_env("RATIONALGRID_PROMOTION_API_TOKEN")
 
     :ok
   end
@@ -43,6 +52,18 @@ defmodule GridMediaManager.RationalGrid.ClientTest do
     )
 
     assert Client.index_url() == {:ok, "http://localhost:4000/api/promotion/grids"}
+  end
+
+  test "adds an authorization bearer header when the promotion token is configured" do
+    System.put_env("RATIONALGRID_PROMOTION_API_TOKEN", "dev-secret-token")
+
+    assert Client.request_headers() == [{"authorization", "Bearer dev-secret-token"}]
+  end
+
+  test "does not add authorization headers when the promotion token is blank" do
+    System.put_env("RATIONALGRID_PROMOTION_API_TOKEN", "   ")
+
+    assert Client.request_headers() == []
   end
 
   test "normalizes flexible grid index payloads" do

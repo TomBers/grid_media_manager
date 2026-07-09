@@ -1,6 +1,10 @@
 defmodule GridMediaManager.RationalGrid.MediaPayload do
   @moduledoc """
-  Extracts the stable fields this app needs from the RationalGrid media endpoint.
+  Extracts the stable fields this app needs from the RationalGrid promotion content payload.
+
+  The current promotion API returns `grid` and `content`. The older endpoint shape
+  returned rendered `assets` and a `raw` object; we keep backward-compatible
+  readers for that older payload while treating `content` as the canonical source.
   """
 
   alias GridMediaManager.RationalGrid.Slug
@@ -31,29 +35,76 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
     |> Enum.reject(&is_nil(&1.url))
   end
 
+  def origin_question(payload) when is_map(payload) do
+    payload
+    |> content_value("origin_question")
+    |> fallback(get_in(payload, ["raw", "origin_question"]))
+    |> string_value()
+  end
+
+  def first_answer(payload) when is_map(payload) do
+    first_map(content_value(payload, "first_answer"), get_in(payload, ["raw", "first_answer"]))
+  end
+
   def first_answer_excerpt(payload) when is_map(payload) do
     payload
-    |> get_in(["raw", "first_answer", "excerpt"])
-    |> string_value()
+    |> first_answer()
+    |> case do
+      answer when is_map(answer) -> string_value(Map.get(answer, "excerpt"))
+      _ -> nil
+    end
+  end
+
+  def follow_up_questions(payload) when is_map(payload) do
+    payload
+    |> content_or_raw_list("follow_up_questions")
+    |> Enum.map(&question_text/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  def user_questions(payload) when is_map(payload) do
+    payload
+    |> content_or_raw_list("user_questions")
+    |> Enum.filter(&is_map/1)
   end
 
   def key_nodes(payload) when is_map(payload) do
     payload
-    |> get_in(["raw", "key_nodes"])
-    |> case do
-      nodes when is_list(nodes) -> Enum.filter(nodes, &is_map/1)
-      _ -> []
-    end
+    |> content_or_raw_list("key_nodes")
+    |> Enum.filter(&is_map/1)
   end
 
   def highlights(payload) when is_map(payload) do
     payload
-    |> get_in(["raw", "highlights"])
+    |> content_or_raw_list("highlights")
+    |> Enum.filter(&is_map/1)
+  end
+
+  defp content_value(payload, key) do
+    payload
+    |> Map.get("content", %{})
     |> case do
-      highlights when is_list(highlights) -> Enum.filter(highlights, &is_map/1)
-      _ -> []
+      content when is_map(content) -> Map.get(content, key)
+      _ -> nil
     end
   end
+
+  defp content_or_raw_list(payload, key) do
+    first_list(content_value(payload, key), get_in(payload, ["raw", key]))
+  end
+
+  defp first_map(first, _second) when is_map(first), do: first
+  defp first_map(_first, second) when is_map(second), do: second
+  defp first_map(_first, _second), do: nil
+
+  defp first_list(first, _second) when is_list(first), do: first
+  defp first_list(_first, second) when is_list(second), do: second
+  defp first_list(_first, _second), do: []
+
+  defp question_text(value) when is_binary(value), do: string_value(value)
+  defp question_text(%{"question" => question}), do: string_value(question)
+  defp question_text(%{question: question}), do: string_value(question)
+  defp question_text(_value), do: nil
 
   defp asset_attr(asset) do
     %{
@@ -90,6 +141,10 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
     |> String.replace(~r/[^a-z0-9]+/, "-")
     |> String.trim("-")
   end
+
+  defp fallback(nil, fallback), do: fallback
+  defp fallback("", fallback), do: fallback
+  defp fallback(value, _fallback), do: value
 
   defp string_value(value) when is_binary(value) do
     value = String.trim(value)
