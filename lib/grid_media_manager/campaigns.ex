@@ -83,6 +83,12 @@ defmodule GridMediaManager.Campaigns do
     update_post_draft(post_draft, %{status: "copied", copied_at: now})
   end
 
+  def approve_post_draft(id) do
+    id
+    |> get_post_draft!()
+    |> update_post_draft(%{status: "approved"})
+  end
+
   def generate_grid_asset(%Campaign{} = campaign, style \\ ShareCard.default_style()) do
     campaign = get_campaign!(campaign.id)
 
@@ -106,12 +112,38 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
-  def generate_key_node_asset(%Campaign{} = campaign, node_id, style \\ ShareCard.default_style()) do
+  def generate_key_node_asset(
+        %Campaign{} = campaign,
+        node_id,
+        style \\ ShareCard.default_style(),
+        format \\ "landscape"
+      ) do
     campaign = get_campaign!(campaign.id)
 
     with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
-         attrs when is_map(attrs) <- ShareCard.key_node_asset_attr(campaign, node, style) do
+         attrs when is_map(attrs) <- ShareCard.key_node_asset_attr(campaign, node, style, format) do
       upsert_generated_asset_with_drafts(campaign, attrs)
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def generate_key_node_carousel(
+        %Campaign{} = campaign,
+        node_id,
+        style \\ ShareCard.default_style()
+      ) do
+    campaign = get_campaign!(campaign.id)
+
+    with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
+         attrs when is_list(attrs) <-
+           ShareCard.key_node_carousel_asset_attrs(campaign, node, style) do
+      Repo.transaction(fn ->
+        assets = Enum.map(attrs, &upsert_media_asset(campaign, &1))
+        [cover | _] = assets
+        ensure_post_drafts(campaign, [cover])
+        assets
+      end)
     else
       _ -> {:error, :not_found}
     end
@@ -158,6 +190,9 @@ defmodule GridMediaManager.Campaigns do
 
   def follow_up_questions(%Campaign{raw_payload: raw_payload}),
     do: MediaPayload.follow_up_questions(raw_payload)
+
+  def recommended_question(%Campaign{raw_payload: raw_payload}),
+    do: MediaPayload.recommended_question(raw_payload)
 
   def user_questions(%Campaign{raw_payload: raw_payload}),
     do: MediaPayload.user_questions(raw_payload)

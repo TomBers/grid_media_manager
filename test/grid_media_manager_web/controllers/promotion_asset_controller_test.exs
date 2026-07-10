@@ -43,6 +43,49 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert response(conn, 200) =~ "#0f172a"
   end
 
+  test "serves portrait reading cards for key nodes", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    conn =
+      get(
+        conn,
+        ~p"/campaigns/#{campaign.id}/nodes/2/share-card.svg?style=warm_paper&format=portrait"
+      )
+
+    assert response_content_type(conn, :svg) == "image/svg+xml; charset=utf-8"
+    assert response(conn, 200) =~ "width=\"1080\""
+    assert response(conn, 200) =~ "height=\"1350\""
+    assert response(conn, 200) =~ "What Can a Brave New World Teach Us?"
+  end
+
+  test "serves carousel slides for key nodes", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    conn =
+      get(
+        conn,
+        ~p"/campaigns/#{campaign.id}/nodes/2/carousel.svg?style=gradient_poster&slide=1"
+      )
+
+    assert response_content_type(conn, :svg) == "image/svg+xml; charset=utf-8"
+    assert response(conn, 200) =~ "width=\"1080\""
+    assert response(conn, 200) =~ "1 /"
+    assert response(conn, 200) =~ "RationalGrid.ai"
+  end
+
+  test "serves rasterized PNG carousel slides for social publishing", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    conn =
+      get(
+        conn,
+        ~p"/campaigns/#{campaign.id}/nodes/2/carousel.png?style=gradient_poster&slide=1"
+      )
+
+    assert response_content_type(conn, :png) == "image/png; charset=utf-8"
+    assert response(conn, 200) |> binary_part(0, 8) == <<137, 80, 78, 71, 13, 10, 26, 10>>
+  end
+
   test "keeps long key-node content inside the generated SVG text area", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(long_key_node_payload(), "long-node")
 

@@ -82,6 +82,7 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
       payload
       |> content_or_raw_list("follow_up_questions")
       |> Enum.map(&question_text/1)
+      |> Enum.filter(&question_text?/1)
       |> Enum.reject(&is_nil/1)
 
     extracted = extracted_questions(payload)
@@ -90,6 +91,12 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
     (explicit ++ extracted)
     |> unique_strings()
     |> Enum.reject(&same_question?(&1, origin))
+  end
+
+  def recommended_question(payload) when is_map(payload) do
+    payload
+    |> follow_up_questions()
+    |> Enum.max_by(&question_score/1, fn -> nil end)
   end
 
   def user_questions(payload) when is_map(payload) do
@@ -185,7 +192,8 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
         "id" => id,
         "class" => node_class(node) || "node",
         "title" => title || excerpt || "Node #{id}",
-        "excerpt" => excerpt || title || ""
+        "excerpt" => excerpt || title || "",
+        "content" => node_content(node)
       }
     end
   end
@@ -301,10 +309,24 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
   end
 
   defp question_text?(question) when is_binary(question) do
-    String.ends_with?(question, "?") and String.length(question) >= 8
+    (String.ends_with?(question, "?") or String.ends_with?(question, "...")) and
+      String.length(question) >= 8 and
+      not String.contains?(question, ["/", "\\", "://", "www.", ".com", ".ai"])
   end
 
   defp question_text?(_question), do: false
+
+  defp question_score(question) when is_binary(question) do
+    words = Regex.scan(~r/[[:alpha:]]+/u, question) |> length()
+    length_score = min(words, 18)
+
+    question_word_score =
+      if Regex.match?(~r/\b(why|how|what|can|could|would|should|does|is|if)\b/i, question),
+        do: 8,
+        else: 0
+
+    length_score + question_word_score
+  end
 
   defp same_question?(question, origin) when is_binary(question) and is_binary(origin) do
     normalize_question(question) == normalize_question(origin)

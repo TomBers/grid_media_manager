@@ -5,7 +5,7 @@ defmodule GridMediaManager.Campaigns.PostDraft do
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
 
-  @statuses ~w(draft copied scheduled published failed)
+  @statuses ~w(draft approved copied scheduled published failed)
 
   schema "post_drafts" do
     field :platform, :string

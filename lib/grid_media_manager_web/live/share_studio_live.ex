@@ -30,11 +30,13 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
       |> assign(:key_nodes, Campaigns.key_nodes(campaign) |> Enum.take(8))
       |> assign(:first_answer_excerpt, Campaigns.first_answer_excerpt(campaign))
       |> assign(:follow_up_questions, Campaigns.follow_up_questions(campaign))
+      |> assign(:recommended_question, Campaigns.recommended_question(campaign))
       |> assign(:user_questions, Campaigns.user_questions(campaign))
       |> assign(:highlights, Campaigns.highlights(campaign) |> Enum.take(8))
       |> assign(:generated_grid_styles, generated_grid_styles(media_assets))
       |> assign(:generated_highlight_ids, generated_highlight_ids(media_assets))
       |> assign(:generated_key_node_ids, generated_key_node_ids(media_assets))
+      |> assign(:generated_carousel_node_ids, generated_carousel_node_ids(media_assets))
       |> assign(:generated_question_ids, generated_question_ids(media_assets))
       |> assign(:asset_count, length(media_assets))
       |> assign(:draft_count, Campaigns.list_post_drafts(campaign) |> length())
@@ -154,7 +156,9 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     style =
       ShareCard.normalize_style(Map.get(params, "style") || socket.assigns.selected_card_style)
 
-    case Campaigns.generate_key_node_asset(socket.assigns.campaign, node_id, style) do
+    format = if Map.get(params, "format") == "portrait", do: "portrait", else: "landscape"
+
+    case Campaigns.generate_key_node_asset(socket.assigns.campaign, node_id, style, format) do
       {:ok, asset} ->
         media_assets = Campaigns.list_media_assets(socket.assigns.campaign)
         draft_count = Campaigns.list_post_drafts(socket.assigns.campaign) |> length()
@@ -167,12 +171,47 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
            :generated_key_node_ids,
            MapSet.put(
              socket.assigns.generated_key_node_ids,
-             styled_source_key(asset.node_id, style)
+             styled_source_key("#{asset.node_id}|#{format}", style)
            )
          )
          |> stream_insert(:media_assets, asset)
          |> refresh_drafts()
-         |> put_flash(:info, "Generated image card for #{asset.title}")}
+         |> put_flash(:info, generated_node_flash(asset.title, format))}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Could not find that key node.")}
+    end
+  end
+
+  def handle_event("generate_key_node_carousel", %{"id" => node_id} = params, socket) do
+    style =
+      ShareCard.normalize_style(Map.get(params, "style") || socket.assigns.selected_card_style)
+
+    case Campaigns.generate_key_node_carousel(socket.assigns.campaign, node_id, style) do
+      {:ok, assets} ->
+        media_assets = Campaigns.list_media_assets(socket.assigns.campaign)
+        draft_count = Campaigns.list_post_drafts(socket.assigns.campaign) |> length()
+
+        socket =
+          socket
+          |> assign(:asset_count, length(media_assets))
+          |> assign(:draft_count, draft_count)
+          |> assign(
+            :generated_carousel_node_ids,
+            MapSet.put(
+              socket.assigns.generated_carousel_node_ids,
+              styled_source_key(node_id, style)
+            )
+          )
+          |> then(fn socket ->
+            Enum.reduce(assets, socket, fn asset, acc ->
+              stream_insert(acc, :media_assets, asset)
+            end)
+          end)
+          |> refresh_drafts()
+          |> put_flash(:info, "Generated #{length(assets)}-slide carousel")
+
+        {:noreply, socket}
 
       {:error, :not_found} ->
         {:noreply, put_flash(socket, :error, "Could not find that key node.")}
@@ -226,6 +265,17 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
   end
 
   def handle_event("copied", _params, socket), do: {:noreply, socket}
+
+  def handle_event("approve_draft", %{"id" => id}, socket) do
+    case Campaigns.approve_post_draft(id) do
+      {:ok, draft} ->
+        draft = Campaigns.get_post_draft_with_asset!(draft.id)
+        {:noreply, stream_insert(socket, :post_drafts, draft_item(draft))}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not approve this draft.")}
+    end
+  end
 
   @impl true
   def render(assigns) do
@@ -302,8 +352,15 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                     phx-value-style={style.id}
                     class={card_style_button_class(@selected_card_style == style.id)}
                   >
-                    <span class="block text-sm font-semibold">{style.label}</span>
-                    <span class="block text-[0.68rem] text-current/60">{style.description}</span>
+                    <span class="flex items-center gap-2">
+                      <span class={[
+                        "h-5 w-10 shrink-0 rounded-md border border-white/20 shadow-inner",
+                        style_swatch_class(style.id)
+                      ]}>
+                      </span>
+                      <span class="text-sm font-semibold">{style.label}</span>
+                    </span>
+                    <span class="mt-1 block text-[0.68rem] text-current/60">{style.description}</span>
                   </button>
                 </div>
                 <div class="mt-4 flex justify-end">
@@ -375,6 +432,52 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                 <p class="mt-3 rounded-3xl border border-base-content/10 bg-base-100 p-4 text-sm leading-6 text-base-content/70">
                   {@first_answer_excerpt}
                 </p>
+              </div>
+
+              <div :if={@recommended_question} id="recommended-question-section">
+                <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">
+                  Recommended conversation starter
+                </h2>
+                <div class="mt-3 rounded-3xl border border-orange-500/20 bg-orange-500/10 p-4">
+                  <p class="text-sm font-semibold leading-6 text-base-content/85">
+                    {@recommended_question}
+                  </p>
+                  <div class="mt-3 flex items-center justify-between gap-3">
+                    <p class="text-xs text-base-content/55">
+                      Highest-signal question found in this grid.
+                    </p>
+                    <button
+                      id="generate-recommended-question"
+                      type="button"
+                      phx-click="generate_question_asset"
+                      phx-value-id={question_id(@recommended_question)}
+                      phx-value-style={@selected_card_style}
+                      disabled={
+                        generated_question?(
+                          @generated_question_ids,
+                          question_id(@recommended_question),
+                          @selected_card_style
+                        )
+                      }
+                      class={
+                        generate_question_button_class(
+                          generated_question?(
+                            @generated_question_ids,
+                            question_id(@recommended_question),
+                            @selected_card_style
+                          )
+                        )
+                      }
+                    >
+                      <.icon name="hero-chat-bubble-left-right" class="mr-1.5 size-3.5" />
+                      <%= if generated_question?(@generated_question_ids, question_id(@recommended_question), @selected_card_style) do %>
+                        Quote generated
+                      <% else %>
+                        Generate quote
+                      <% end %>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div :if={@follow_up_questions != []} id="follow-up-questions-section">
@@ -552,7 +655,7 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                         {Map.get(node, "class")}
                       </span>
                     </div>
-                    <div class="mt-3 flex justify-end">
+                    <div class="mt-3 flex flex-wrap justify-end gap-2">
                       <button
                         id={"generate-key-node-image-#{dom_id_part(key_node_id(node))}"}
                         type="button"
@@ -577,10 +680,71 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                         }
                       >
                         <.icon name="hero-photo" class="mr-1.5 size-3.5" />
-                        <%= if generated_key_node?(@generated_key_node_ids, key_node_id(node), @selected_card_style) do %>
-                          Image generated
+                        <%= if generated_key_node?(@generated_key_node_ids, key_node_id(node), @selected_card_style, "landscape") do %>
+                          Hook generated
                         <% else %>
-                          Generate image
+                          Hook card
+                        <% end %>
+                      </button>
+                      <button
+                        id={"generate-key-node-reading-image-#{dom_id_part(key_node_id(node))}"}
+                        type="button"
+                        phx-click="generate_key_node_asset"
+                        phx-value-id={key_node_id(node)}
+                        phx-value-style={@selected_card_style}
+                        phx-value-format="portrait"
+                        disabled={
+                          generated_key_node?(
+                            @generated_key_node_ids,
+                            key_node_id(node),
+                            @selected_card_style,
+                            "portrait"
+                          )
+                        }
+                        class={
+                          generate_key_node_button_class(
+                            generated_key_node?(
+                              @generated_key_node_ids,
+                              key_node_id(node),
+                              @selected_card_style,
+                              "portrait"
+                            )
+                          )
+                        }
+                      >
+                        <.icon name="hero-book-open" class="mr-1.5 size-3.5" />
+                        <%= if generated_key_node?(@generated_key_node_ids, key_node_id(node), @selected_card_style, "portrait") do %>
+                          Reading card generated
+                        <% else %>
+                          Reading card
+                        <% end %>
+                      </button>
+                      <button
+                        id={"generate-key-node-carousel-#{dom_id_part(key_node_id(node))}"}
+                        type="button"
+                        phx-click="generate_key_node_carousel"
+                        phx-value-id={key_node_id(node)}
+                        phx-value-style={@selected_card_style}
+                        disabled={
+                          MapSet.member?(
+                            @generated_carousel_node_ids,
+                            styled_source_key(key_node_id(node), @selected_card_style)
+                          )
+                        }
+                        class={
+                          generate_key_node_button_class(
+                            MapSet.member?(
+                              @generated_carousel_node_ids,
+                              styled_source_key(key_node_id(node), @selected_card_style)
+                            )
+                          )
+                        }
+                      >
+                        <.icon name="hero-rectangle-stack" class="mr-1.5 size-3.5" />
+                        <%= if MapSet.member?(@generated_carousel_node_ids, styled_source_key(key_node_id(node), @selected_card_style)) do %>
+                          Carousel generated
+                        <% else %>
+                          Carousel
                         <% end %>
                       </button>
                     </div>
@@ -659,6 +823,9 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                         <p class="text-sm font-semibold text-base-content">{asset.title}</p>
                         <p class="text-xs text-base-content/50">
                           {asset.kind}<span :if={asset.style}> · {asset.style}</span>
+                          <span :if={Map.get(asset.metadata || %{}, "format") == "portrait"}>
+                            · reading card
+                          </span>
                         </p>
                       </div>
                       <span
@@ -811,17 +978,34 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                       Status:
                       <span class="font-medium uppercase tracking-wide">{item.draft.status}</span>
                     </p>
-                    <button
-                      id={"copy-draft-#{item.id}"}
-                      type="button"
-                      phx-hook="CopyToClipboard"
-                      phx-update="ignore"
-                      data-copy-text={item.draft.body}
-                      data-draft-id={item.id}
-                      class="inline-flex items-center rounded-2xl bg-base-content px-4 py-2 text-sm font-semibold text-base-100 shadow-lg shadow-base-content/10 transition hover:-translate-y-0.5 hover:shadow-xl"
-                    >
-                      Copy text
-                    </button>
+                    <div class="flex flex-wrap justify-end gap-2">
+                      <%= if item.draft.status == "approved" do %>
+                        <span class="inline-flex items-center rounded-2xl bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-200">
+                          <.icon name="hero-check" class="mr-1.5 size-4" /> Approved
+                        </span>
+                      <% else %>
+                        <button
+                          id={"approve-draft-#{item.id}"}
+                          type="button"
+                          phx-click="approve_draft"
+                          phx-value-id={item.id}
+                          class="inline-flex items-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:-translate-y-0.5 hover:bg-emerald-500/15 dark:text-emerald-200"
+                        >
+                          <.icon name="hero-check" class="mr-1.5 size-4" /> Approve
+                        </button>
+                      <% end %>
+                      <button
+                        id={"copy-draft-#{item.id}"}
+                        type="button"
+                        phx-hook="CopyToClipboard"
+                        phx-update="ignore"
+                        data-copy-text={item.draft.body}
+                        data-draft-id={item.id}
+                        class="inline-flex items-center rounded-2xl bg-base-content px-4 py-2 text-sm font-semibold text-base-100 shadow-lg shadow-base-content/10 transition hover:-translate-y-0.5 hover:shadow-xl"
+                      >
+                        Copy text
+                      </button>
+                    </div>
                   </div>
                 </article>
               </div>
@@ -873,6 +1057,7 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     |> assign(:generated_grid_styles, generated_grid_styles(media_assets))
     |> assign(:generated_highlight_ids, generated_highlight_ids(media_assets))
     |> assign(:generated_key_node_ids, generated_key_node_ids(media_assets))
+    |> assign(:generated_carousel_node_ids, generated_carousel_node_ids(media_assets))
     |> assign(:generated_question_ids, generated_question_ids(media_assets))
   end
 
@@ -923,6 +1108,19 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
   defp generated_key_node_ids(media_assets) do
     media_assets
     |> Enum.filter(&(&1.kind == "key_node_card"))
+    |> Enum.map(fn asset ->
+      format = Map.get(asset.metadata || %{}, "format", "landscape")
+      styled_source_key("#{asset.node_id}|#{format}", asset.style)
+    end)
+    |> MapSet.new()
+  end
+
+  defp generated_carousel_node_ids(media_assets) do
+    media_assets
+    |> Enum.filter(fn asset ->
+      asset.kind == "key_node_carousel_slide" and
+        Map.get(asset.metadata || %{}, "slide_index") in [1, "1"]
+    end)
     |> Enum.map(&styled_source_key(&1.node_id, &1.style))
     |> MapSet.new()
   end
@@ -980,9 +1178,12 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     |> to_string()
   end
 
-  defp generated_key_node?(generated_key_node_ids, node_id, style) do
-    MapSet.member?(generated_key_node_ids, styled_source_key(node_id, style))
+  defp generated_key_node?(generated_key_node_ids, node_id, style, format \\ "landscape") do
+    MapSet.member?(generated_key_node_ids, styled_source_key("#{node_id}|#{format}", style))
   end
+
+  defp generated_node_flash(title, "portrait"), do: "Generated reading card for #{title}"
+  defp generated_node_flash(title, _format), do: "Generated hook card for #{title}"
 
   defp styled_source_key(source_id, style) do
     "#{source_id}|#{ShareCard.normalize_style(style)}"
@@ -1008,6 +1209,29 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
       )
     ]
   end
+
+  defp style_swatch_class("editorial_dark"),
+    do: "bg-gradient-to-br from-rose-400 via-indigo-950 to-cyan-400"
+
+  defp style_swatch_class("gradient_poster"),
+    do: "bg-gradient-to-br from-fuchsia-300 via-violet-700 to-teal-500"
+
+  defp style_swatch_class("minimal_academic"),
+    do: "bg-gradient-to-br from-slate-100 via-blue-100 to-slate-400"
+
+  defp style_swatch_class("warm_paper"),
+    do: "bg-gradient-to-br from-amber-200 via-orange-700 to-stone-900"
+
+  defp style_swatch_class("signal_red"),
+    do: "bg-gradient-to-br from-rose-300 via-red-800 to-amber-500"
+
+  defp style_swatch_class("deep_ocean"),
+    do: "bg-gradient-to-br from-cyan-300 via-sky-950 to-emerald-400"
+
+  defp style_swatch_class("newsprint"),
+    do: "bg-gradient-to-br from-stone-100 via-amber-100 to-red-800"
+
+  defp style_swatch_class(_style), do: "bg-base-300"
 
   defp generate_grid_button_class(true) do
     "inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-200"
