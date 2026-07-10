@@ -3,8 +3,33 @@ defmodule GridMediaManager.CampaignsTest do
 
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.RationalGrid.MediaPayload
+
+  test "exposes distinct style presets for different editorial moods" do
+    styles = ShareCard.styles()
+    ids = Enum.map(styles, & &1.id)
+
+    assert Enum.all?(["signal_red", "deep_ocean", "newsprint"], &(&1 in ids))
+    assert length(ids) == length(Enum.uniq(ids))
+    assert ShareCard.normalize_style("newsprint") == "newsprint"
+  end
 
   describe "import_payload/2" do
+    test "rejects URL fragments when extracting follow-up questions" do
+      payload = %{
+        "content" => %{
+          "follow_up_questions" => [
+            "com/search?",
+            "Would comfort make freedom less valuable?"
+          ]
+        }
+      }
+
+      assert MediaPayload.follow_up_questions(payload) == [
+               "Would comfort make freedom less valuable?"
+             ]
+    end
+
     test "creates a campaign, media assets, and deterministic drafts" do
       payload = sample_payload()
 
@@ -23,6 +48,16 @@ defmodule GridMediaManager.CampaignsTest do
                assets,
                &(&1.kind == "highlight_card" and &1.text == "collective unconscious")
              )
+    end
+
+    test "approves a draft for the publishing queue" do
+      assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "approval-test")
+
+      [draft | _] =
+        Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: "campaign")
+
+      assert {:ok, approved} = Campaigns.approve_post_draft(draft.id)
+      assert approved.status == "approved"
     end
 
     test "imports the simplified content payload without pre-rendered assets" do
@@ -49,6 +84,9 @@ defmodule GridMediaManager.CampaignsTest do
                "If a drug like soma existed today...",
                "How do modern social media algorithms mimic..."
              ]
+
+      assert Campaigns.recommended_question(campaign) ==
+               "If a drug like soma existed today..."
 
       assert [%{"question" => "If a drug like soma existed today..."}] =
                Campaigns.user_questions(campaign)
@@ -120,6 +158,11 @@ defmodule GridMediaManager.CampaignsTest do
       assert highlight_asset.url ==
                "/campaigns/#{campaign.id}/highlights/123/share-card.svg?style=warm_paper"
 
+      highlight = %{"id" => 123, "text" => "Perfect comfort can become a cage."}
+      warm_svg = ShareCard.highlight_image_svg(campaign, highlight, "warm_paper")
+      assert warm_svg =~ "#451a03"
+      refute warm_svg =~ "#120f16"
+
       assets = Campaigns.list_media_assets(campaign)
       assert length(assets) == 2
 
@@ -186,15 +229,49 @@ defmodule GridMediaManager.CampaignsTest do
       assert styled_asset.url ==
                "/campaigns/#{campaign.id}/nodes/1/share-card.svg?style=warm_paper"
 
+      assert {:ok, portrait_asset} =
+               Campaigns.generate_key_node_asset(campaign, "1", "warm_paper", "portrait")
+
+      assert portrait_asset.url ==
+               "/campaigns/#{campaign.id}/nodes/1/share-card.svg?style=warm_paper&format=portrait"
+
+      assert portrait_asset.metadata["format"] == "portrait"
+
+      assert ShareCard.node_reading_image_svg(
+               campaign,
+               ShareCard.find_key_node(campaign, "1"),
+               "warm_paper"
+             ) =~ "width=\"1080\""
+
       assets = Campaigns.list_media_assets(campaign)
-      assert length(Enum.filter(assets, &(&1.kind == "key_node_card"))) == 2
+      assert length(Enum.filter(assets, &(&1.kind == "key_node_card"))) == 3
 
       drafts = Campaigns.list_post_drafts(campaign)
       assert Enum.any?(drafts, &(&1.platform == "linkedin" and &1.angle == "key_node"))
 
       assert {:ok, _asset} = Campaigns.generate_key_node_asset(campaign, "1")
       assets = Campaigns.list_media_assets(campaign)
-      assert length(Enum.filter(assets, &(&1.kind == "key_node_card"))) == 2
+      assert length(Enum.filter(assets, &(&1.kind == "key_node_card"))) == 3
+    end
+
+    test "generates an ordered carousel of key-node slides" do
+      assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "carousel-test")
+
+      assert {:ok, assets} =
+               Campaigns.generate_key_node_carousel(campaign, "1", "gradient_poster")
+
+      assert length(assets) >= 2
+      assert Enum.all?(assets, &(&1.kind == "key_node_carousel_slide"))
+      assert Enum.at(assets, 0).metadata["slide_index"] == 1
+      assert Enum.at(assets, 0).recommended_platforms == ["instagram", "linkedin"]
+      assert Enum.at(assets, 0).mime_type == "image/png"
+      assert Enum.at(assets, 0).url =~ "/carousel.png?"
+      assert Enum.all?(Enum.drop(assets, 1), &(&1.recommended_platforms == []))
+
+      assert Enum.any?(
+               Campaigns.list_post_drafts(campaign),
+               &(&1.media_asset_id == Enum.at(assets, 0).id)
+             )
     end
 
     test "deletes a generated image asset and its generated drafts" do

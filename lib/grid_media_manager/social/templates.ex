@@ -8,6 +8,7 @@ defmodule GridMediaManager.Social.Templates do
 
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
+  alias GridMediaManager.RationalGrid.MediaPayload
   alias GridMediaManager.Social.Platforms
 
   @base_angles ~w(question explainer discussion)
@@ -171,19 +172,25 @@ defmodule GridMediaManager.Social.Templates do
   end
 
   def body(%Campaign{} = campaign, _asset, platform, "discussion") do
+    question = lead_question(campaign)
+
     case platform do
       "linkedin" ->
-        "What would change if more online discussions were mapped instead of flattened into comment threads?\n\nThis RationalGrid uses #{campaign.title} as an explorable argument map — a way to learn through structure, context, and follow-up questions.\n\nExplore it:\n#{campaign.grid_url}"
+        "#{question}\n\nThe grid maps the surrounding argument, including the claims and questions that make this difficult. Where do you land?\n\nExplore it:\n#{campaign.grid_url}"
 
       "instagram" ->
-        "What if learning a topic felt more like exploring a map than scrolling a feed?\n\nThis RationalGrid is a visual argument map for: #{campaign.title}\n\n#{hashtags(campaign)}"
+        "#{question}\n\nFollow the argument and the questions around it.\n\n#{hashtags(campaign)}"
 
       "substack" ->
-        "Most social posts flatten an idea. A RationalGrid tries to preserve the structure: what is being claimed, what supports it, what follows, and what remains open.\n\nThis one maps: #{campaign.title}\n\n#{campaign.grid_url}"
+        "#{question}\n\nThe RationalGrid preserves the structure around the question: what is claimed, what supports it, what follows, and what remains open.\n\n#{campaign.grid_url}"
 
       _ ->
-        "What if online arguments were easier to map, explore, and learn from?\n\nExample RationalGrid: #{truncate(campaign.title, 92)}\n#{campaign.grid_url}"
+        "#{question}\n\nWhere do you land?\n#{campaign.grid_url}"
     end
+  end
+
+  defp lead_question(%Campaign{} = campaign) do
+    MediaPayload.recommended_question(campaign.raw_payload) || ensure_question(campaign.title)
   end
 
   defp asset_angle(%MediaAsset{kind: "key_node_card"}), do: "key_node"

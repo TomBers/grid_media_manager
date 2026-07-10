@@ -1,6 +1,9 @@
 defmodule GridMediaManager.Promotion.ShareCard do
   @moduledoc """
-  Generates RationalGrid promotion share-card SVGs from imported campaign content.
+  Generates RationalGrid promotion share cards from imported campaign content.
+
+  Most cards remain SVG-first; carousels are rasterized to PNG for social
+  publishing after their layout is rendered.
 
   This is adapted from Dialectic's `DialecticWeb.HighlightShare`, but it is
   intentionally decoupled from Dialectic schemas/routes. It works from the
@@ -12,6 +15,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   @image_width 1200
   @image_height 630
+  @portrait_width 1080
+  @portrait_height 1350
   @max_quote_lines 6
   @quote_area_left 112
   @quote_area_top 146
@@ -25,14 +30,25 @@ defmodule GridMediaManager.Promotion.ShareCard do
   @default_style "editorial_dark"
 
   @styles [
-    %{id: "editorial_dark", label: "Editorial dark", description: "Rich dark quote card"},
-    %{id: "gradient_poster", label: "Gradient poster", description: "Bold colorful poster"},
+    %{
+      id: "editorial_dark",
+      label: "Editorial dark",
+      description: "Rich dark quote card"
+    },
+    %{
+      id: "gradient_poster",
+      label: "Gradient poster",
+      description: "Bold colorful poster"
+    },
     %{
       id: "minimal_academic",
       label: "Minimal academic",
       description: "Clean light editorial card"
     },
-    %{id: "warm_paper", label: "Warm paper", description: "Soft warm reading card"}
+    %{id: "warm_paper", label: "Warm paper", description: "Soft warm reading card"},
+    %{id: "signal_red", label: "Signal red", description: "Provocative red-top bulletin"},
+    %{id: "deep_ocean", label: "Deep ocean", description: "Cool analytical night mode"},
+    %{id: "newsprint", label: "Newsprint", description: "Tactile paper and ink"}
   ]
 
   def styles, do: @styles
@@ -81,13 +97,23 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> maybe_add_style_query(style)
   end
 
-  def node_image_path(campaign, node_id, style \\ @default_style)
+  def node_image_path(campaign, node_id, style \\ @default_style, format \\ "landscape")
 
-  def node_image_path(%Campaign{id: id}, node_id, style) do
+  def node_image_path(%Campaign{id: id}, node_id, style, format) do
     encoded_node_id = URI.encode(to_string(node_id), &URI.char_unreserved?/1)
 
     "/campaigns/#{id}/nodes/#{encoded_node_id}/share-card.svg"
     |> maybe_add_style_query(style)
+    |> maybe_add_format_query(format)
+  end
+
+  def node_carousel_image_path(campaign, node_id, slide, style \\ @default_style)
+
+  def node_carousel_image_path(%Campaign{id: id}, node_id, slide, style) do
+    encoded_node_id = URI.encode(to_string(node_id), &URI.char_unreserved?/1)
+
+    "/campaigns/#{id}/nodes/#{encoded_node_id}/carousel.png"
+    |> then(&(&1 <> "?" <> URI.encode_query(%{style: normalize_style(style), slide: slide})))
   end
 
   def question_image_path(campaign, question_id, style \\ @default_style)
@@ -300,6 +326,295 @@ defmodule GridMediaManager.Promotion.ShareCard do
     """
   end
 
+  def node_reading_image_svg(campaign, node, style \\ @default_style)
+
+  def node_reading_image_svg(%Campaign{} = campaign, node, style) when is_map(node) do
+    style = normalize_style(style)
+    palette = quote_palette(style)
+    node_title = node |> get("title") |> sanitize_text(320) |> fallback("Key node")
+
+    node_content =
+      node
+      |> get("content")
+      |> fallback(get(node, "excerpt"))
+      |> fallback("")
+      |> strip_node_markdown()
+      |> sanitize_text(1500)
+      |> strip_leading_title(node_title)
+
+    node_class =
+      node |> get("class") |> sanitize_text(48) |> fallback("node") |> String.replace("_", " ")
+
+    title_font_size = 58
+    title_line_gap = 66
+    title_lines = wrap_lines_by_width(node_title, 820 / title_font_size, 4)
+    title_start_y = 232
+    body_font_size = 29
+    body_line_gap = 42
+    body_start_y = title_start_y + (length(title_lines) - 1) * title_line_gap + 92
+    body_max_lines = max(min(div(1160 - body_start_y, body_line_gap), 18), 4)
+    body_lines = wrap_lines_by_width(node_content, 820 / body_font_size, body_max_lines)
+
+    title_markup =
+      title_lines
+      |> Enum.with_index()
+      |> Enum.map_join("", fn {line, index} ->
+        y = title_start_y + index * title_line_gap
+        ~s(<tspan x="130" y="#{y}">#{escape_xml(line)}</tspan>)
+      end)
+
+    body_markup =
+      body_lines
+      |> Enum.with_index()
+      |> Enum.map_join("", fn {line, index} ->
+        y = body_start_y + index * body_line_gap
+        ~s(<tspan x="130" y="#{y}">#{escape_xml(line)}</tspan>)
+      end)
+
+    """
+    <svg xmlns="http://www.w3.org/2000/svg" width="#{@portrait_width}" height="#{@portrait_height}" viewBox="0 0 #{@portrait_width} #{@portrait_height}" role="img" aria-labelledby="title desc">
+      <title id="title">#{escape_xml(node_title)} · #{escape_xml(campaign.title)} · RationalGrid</title>
+      <desc id="desc">Portrait reading card for #{escape_xml(node_title)} from #{escape_xml(campaign.title)} on RationalGrid</desc>
+      <defs>
+        <linearGradient id="portraitCanvas" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#{palette.canvas_a}" />
+          <stop offset="48%" stop-color="#{palette.canvas_b}" />
+          <stop offset="100%" stop-color="#{palette.canvas_c}" />
+        </linearGradient>
+        <radialGradient id="portraitBloomA" cx="12%" cy="10%" r="72%">
+          <stop offset="0%" stop-color="#{palette.bloom_a}" stop-opacity="#{palette.bloom_opacity}" />
+          <stop offset="100%" stop-color="#{palette.bloom_a}" stop-opacity="0" />
+        </radialGradient>
+        <radialGradient id="portraitBloomB" cx="90%" cy="24%" r="70%">
+          <stop offset="0%" stop-color="#{palette.bloom_b}" stop-opacity="#{palette.bloom_opacity}" />
+          <stop offset="100%" stop-color="#{palette.bloom_b}" stop-opacity="0" />
+        </radialGradient>
+        <linearGradient id="portraitAccent" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#{palette.accent_a}" />
+          <stop offset="52%" stop-color="#{palette.accent_b}" />
+          <stop offset="100%" stop-color="#{palette.accent_c}" />
+        </linearGradient>
+        <filter id="portraitShadow" x="-8%" y="-6%" width="116%" height="114%">
+          <feDropShadow dx="0" dy="28" stdDeviation="26" flood-color="#{palette.shadow}" flood-opacity="#{palette.shadow_opacity}" />
+        </filter>
+      </defs>
+
+      <rect width="1080" height="1350" fill="url(#portraitCanvas)" />
+      <rect width="1080" height="1350" fill="url(#portraitBloomA)" />
+      <rect width="1080" height="1350" fill="url(#portraitBloomB)" />
+      <path d="M-80 1040 C220 890 420 1200 730 1010 C870 924 986 878 1160 760" fill="none" stroke="#{palette.accent_b}" stroke-opacity="0.16" stroke-width="3" />
+
+      <rect x="54" y="54" width="972" height="1242" rx="44" fill="#{palette.card}" fill-opacity="#{palette.card_opacity}" filter="url(#portraitShadow)" />
+      <rect x="54.5" y="54.5" width="971" height="1241" rx="43.5" fill="none" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
+      <rect x="82" y="82" width="916" height="1186" rx="32" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
+
+      <text x="130" y="142" fill="#{palette.label}" fill-opacity="0.92" font-size="20" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0.4">RationalGrid.ai</text>
+      <text x="950" y="142" text-anchor="end" fill="#{palette.kicker}" font-size="17" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="1.4" text-transform="uppercase">#{escape_xml(node_class)}</text>
+      <line x1="130" y1="176" x2="950" y2="176" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
+
+      <text fill="#{palette.text}" font-size="#{title_font_size}" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="-0.7" paint-order="stroke" stroke="#{palette.text_stroke}" stroke-width="2.2" stroke-opacity="#{palette.text_stroke_opacity}">
+        #{title_markup}
+      </text>
+      <rect x="130" y="#{body_start_y - 54}" width="210" height="7" rx="3.5" fill="url(#portraitAccent)" opacity="0.96" />
+      <text fill="#{palette.secondary_text}" font-size="#{body_font_size}" font-weight="500" font-family="#{@ui_font_family}" letter-spacing="0" opacity="0.94">
+        #{body_markup}
+      </text>
+
+      <line x1="130" y1="1210" x2="950" y2="1210" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
+      <text x="130" y="1248" fill="#{palette.muted}" font-size="18" font-weight="700" font-family="#{@ui_font_family}" letter-spacing="0.2">Explore the full argument on RationalGrid</text>
+    </svg>
+    """
+  end
+
+  def carousel_slides(%Campaign{} = campaign, node) when is_map(node) do
+    node_title = node |> get("title") |> sanitize_text(320) |> fallback("Key node")
+
+    content =
+      node
+      |> get("content")
+      |> fallback(get(node, "excerpt"))
+      |> fallback("")
+      |> to_string()
+
+    sections =
+      Regex.split(~r/(?m)^##+\s+/, content, trim: true)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.map(fn section ->
+        case String.split(section, "\n", parts: 2) do
+          [heading, body] -> %{title: String.trim(heading), body: String.trim(body)}
+          [body] -> %{title: "The argument", body: body}
+        end
+      end)
+
+    body_sections =
+      sections
+      |> Enum.map(fn section ->
+        %{
+          section
+          | body: section.body |> strip_node_markdown() |> strip_leading_title(node_title)
+        }
+      end)
+      |> Enum.reject(&(&1.body == ""))
+
+    content_slides =
+      body_sections
+      |> Enum.take(3)
+      |> Enum.map(fn section ->
+        %{label: "Argument", title: section.title, body: section.body}
+      end)
+
+    question =
+      campaign.raw_payload
+      |> MediaPayload.follow_up_questions()
+      |> List.first()
+      |> fallback("What does this node make you question?")
+
+    slides =
+      [
+        %{
+          label: "Thesis",
+          title: node_title,
+          body: "A key move in the argument mapped by RationalGrid."
+        }
+      ] ++
+        content_slides ++
+        [%{label: "Question", title: "Where do you stand?", body: question}]
+
+    Enum.take(slides, 5)
+  end
+
+  def key_node_carousel_asset_attrs(%Campaign{} = campaign, node, style \\ @default_style) do
+    style = normalize_style(style)
+    node_id = node |> get("id") |> string_value()
+    node_title = node |> get("title") |> sanitize_text(180) |> fallback("Key node")
+    slides = carousel_slides(campaign, node)
+    total = length(slides)
+
+    slides
+    |> Enum.with_index(1)
+    |> Enum.map(fn {slide, index} ->
+      %{
+        title: "#{node_title} · Slide #{index}",
+        kind: "key_node_carousel_slide",
+        url: node_carousel_image_path(campaign, node_id, index, style),
+        mime_type: "image/png",
+        text: slide.body,
+        node_id: node_id,
+        highlight_id: nil,
+        recommended_platforms: if(index == 1, do: ["instagram", "linkedin"], else: []),
+        style: style,
+        source_type: "key_node_carousel",
+        source_id: "#{node_id}|#{index}",
+        metadata: %{
+          "format" => "carousel",
+          "slide_index" => index,
+          "slide_count" => total,
+          "slide_label" => slide.label
+        },
+        carousel_cover?: index == 1
+      }
+    end)
+  end
+
+  def node_carousel_image_svg(campaign, node, style, slide) when is_map(node) do
+    style = normalize_style(style)
+    slide_index = normalize_slide_index(slide)
+    slides = carousel_slides(campaign, node)
+    slide = Enum.at(slides, slide_index - 1) || List.first(slides)
+    palette = quote_palette(style)
+    body_lines = wrap_lines_by_width(slide.body, 820 / 31, 15)
+    body_start_y = 480
+    title_image_data_uri = carousel_title_image_data_uri(slide.title, palette.text)
+
+    body_markup =
+      body_lines
+      |> Enum.with_index()
+      |> Enum.map_join("", fn {line, index} ->
+        ~s(<tspan x="130" y="#{body_start_y + index * 45}">#{escape_xml(line)}</tspan>)
+      end)
+
+    """
+    <svg xmlns="http://www.w3.org/2000/svg" width="#{@portrait_width}" height="#{@portrait_height}" viewBox="0 0 #{@portrait_width} #{@portrait_height}" role="img" aria-labelledby="title desc">
+      <title id="title">#{escape_xml(slide.title)} · #{escape_xml(campaign.title)} · RationalGrid</title>
+      <desc id="desc">Carousel slide #{slide_index} from #{escape_xml(node |> get("title") |> sanitize_text(180))} on RationalGrid</desc>
+      <defs>
+        <linearGradient id="carouselCanvas" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#{palette.canvas_a}" />
+          <stop offset="48%" stop-color="#{palette.canvas_b}" />
+          <stop offset="100%" stop-color="#{palette.canvas_c}" />
+        </linearGradient>
+        <radialGradient id="carouselBloomA" cx="12%" cy="10%" r="72%">
+          <stop offset="0%" stop-color="#{palette.bloom_a}" stop-opacity="#{palette.bloom_opacity}" />
+          <stop offset="100%" stop-color="#{palette.bloom_a}" stop-opacity="0" />
+        </radialGradient>
+        <radialGradient id="carouselBloomB" cx="90%" cy="24%" r="70%">
+          <stop offset="0%" stop-color="#{palette.bloom_b}" stop-opacity="#{palette.bloom_opacity}" />
+          <stop offset="100%" stop-color="#{palette.bloom_b}" stop-opacity="0" />
+        </radialGradient>
+        <linearGradient id="carouselAccent" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#{palette.accent_a}" />
+          <stop offset="52%" stop-color="#{palette.accent_b}" />
+          <stop offset="100%" stop-color="#{palette.accent_c}" />
+        </linearGradient>
+        <filter id="carouselShadow" x="-8%" y="-6%" width="116%" height="114%">
+          <feDropShadow dx="0" dy="28" stdDeviation="26" flood-color="#{palette.shadow}" flood-opacity="#{palette.shadow_opacity}" />
+        </filter>
+      </defs>
+
+      <rect width="1080" height="1350" fill="url(#carouselCanvas)" />
+      <rect width="1080" height="1350" fill="url(#carouselBloomA)" />
+      <rect width="1080" height="1350" fill="url(#carouselBloomB)" />
+      <rect x="54" y="54" width="972" height="1242" rx="44" fill="#{palette.card}" fill-opacity="#{palette.card_opacity}" filter="url(#carouselShadow)" />
+      <rect x="54.5" y="54.5" width="971" height="1241" rx="43.5" fill="none" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
+      <rect x="82" y="82" width="916" height="1186" rx="32" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
+
+      <text x="130" y="142" fill="#{palette.label}" fill-opacity="0.92" font-size="20" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0.4">RationalGrid.ai</text>
+      <text x="950" y="142" text-anchor="end" fill="#{palette.kicker}" font-size="17" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="1.4" text-transform="uppercase">#{escape_xml(slide.label)}</text>
+      <line x1="130" y1="176" x2="950" y2="176" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
+      <image x="130" y="205" width="820" height="190" href="#{title_image_data_uri}" preserveAspectRatio="none" />
+      <rect x="130" y="430" width="210" height="7" rx="3.5" fill="url(#carouselAccent)" opacity="0.96" />
+      <text fill="#{palette.secondary_text}" font-size="31" font-weight="500" font-family="#{@ui_font_family}" letter-spacing="0" opacity="0.94">
+        #{body_markup}
+      </text>
+      <line x1="130" y1="1210" x2="950" y2="1210" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
+      <text x="130" y="1248" fill="#{palette.muted}" font-size="18" font-weight="700" font-family="#{@ui_font_family}">#{slide_index} / #{length(slides)} · #{escape_xml(sanitize_text(campaign.title, 76))}</text>
+    </svg>
+    """
+  end
+
+  @doc """
+  Rasterizes a carousel SVG to a social-ready PNG using libvips.
+
+  The SVG remains the layout source so existing styles stay consistent, while
+  Image.Text handles the bounded title layout and libvips produces the final
+  bitmap that social platforms expect.
+  """
+  def node_carousel_image_png(campaign, node, style, slide) when is_map(node) do
+    campaign
+    |> node_carousel_image_svg(node, style, slide)
+    |> Image.from_svg!()
+    |> Image.write!(:memory, suffix: ".png")
+  end
+
+  defp carousel_title_image_data_uri(title, text_color) do
+    title
+    |> Image.Text.text!(
+      font: "Arial",
+      font_size: 0,
+      font_weight: :heavy,
+      text_fill_color: text_color,
+      background_fill_color: :transparent,
+      width: 820,
+      height: 190,
+      x: :left,
+      y: :top
+    )
+    |> Image.write!(:memory, suffix: ".png")
+    |> Base.encode64()
+    |> then(&"data:image/png;base64,#{&1}")
+  end
+
   def question_image_svg(campaign, question, style \\ @default_style)
 
   def question_image_svg(%Campaign{} = campaign, question, style) when is_map(question) do
@@ -381,7 +696,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def highlight_image_svg(campaign, highlight, style \\ @default_style)
 
   def highlight_image_svg(%Campaign{} = campaign, highlight, style) when is_map(highlight) do
-    _style = normalize_style(style)
+    style = normalize_style(style)
+    palette = quote_palette(style)
 
     quote_text =
       highlight
@@ -410,38 +726,38 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <desc id="desc">#{escape_xml(page_description(campaign, highlight))}</desc>
       <defs>
         <linearGradient id="quoteCanvas" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#120f16" />
-          <stop offset="45%" stop-color="#21132a" />
-          <stop offset="100%" stop-color="#08231f" />
+          <stop offset="0%" stop-color="#{palette.canvas_a}" />
+          <stop offset="45%" stop-color="#{palette.canvas_b}" />
+          <stop offset="100%" stop-color="#{palette.canvas_c}" />
         </linearGradient>
         <radialGradient id="amberBloom" cx="12%" cy="12%" r="68%">
-          <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.52" />
-          <stop offset="100%" stop-color="#f59e0b" stop-opacity="0" />
+          <stop offset="0%" stop-color="#{palette.bloom_a}" stop-opacity="#{palette.bloom_opacity}" />
+          <stop offset="100%" stop-color="#{palette.bloom_a}" stop-opacity="0" />
         </radialGradient>
         <radialGradient id="tealBloom" cx="88%" cy="18%" r="72%">
-          <stop offset="0%" stop-color="#14b8a6" stop-opacity="0.42" />
-          <stop offset="100%" stop-color="#14b8a6" stop-opacity="0" />
+          <stop offset="0%" stop-color="#{palette.bloom_b}" stop-opacity="#{palette.bloom_opacity}" />
+          <stop offset="100%" stop-color="#{palette.bloom_b}" stop-opacity="0" />
         </radialGradient>
         <radialGradient id="violetBloom" cx="66%" cy="88%" r="62%">
-          <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.36" />
-          <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
+          <stop offset="0%" stop-color="#{palette.accent_c}" stop-opacity="0.28" />
+          <stop offset="100%" stop-color="#{palette.accent_c}" stop-opacity="0" />
         </radialGradient>
         <linearGradient id="quotePanel" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#fff7ed" stop-opacity="0.18" />
-          <stop offset="42%" stop-color="#ffffff" stop-opacity="0.07" />
-          <stop offset="100%" stop-color="#2dd4bf" stop-opacity="0.13" />
+          <stop offset="0%" stop-color="#{palette.panel}" stop-opacity="#{palette.panel_opacity}" />
+          <stop offset="42%" stop-color="#{palette.panel}" stop-opacity="0.07" />
+          <stop offset="100%" stop-color="#{palette.accent_c}" stop-opacity="0.13" />
         </linearGradient>
         <linearGradient id="highlightAccent" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#f59e0b" />
-          <stop offset="48%" stop-color="#fef3c7" />
-          <stop offset="100%" stop-color="#2dd4bf" />
+          <stop offset="0%" stop-color="#{palette.accent_a}" />
+          <stop offset="48%" stop-color="#{palette.accent_b}" />
+          <stop offset="100%" stop-color="#{palette.accent_c}" />
         </linearGradient>
         <linearGradient id="brandMark" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#fbbf24" />
-          <stop offset="100%" stop-color="#14b8a6" />
+          <stop offset="0%" stop-color="#{palette.accent_b}" />
+          <stop offset="100%" stop-color="#{palette.accent_c}" />
         </linearGradient>
         <filter id="cardShadow" x="-8%" y="-10%" width="116%" height="124%">
-          <feDropShadow dx="0" dy="28" stdDeviation="24" flood-color="#000000" flood-opacity="0.36" />
+          <feDropShadow dx="0" dy="28" stdDeviation="24" flood-color="#{palette.shadow}" flood-opacity="#{palette.shadow_opacity}" />
         </filter>
         <filter id="softGlow" x="-35%" y="-35%" width="170%" height="170%">
           <feGaussianBlur stdDeviation="18" result="blur" />
@@ -457,29 +773,29 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect width="1200" height="630" fill="url(#amberBloom)" />
       <rect width="1200" height="630" fill="url(#tealBloom)" />
       <rect width="1200" height="630" fill="url(#violetBloom)" />
-      <path d="M-40 492 C220 402 356 638 606 500 C820 382 948 438 1240 284" fill="none" stroke="#fbbf24" stroke-opacity="0.18" stroke-width="2" />
-      <path d="M-30 158 C186 250 312 24 548 142 C806 270 944 76 1232 118" fill="none" stroke="#2dd4bf" stroke-opacity="0.18" stroke-width="2" />
-      <circle cx="1032" cy="112" r="168" fill="#14b8a6" fill-opacity="0.12" />
-      <circle cx="158" cy="516" r="152" fill="#f59e0b" fill-opacity="0.11" />
+      <path d="M-40 492 C220 402 356 638 606 500 C820 382 948 438 1240 284" fill="none" stroke="#{palette.accent_b}" stroke-opacity="0.18" stroke-width="2" />
+      <path d="M-30 158 C186 250 312 24 548 142 C806 270 944 76 1232 118" fill="none" stroke="#{palette.accent_c}" stroke-opacity="0.18" stroke-width="2" />
+      <circle cx="1032" cy="112" r="168" fill="#{palette.bloom_b}" fill-opacity="0.12" />
+      <circle cx="158" cy="516" r="152" fill="#{palette.bloom_a}" fill-opacity="0.11" />
 
-      <rect x="38" y="34" width="1124" height="562" rx="40" fill="#0b1017" fill-opacity="0.82" filter="url(#cardShadow)" />
-      <rect x="38.5" y="34.5" width="1123" height="561" rx="39.5" fill="none" stroke="#ffffff" stroke-opacity="0.13" />
-      <rect x="58" y="54" width="1084" height="522" rx="30" fill="url(#quotePanel)" stroke="#ffffff" stroke-opacity="0.12" />
+      <rect x="38" y="34" width="1124" height="562" rx="40" fill="#{palette.card}" fill-opacity="#{palette.card_opacity}" filter="url(#cardShadow)" />
+      <rect x="38.5" y="34.5" width="1123" height="561" rx="39.5" fill="none" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
+      <rect x="58" y="54" width="1084" height="522" rx="30" fill="url(#quotePanel)" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
 
       <circle cx="92" cy="92" r="16" fill="url(#brandMark)" filter="url(#softGlow)" />
-      <path d="M92 83 L100 92 L92 101 L84 92 Z" fill="#0b1017" fill-opacity="0.88" />
-      <text x="121" y="98" fill="#f8fafc" fill-opacity="0.9" font-size="17" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0">RationalGrid.ai</text>
+      <path d="M92 83 L100 92 L92 101 L84 92 Z" fill="#{palette.card}" fill-opacity="0.88" />
+      <text x="121" y="98" fill="#{palette.label}" fill-opacity="0.9" font-size="17" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0">RationalGrid.ai</text>
 
-      <rect x="86" y="126" width="1028" height="1" fill="#ffffff" fill-opacity="0.13" />
+      <rect x="86" y="126" width="1028" height="1" fill="#{palette.border}" fill-opacity="#{palette.border_opacity}" />
       <rect x="86" y="514" width="344" height="6" rx="3" fill="url(#highlightAccent)" opacity="0.96" />
 
-      <text x="58" y="286" fill="#fbbf24" fill-opacity="0.10" font-size="198" font-weight="700" font-family="#{@quote_font_family}">“</text>
-      <text x="1142" y="500" text-anchor="end" fill="#2dd4bf" fill-opacity="0.08" font-size="154" font-weight="700" font-family="#{@quote_font_family}">”</text>
-      <text fill="#fff7ed" font-size="#{quote_layout.font_size}" font-weight="700" font-family="#{@quote_font_family}" letter-spacing="0" paint-order="stroke" stroke="#120f16" stroke-width="2.2" stroke-opacity="0.24">
+      <text x="58" y="286" fill="#{palette.accent_a}" fill-opacity="0.10" font-size="198" font-weight="700" font-family="#{@quote_font_family}">“</text>
+      <text x="1142" y="500" text-anchor="end" fill="#{palette.accent_c}" fill-opacity="0.08" font-size="154" font-weight="700" font-family="#{@quote_font_family}">”</text>
+      <text fill="#{palette.text}" font-size="#{quote_layout.font_size}" font-weight="700" font-family="#{@quote_font_family}" letter-spacing="0" paint-order="stroke" stroke="#{palette.text_stroke}" stroke-width="2.2" stroke-opacity="#{palette.text_stroke_opacity}">
         #{quote_markup}
       </text>
 
-      <text x="86" y="552" fill="#f8fafc" fill-opacity="0.9" font-size="24" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0">#{escape_xml(source_label)}</text>
+      <text x="86" y="552" fill="#{palette.label}" fill-opacity="0.9" font-size="24" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0">#{escape_xml(source_label)}</text>
     </svg>
     """
   end
@@ -543,17 +859,18 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end
   end
 
-  def key_node_asset_attr(campaign, node, style \\ @default_style)
+  def key_node_asset_attr(campaign, node, style \\ @default_style, format \\ "landscape")
 
-  def key_node_asset_attr(%Campaign{} = campaign, node, style) do
+  def key_node_asset_attr(%Campaign{} = campaign, node, style, format) do
     style = normalize_style(style)
+    format = normalize_node_format(format)
 
     with node_id when is_binary(node_id) and node_id != "" <- node |> get("id") |> string_value(),
          title when is_binary(title) and title != "" <- node |> get("title") |> sanitize_text(nil) do
       %{
         title: title,
         kind: "key_node_card",
-        url: node_image_path(campaign, node_id, style),
+        url: node_image_path(campaign, node_id, style, format),
         mime_type: "image/svg+xml",
         text: node |> get("excerpt") |> sanitize_text(nil) |> fallback(title),
         node_id: node_id,
@@ -562,7 +879,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         style: style,
         source_type: "key_node",
         source_id: node_id,
-        metadata: %{"node_class" => get(node, "class")}
+        metadata: %{"node_class" => get(node, "class"), "format" => format}
       }
     else
       _ -> nil
@@ -1028,6 +1345,48 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end
   end
 
+  defp maybe_add_format_query(path, "landscape"), do: path
+
+  defp maybe_add_format_query(path, format) do
+    separator = if String.contains?(path, "?"), do: "&", else: "?"
+    path <> separator <> URI.encode_query(%{format: normalize_node_format(format)})
+  end
+
+  defp normalize_node_format("portrait"), do: "portrait"
+  defp normalize_node_format(_format), do: "landscape"
+
+  defp normalize_slide_index(slide) when is_integer(slide), do: max(slide, 1)
+
+  defp normalize_slide_index(slide) do
+    case Integer.parse(to_string(slide)) do
+      {index, ""} -> max(index, 1)
+      _ -> 1
+    end
+  end
+
+  defp strip_leading_title(text, title) do
+    text = text |> String.trim_leading("#") |> String.trim_leading()
+
+    cond do
+      text == title ->
+        ""
+
+      String.starts_with?(text, title) ->
+        String.trim_leading(String.slice(text, String.length(title)..-1//1), " :—–-\n")
+
+      true ->
+        text
+    end
+  end
+
+  defp strip_node_markdown(text) when is_binary(text) do
+    text
+    |> String.replace(~r/^[[:space:]]*#+[[:space:]]*/m, "")
+    |> String.replace(~r/\*\*([^*]+)\*\*/, "\\1")
+    |> String.replace(~r/\*([^*]+)\*/, "\\1")
+    |> String.replace(~r/\[([^\]]+)\]\([^\)]+\)/, "\\1")
+  end
+
   defp quote_palette("gradient_poster") do
     %{
       canvas_a: "#2e1065",
@@ -1112,6 +1471,93 @@ defmodule GridMediaManager.Promotion.ShareCard do
       muted: "#fdba74",
       text_stroke: "#1c1917",
       text_stroke_opacity: "0.28"
+    }
+  end
+
+  defp quote_palette("signal_red") do
+    %{
+      canvas_a: "#2b0709",
+      canvas_b: "#7f1d1d",
+      canvas_c: "#111827",
+      bloom_a: "#fb7185",
+      bloom_b: "#f59e0b",
+      bloom_opacity: "0.46",
+      accent_a: "#fb7185",
+      accent_b: "#facc15",
+      accent_c: "#f97316",
+      shadow: "#190204",
+      shadow_opacity: "0.38",
+      card: "#180a0b",
+      card_opacity: "0.82",
+      panel: "#fff1f2",
+      panel_opacity: "0.08",
+      border: "#fecdd3",
+      border_opacity: "0.2",
+      label: "#ffe4e6",
+      kicker: "#fda4af",
+      text: "#fff7ed",
+      secondary_text: "#fecaca",
+      muted: "#fda4af",
+      text_stroke: "#3f0b0b",
+      text_stroke_opacity: "0.3"
+    }
+  end
+
+  defp quote_palette("deep_ocean") do
+    %{
+      canvas_a: "#082f49",
+      canvas_b: "#0f172a",
+      canvas_c: "#164e63",
+      bloom_a: "#38bdf8",
+      bloom_b: "#2dd4bf",
+      bloom_opacity: "0.42",
+      accent_a: "#67e8f9",
+      accent_b: "#bef264",
+      accent_c: "#22d3ee",
+      shadow: "#020617",
+      shadow_opacity: "0.4",
+      card: "#06111f",
+      card_opacity: "0.84",
+      panel: "#ecfeff",
+      panel_opacity: "0.07",
+      border: "#a5f3fc",
+      border_opacity: "0.18",
+      label: "#cffafe",
+      kicker: "#99f6e4",
+      text: "#ecfeff",
+      secondary_text: "#bae6fd",
+      muted: "#67e8f9",
+      text_stroke: "#082f49",
+      text_stroke_opacity: "0.3"
+    }
+  end
+
+  defp quote_palette("newsprint") do
+    %{
+      canvas_a: "#f5f0e6",
+      canvas_b: "#e7dfd0",
+      canvas_c: "#d6c8b6",
+      bloom_a: "#fecaca",
+      bloom_b: "#bfdbfe",
+      bloom_opacity: "0.38",
+      accent_a: "#991b1b",
+      accent_b: "#44403c",
+      accent_c: "#1d4ed8",
+      shadow: "#57534e",
+      shadow_opacity: "0.2",
+      card: "#faf7f0",
+      card_opacity: "0.94",
+      panel: "#fffdf8",
+      panel_opacity: "0.84",
+      border: "#a8a29e",
+      border_opacity: "0.62",
+      label: "#292524",
+      kicker: "#991b1b",
+      text: "#1c1917",
+      secondary_text: "#44403c",
+      muted: "#78716c",
+      text_stroke: "#fffdf8",
+      text_stroke_opacity: "0.5"
     }
   end
 

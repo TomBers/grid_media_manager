@@ -24,6 +24,7 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}")
 
     assert has_element?(view, "#origin-question-section")
+    assert has_element?(view, "#recommended-question-section")
     assert has_element?(view, "#first-answer-excerpt-section")
     assert has_element?(view, "#follow-up-questions-section")
     assert has_element?(view, "#user-questions-section")
@@ -31,6 +32,11 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     assert has_element?(view, "#generate-title-image")
     assert has_element?(view, "#generate-highlight-image-123")
     assert has_element?(view, "#generate-key-node-image-1")
+    assert has_element?(view, "#generate-key-node-reading-image-1")
+    assert has_element?(view, "#generate-key-node-carousel-1")
+    assert has_element?(view, "#card-style-signal_red")
+    assert has_element?(view, "#card-style-deep_ocean")
+    assert has_element?(view, "#card-style-newsprint")
     assert has_element?(view, "#empty-media-assets")
     refute has_element?(view, "#media-assets article")
   end
@@ -107,6 +113,40 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     assert has_element?(view, "#generate-key-node-image-1[disabled]")
   end
 
+  test "generates a portrait reading card from the key-node button", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}")
+
+    view
+    |> element("#generate-key-node-reading-image-1")
+    |> render_click()
+
+    assert Enum.any?(
+             Campaigns.list_media_assets(campaign),
+             &(&1.kind == "key_node_card" and &1.metadata["format"] == "portrait")
+           )
+
+    assert has_element?(view, "#generate-key-node-reading-image-1[disabled]")
+  end
+
+  test "generates a carousel from the key-node button", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}")
+
+    view
+    |> element("#generate-key-node-carousel-1")
+    |> render_click()
+
+    assert Enum.any?(
+             Campaigns.list_media_assets(campaign),
+             &(&1.kind == "key_node_carousel_slide" and &1.metadata["slide_index"] == 1)
+           )
+
+    assert has_element?(view, "#generate-key-node-carousel-1[disabled]")
+  end
+
   test "saves edited draft copy", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(sample_payload(), "res.json")
     [draft | _] = Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: "campaign")
@@ -118,6 +158,20 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     |> render_change()
 
     assert Campaigns.get_post_draft!(draft.id).body == "Updated copy from the editor"
+  end
+
+  test "approves a draft from the composer", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(sample_payload(), "approval-live-test")
+    [draft | _] = Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: "campaign")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}")
+
+    view
+    |> element("#approve-draft-#{draft.id}")
+    |> render_click()
+
+    assert Campaigns.get_post_draft!(draft.id).status == "approved"
+    assert has_element?(view, "#post-draft-#{draft.id}", "Approved")
   end
 
   defp sample_payload do
