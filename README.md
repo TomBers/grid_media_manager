@@ -128,12 +128,12 @@ Social/editorial styles:
 - `deep_ocean` — analytical dark treatment for complex topics
 - `newsprint` — tactile print treatment for quotes and cultural topics
 
-Key-node production also includes channel-specific layouts:
+Question, highlight, and key-node production includes channel-specific layouts:
 
 - `landscape` — 1200×630 feed hook for X, Bluesky, and link previews
 - `linkedin` — 1200×1200 square explainer with denser body copy
 - `portrait` — 1080×1350 Instagram reading card
-- `carousel` — 1080×1350 Instagram slides plus dedicated 1080×1920 Shorts/Reels video frames
+- `carousel` — key nodes become 1080×1350 Instagram slides plus a multi-frame Short; questions and highlights become a portrait plus a six-second 1080×1920 MP4
 
 Generated style and layout variants are persisted as separate media assets. Generated assets can be deleted from the asset gallery, which also removes their associated generated drafts so variants can be regenerated during testing. Extracted question text is preserved in full; generated question drafts may exceed platform character limits and will show the normal character-count warning.
 
@@ -152,6 +152,8 @@ Generated carousel routes:
 ```text
 GET /campaigns/:id/nodes/:node_id/carousel.png?slide=1
 GET /campaigns/:id/nodes/:node_id/carousel.mp4
+GET /campaigns/:id/questions/:question_id/short.mp4
+GET /campaigns/:id/highlights/:highlight_id/short.mp4
 ```
 
 ## Start the Phoenix server

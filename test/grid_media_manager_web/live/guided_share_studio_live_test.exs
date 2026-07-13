@@ -93,7 +93,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     assets = Campaigns.list_media_assets(campaign)
     assert length(assets) == 3
-    assert length(Campaigns.list_post_drafts(campaign, platform: "linkedin")) == 5
+    assert length(Campaigns.list_post_drafts(campaign, platform: "linkedin")) == 3
     assert length(Campaigns.list_post_drafts(campaign, platform: "instagram")) == 6
 
     assert Enum.any?(assets, &(&1.kind == "question_quote_card" and &1.style == "warm_paper"))

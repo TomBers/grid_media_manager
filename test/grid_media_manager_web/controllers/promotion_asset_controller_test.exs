@@ -207,6 +207,57 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert response(conn, 200) =~ "RationalGrid.ai"
   end
 
+  test "serves LinkedIn and Instagram question/highlight layouts", %{conn: conn} do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "platform-quote-routes")
+
+    question = "If a drug like soma existed today..."
+    question_id = ShareCard.question_id(question)
+
+    question_conn =
+      get(
+        conn,
+        ~p"/campaigns/#{campaign.id}/questions/#{question_id}/share-card.svg?style=minimal_light&format=linkedin"
+      )
+
+    question_svg = response(question_conn, 200)
+    assert question_svg =~ "width=\"1200\""
+    assert question_svg =~ "height=\"1200\""
+    assert question_svg =~ "LINKEDIN · FOLLOW UP QUESTION"
+
+    highlight_conn =
+      get(
+        recycle(conn),
+        ~p"/campaigns/#{campaign.id}/highlights/123/share-card.svg?style=minimal_dark&format=portrait"
+      )
+
+    highlight_svg = response(highlight_conn, 200)
+    assert highlight_svg =~ "width=\"1080\""
+    assert highlight_svg =~ "height=\"1350\""
+    assert highlight_svg =~ "INSTAGRAM · HIGHLIGHT"
+  end
+
+  test "serves an uploadable question Short", %{conn: conn} do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "question-short-route")
+
+    question = "If a drug like soma existed today..."
+    question_id = ShareCard.question_id(question)
+
+    conn =
+      get(
+        conn,
+        ~p"/campaigns/#{campaign.id}/questions/#{question_id}/short.mp4?style=gradient_poster"
+      )
+
+    if CarouselVideo.available?() do
+      assert get_resp_header(conn, "content-type") |> List.first() =~ "video/mp4"
+      assert response(conn, 200) |> binary_part(4, 4) == "ftyp"
+    else
+      assert response(conn, 503) == "Video rendering requires FFmpeg"
+    end
+  end
+
   test "serves styled question quote-card variants", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
     question = "If a drug like soma existed today..."

@@ -50,7 +50,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       label: "Instagram carousel + Shorts",
       size: "1080 × 1350 PNG · 1080 × 1920 MP4",
       description:
-        "Swipeable reading slides plus dedicated full-screen video frames with larger hook text.",
+        "Key nodes become a carousel; questions and highlights become a portrait plus a six-second Short.",
       icon: "hero-rectangle-stack"
     }
   ]
@@ -76,7 +76,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:candidate_filter, "all")
       |> assign(:selected_keys, selected_keys)
       |> assign(:selected_count, MapSet.size(selected_keys))
-      |> assign(:selected_key_node?, selected_type?(candidates, selected_keys, "key_node"))
       |> assign(:step, "curate")
       |> assign(:selected_style, ShareCard.default_style())
       |> assign(:selected_format, "linkedin")
@@ -480,11 +479,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                       How should deeper ideas unfold?
                     </h2>
                   </div>
-                  <span
-                    :if={not @selected_key_node?}
-                    class="rounded-full bg-base-200 px-3 py-1 text-xs font-medium text-base-content/55"
-                  >
-                    Applies when a key node is selected
+                  <span class="rounded-full bg-base-200 px-3 py-1 text-xs font-medium text-base-content/55">
+                    Applied to every selected moment
                   </span>
                 </div>
 
@@ -1031,7 +1027,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     socket
     |> assign(:selected_keys, selected_keys)
     |> assign(:selected_count, MapSet.size(selected_keys))
-    |> assign(:selected_key_node?, selected_type?(candidates, selected_keys, "key_node"))
     |> stream_insert(
       :candidates,
       Map.put(candidate, :selected?, MapSet.member?(selected_keys, candidate.key))
@@ -1126,10 +1121,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp candidate_items(candidates, selected_keys) do
     Enum.map(candidates, &Map.put(&1, :selected?, MapSet.member?(selected_keys, &1.key)))
-  end
-
-  defp selected_type?(candidates, selected_keys, type) do
-    Enum.any?(candidates, &(&1.type == type and MapSet.member?(selected_keys, &1.key)))
   end
 
   defp platform_for_format("linkedin"), do: "linkedin"
@@ -1340,11 +1331,23 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp asset_kind_label(%MediaAsset{kind: "key_node_video", metadata: metadata}),
     do: "Short video · #{Map.get(metadata, "duration_seconds")}s · 1080 × 1920"
 
+  defp asset_kind_label(%MediaAsset{kind: "question_video"}),
+    do: "Question Short · 6s · 1080 × 1920"
+
+  defp asset_kind_label(%MediaAsset{kind: "highlight_video"}),
+    do: "Highlight Reel · 6s · 1080 × 1920"
+
   defp asset_kind_label(%MediaAsset{kind: "key_node_card", metadata: %{"format" => "portrait"}}),
     do: "Instagram portrait · 1080 × 1350"
 
   defp asset_kind_label(%MediaAsset{kind: "key_node_card", metadata: %{"format" => "linkedin"}}),
     do: "LinkedIn explainer · 1200 × 1200"
+
+  defp asset_kind_label(%MediaAsset{metadata: %{"format" => "portrait"}}),
+    do: "Instagram portrait · 1080 × 1350"
+
+  defp asset_kind_label(%MediaAsset{metadata: %{"format" => "linkedin"}}),
+    do: "LinkedIn quote · 1200 × 1200"
 
   defp asset_kind_label(%MediaAsset{kind: kind}),
     do: kind |> String.replace("_", " ") |> String.capitalize()

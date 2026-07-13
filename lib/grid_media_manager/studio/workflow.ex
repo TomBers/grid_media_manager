@@ -87,12 +87,31 @@ defmodule GridMediaManager.Studio.Workflow do
     Campaigns.generate_grid_asset(campaign, style)
   end
 
-  defp generate_candidate(campaign, %{type: "question", source_id: source_id}, style, _format) do
-    Campaigns.generate_question_asset(campaign, source_id, style)
+  defp generate_candidate(campaign, %{type: "question", source_id: source_id}, style, "carousel") do
+    with {:ok, image} <- Campaigns.generate_question_asset(campaign, source_id, style, "portrait") do
+      case Campaigns.generate_question_short_video(campaign, source_id, style) do
+        {:ok, video} -> {:ok, [image, video]}
+        {:error, reason} -> {:partial, [image], {:video, reason}}
+      end
+    end
   end
 
-  defp generate_candidate(campaign, %{type: "highlight", source_id: source_id}, style, _format) do
-    Campaigns.generate_highlight_asset(campaign, source_id, style)
+  defp generate_candidate(campaign, %{type: "question", source_id: source_id}, style, format) do
+    Campaigns.generate_question_asset(campaign, source_id, style, format)
+  end
+
+  defp generate_candidate(campaign, %{type: "highlight", source_id: source_id}, style, "carousel") do
+    with {:ok, image} <-
+           Campaigns.generate_highlight_asset(campaign, source_id, style, "portrait") do
+      case Campaigns.generate_highlight_short_video(campaign, source_id, style) do
+        {:ok, video} -> {:ok, [image, video]}
+        {:error, reason} -> {:partial, [image], {:video, reason}}
+      end
+    end
+  end
+
+  defp generate_candidate(campaign, %{type: "highlight", source_id: source_id}, style, format) do
+    Campaigns.generate_highlight_asset(campaign, source_id, style, format)
   end
 
   defp generate_candidate(campaign, %{type: "key_node", source_id: source_id}, style, "carousel") do

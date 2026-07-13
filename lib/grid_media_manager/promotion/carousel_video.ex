@@ -15,10 +15,11 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @width 1080
   @height 1920
   @slide_seconds 3.0
+  @static_seconds 6.0
   @fade_seconds 0.25
   @frame_rate 30
   @render_timeout 90_000
-  @cache_version 2
+  @cache_version 3
 
   def available?, do: is_binary(ffmpeg_path())
 
@@ -74,6 +75,22 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     end
   end
 
+  def render_static(cache_key, frame_fun) when is_function(frame_fun, 0) do
+    with ffmpeg when is_binary(ffmpeg) <- ffmpeg_path(),
+         {:ok, cache_dir} <- ensure_cache_dir() do
+      output_path = Path.join(cache_dir, static_cache_filename(cache_key))
+
+      if valid_video_file?(output_path) do
+        {:ok, output_path}
+      else
+        render_static_video(ffmpeg, frame_fun, cache_dir, output_path)
+      end
+    else
+      nil -> {:error, :ffmpeg_not_found}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   def duration_seconds(slide_count) when is_integer(slide_count) and slide_count > 0 do
     Float.round(slide_count * @slide_seconds, 2)
   end
@@ -110,6 +127,43 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       rescue
         error ->
           Logger.warning("Carousel video rendering failed: #{Exception.message(error)}")
+          {:error, :render_failed}
+      after
+        File.rm_rf(work_dir)
+      end
+    end
+  end
+
+  defp render_static_video(ffmpeg, frame_fun, cache_dir, output_path) do
+    work_dir =
+      Path.join(cache_dir, "static-work-#{System.unique_integer([:positive, :monotonic])}")
+
+    with :ok <- File.mkdir_p(work_dir) do
+      try do
+        frame_path = Path.join(work_dir, "frame.png")
+        temporary_output = Path.join(work_dir, "short.mp4")
+        File.write!(frame_path, frame_fun.())
+
+        case run_ffmpeg(ffmpeg, static_ffmpeg_args(frame_path, temporary_output)) do
+          {:ok, _output} ->
+            with true <- valid_video_file?(temporary_output),
+                 :ok <- move_video(temporary_output, output_path) do
+              {:ok, output_path}
+            else
+              false -> {:error, :empty_video}
+              {:error, reason} -> {:error, reason}
+            end
+
+          {:error, reason, output} ->
+            Logger.warning(
+              "Static short video encoding failed: #{String.slice(output, 0, 1_000)}"
+            )
+
+            {:error, reason}
+        end
+      rescue
+        error ->
+          Logger.warning("Static short video rendering failed: #{Exception.message(error)}")
           {:error, :render_failed}
       after
         File.rm_rf(work_dir)
@@ -172,6 +226,49 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       ]
   end
 
+  defp static_ffmpeg_args(frame_path, output_path) do
+    fade_out_start = @static_seconds - @fade_seconds
+
+    [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-loop",
+      "1",
+      "-framerate",
+      Integer.to_string(@frame_rate),
+      "-t",
+      decimal(@static_seconds),
+      "-i",
+      frame_path,
+      "-vf",
+      "scale=#{@width}:#{@height}:force_original_aspect_ratio=decrease," <>
+        "pad=#{@width}:#{@height}:(ow-iw)/2:(oh-ih)/2," <>
+        "format=yuv420p,fps=#{@frame_rate}," <>
+        "fade=t=in:st=0:d=#{decimal(@fade_seconds)}," <>
+        "fade=t=out:st=#{decimal(fade_out_start)}:d=#{decimal(@fade_seconds)}",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "medium",
+      "-crf",
+      "20",
+      "-pix_fmt",
+      "yuv420p",
+      "-r",
+      Integer.to_string(@frame_rate),
+      "-t",
+      decimal(@static_seconds),
+      "-movflags",
+      "+faststart",
+      "-f",
+      "mp4",
+      output_path
+    ]
+  end
+
   defp filter_complex(slide_count) do
     slide_filters =
       0..(slide_count - 1)
@@ -232,6 +329,16 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       |> Base.url_encode64(padding: false)
 
     "#{digest}.mp4"
+  end
+
+  defp static_cache_filename(cache_key) do
+    digest =
+      {@cache_version, :static, cache_key, @static_seconds, @fade_seconds}
+      |> :erlang.term_to_binary()
+      |> then(&:crypto.hash(:sha256, &1))
+      |> Base.url_encode64(padding: false)
+
+    "static-#{digest}.mp4"
   end
 
   defp ensure_cache_dir do

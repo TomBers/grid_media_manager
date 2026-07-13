@@ -31,9 +31,17 @@ defmodule GridMediaManagerWeb.Router do
         PromotionAssetController,
         :question_card
 
+    get "/campaigns/:id/questions/:question_id/short.mp4",
+        PromotionAssetController,
+        :question_short_video
+
     get "/campaigns/:id/highlights/:highlight_id/share-card.svg",
         PromotionAssetController,
         :highlight_card
+
+    get "/campaigns/:id/highlights/:highlight_id/short.mp4",
+        PromotionAssetController,
+        :highlight_short_video
 
     live "/campaigns/:id/studio", GuidedShareStudioLive, :show
     live "/campaigns/:id", ShareStudioLive, :show

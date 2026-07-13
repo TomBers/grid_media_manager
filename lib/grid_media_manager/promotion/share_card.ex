@@ -128,11 +128,18 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> maybe_add_style_query(style)
   end
 
-  def highlight_image_path(campaign, highlight_id, style \\ @default_style)
+  def highlight_image_path(campaign, highlight_id, style \\ @default_style),
+    do: highlight_image_path(campaign, highlight_id, style, "landscape")
 
-  def highlight_image_path(%Campaign{id: id}, highlight_id, style) do
+  def highlight_image_path(%Campaign{id: id}, highlight_id, style, format) do
     "/campaigns/#{id}/highlights/#{highlight_id}/share-card.svg"
     |> maybe_add_style_query(style)
+    |> maybe_add_quote_format_query(format)
+  end
+
+  def highlight_short_video_path(%Campaign{id: id}, highlight_id, style) do
+    query = URI.encode_query(%{style: normalize_style(style)})
+    "/campaigns/#{id}/highlights/#{highlight_id}/short.mp4?#{query}"
   end
 
   def node_image_path(campaign, node_id, style \\ @default_style, format \\ "landscape")
@@ -154,11 +161,19 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> then(&(&1 <> "?" <> URI.encode_query(%{style: normalize_style(style), slide: slide})))
   end
 
-  def question_image_path(campaign, question_id, style \\ @default_style)
+  def question_image_path(campaign, question_id, style \\ @default_style),
+    do: question_image_path(campaign, question_id, style, "landscape")
 
-  def question_image_path(%Campaign{id: id}, question_id, style) do
+  def question_image_path(%Campaign{id: id}, question_id, style, format) do
     "/campaigns/#{id}/questions/#{URI.encode(to_string(question_id), &URI.char_unreserved?/1)}/share-card.svg"
     |> maybe_add_style_query(style)
+    |> maybe_add_quote_format_query(format)
+  end
+
+  def question_short_video_path(%Campaign{id: id}, question_id, style) do
+    encoded_id = URI.encode(to_string(question_id), &URI.char_unreserved?/1)
+    query = URI.encode_query(%{style: normalize_style(style)})
+    "/campaigns/#{id}/questions/#{encoded_id}/short.mp4?#{query}"
   end
 
   def question_id(question_text, node_id \\ nil) do
@@ -1038,6 +1053,246 @@ defmodule GridMediaManager.Promotion.ShareCard do
     """
   end
 
+  def question_platform_image_svg(campaign, question, style, format)
+
+  def question_platform_image_svg(%Campaign{} = campaign, question, style, format)
+      when is_map(question) do
+    format = normalize_quote_format(format)
+
+    if format == "landscape" do
+      question_image_svg(campaign, question, style)
+    else
+      text = question |> get("question") |> sanitize_text(nil)
+      kind = question |> get("kind") |> sanitize_text(48) |> fallback("question")
+
+      platform_quote_image_svg(
+        campaign,
+        text,
+        campaign.title,
+        kind,
+        style,
+        format
+      )
+    end
+  end
+
+  def highlight_platform_image_svg(campaign, highlight, style, format)
+
+  def highlight_platform_image_svg(%Campaign{} = campaign, highlight, style, format)
+      when is_map(highlight) do
+    format = normalize_quote_format(format)
+
+    if format == "landscape" do
+      highlight_image_svg(campaign, highlight, style)
+    else
+      text = highlight |> highlight_text() |> sanitize_text(@max_svg_quote_chars)
+      source = campaign |> node_title(highlight_node_id(highlight)) |> sanitize_text(140)
+      platform_quote_image_svg(campaign, text, source, "highlight", style, format)
+    end
+  end
+
+  def question_platform_image_png(campaign, question, style, format) do
+    campaign
+    |> question_platform_image_svg(question, style, format)
+    |> Image.from_svg!()
+    |> Image.write!(:memory, suffix: ".png")
+  end
+
+  def highlight_platform_image_png(campaign, highlight, style, format) do
+    campaign
+    |> highlight_platform_image_svg(highlight, style, format)
+    |> Image.from_svg!()
+    |> Image.write!(:memory, suffix: ".png")
+  end
+
+  defp platform_quote_image_svg(campaign, text, source, kind, style, format) do
+    style = normalize_style(style)
+    palette = quote_palette(style)
+    spec = platform_quote_spec(format)
+    layout = platform_quote_layout(text, spec)
+    platform_label = platform_quote_label(format)
+
+    quote_markup =
+      layout.lines
+      |> Enum.with_index()
+      |> Enum.map_join("", fn {line, index} ->
+        ~s(<tspan x="#{spec.text_x}" y="#{layout.start_y + index * layout.line_gap}">#{escape_xml(line)}</tspan>)
+      end)
+
+    """
+    <svg xmlns="http://www.w3.org/2000/svg" width="#{spec.width}" height="#{spec.height}" viewBox="0 0 #{spec.width} #{spec.height}" role="img" aria-labelledby="title desc">
+      <title id="title">#{escape_xml(text)} · #{escape_xml(campaign.title)} · RationalGrid</title>
+      <desc id="desc">#{escape_xml(platform_label)} #{escape_xml(kind)} card from #{escape_xml(campaign.title)}</desc>
+      <defs>
+        <linearGradient id="platformCanvas" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#{palette.canvas_a}" />
+          <stop offset="48%" stop-color="#{palette.canvas_b}" />
+          <stop offset="100%" stop-color="#{palette.canvas_c}" />
+        </linearGradient>
+        <radialGradient id="platformBloomA" cx="12%" cy="10%" r="72%">
+          <stop offset="0%" stop-color="#{palette.bloom_a}" stop-opacity="#{palette.bloom_opacity}" />
+          <stop offset="100%" stop-color="#{palette.bloom_a}" stop-opacity="0" />
+        </radialGradient>
+        <radialGradient id="platformBloomB" cx="90%" cy="24%" r="70%">
+          <stop offset="0%" stop-color="#{palette.bloom_b}" stop-opacity="#{palette.bloom_opacity}" />
+          <stop offset="100%" stop-color="#{palette.bloom_b}" stop-opacity="0" />
+        </radialGradient>
+        <linearGradient id="platformAccent" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#{palette.accent_a}" />
+          <stop offset="52%" stop-color="#{palette.accent_b}" />
+          <stop offset="100%" stop-color="#{palette.accent_c}" />
+        </linearGradient>
+        <filter id="platformShadow" x="-8%" y="-6%" width="116%" height="114%">
+          <feDropShadow dx="0" dy="28" stdDeviation="26" flood-color="#{palette.shadow}" flood-opacity="#{palette.shadow_opacity}" />
+        </filter>
+      </defs>
+
+      <rect width="#{spec.width}" height="#{spec.height}" fill="url(#platformCanvas)" />
+      <rect width="#{spec.width}" height="#{spec.height}" fill="url(#platformBloomA)" />
+      <rect width="#{spec.width}" height="#{spec.height}" fill="url(#platformBloomB)" />
+      <circle cx="#{spec.width - 120}" cy="170" r="190" fill="#{palette.bloom_b}" fill-opacity="#{palette.decoration_opacity}" />
+      <circle cx="110" cy="#{spec.height - 170}" r="210" fill="#{palette.bloom_a}" fill-opacity="#{palette.decoration_opacity}" />
+
+      <rect x="54" y="54" width="#{spec.width - 108}" height="#{spec.height - 108}" rx="46" fill="#{palette.card}" fill-opacity="#{palette.card_opacity}" filter="url(#platformShadow)" />
+      <rect x="54.5" y="54.5" width="#{spec.width - 109}" height="#{spec.height - 109}" rx="45.5" fill="none" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
+      <rect x="82" y="82" width="#{spec.width - 164}" height="#{spec.height - 164}" rx="34" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
+
+      <text x="#{spec.text_x}" y="#{spec.brand_y}" fill="#{palette.label}" font-size="#{spec.brand_size}" font-weight="800" font-family="#{@ui_font_family}">RationalGrid.ai</text>
+      <text x="#{spec.text_right}" y="#{spec.brand_y}" text-anchor="end" fill="#{palette.kicker}" font-size="#{spec.kicker_size}" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="1.6">#{escape_xml(String.upcase(platform_label))} · #{escape_xml(String.upcase(String.replace(kind, "_", " ")))}</text>
+      <line x1="#{spec.text_x}" y1="#{spec.rule_y}" x2="#{spec.text_right}" y2="#{spec.rule_y}" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
+
+      <text x="#{spec.text_x - 48}" y="#{spec.quote_top + 52}" fill="#{palette.accent_a}" fill-opacity="0.10" font-size="#{spec.quote_mark_size}" font-weight="700" font-family="#{@quote_font_family}">“</text>
+      <text x="#{spec.text_right + 34}" y="#{spec.quote_bottom}" text-anchor="end" fill="#{palette.accent_c}" fill-opacity="0.08" font-size="#{round(spec.quote_mark_size * 0.78)}" font-weight="700" font-family="#{@quote_font_family}">”</text>
+      <text fill="#{palette.text}" font-size="#{layout.font_size}" font-weight="700" font-family="#{@quote_font_family}" paint-order="stroke" stroke="#{palette.text_stroke}" stroke-width="2.2" stroke-opacity="#{palette.text_stroke_opacity}">
+        #{quote_markup}
+      </text>
+
+      <rect x="#{spec.text_x}" y="#{spec.accent_y}" width="#{spec.accent_width}" height="8" rx="4" fill="url(#platformAccent)" opacity="0.96" />
+      <text x="#{spec.text_x}" y="#{spec.footer_y}" fill="#{palette.label}" font-size="#{spec.footer_size}" font-weight="800" font-family="#{@ui_font_family}">#{escape_xml(sanitize_text(source, spec.source_limit))}</text>
+      <text x="#{spec.text_x}" y="#{spec.cta_y}" fill="#{palette.muted}" font-size="#{spec.cta_size}" font-weight="700" font-family="#{@ui_font_family}">Explore and contribute on RationalGrid</text>
+    </svg>
+    """
+  end
+
+  defp platform_quote_layout(text, spec) do
+    text = sanitize_text(text, nil)
+
+    Enum.find_value(spec.font_sizes, fn font_size ->
+      max_units = spec.text_width / font_size * spec.wrap_factor
+      lines = wrap_all_lines_by_width(text, max_units)
+      line_gap = round(font_size * 1.16)
+      block_height = quote_block_height(lines, line_gap)
+      fits_width? = Enum.all?(lines, &(text_units(&1) <= max_units))
+
+      if fits_width? and block_height <= spec.quote_bottom - spec.quote_top do
+        extra_space = spec.quote_bottom - spec.quote_top - block_height
+
+        %{
+          font_size: font_size,
+          line_gap: line_gap,
+          start_y: spec.quote_top + div(extra_space, 2) + font_size,
+          lines: lines
+        }
+      end
+    end) ||
+      %{
+        font_size: List.last(spec.font_sizes),
+        line_gap: round(List.last(spec.font_sizes) * 1.16),
+        start_y: spec.quote_top + List.last(spec.font_sizes),
+        lines:
+          wrap_lines_by_width(
+            text,
+            spec.text_width / List.last(spec.font_sizes) * spec.wrap_factor,
+            spec.max_lines
+          )
+      }
+  end
+
+  defp platform_quote_spec("linkedin") do
+    %{
+      width: 1200,
+      height: 1200,
+      text_x: 124,
+      text_right: 1076,
+      text_width: 880,
+      brand_y: 140,
+      brand_size: 20,
+      kicker_size: 16,
+      rule_y: 176,
+      quote_top: 250,
+      quote_bottom: 850,
+      quote_mark_size: 170,
+      accent_y: 920,
+      accent_width: 260,
+      footer_y: 982,
+      footer_size: 24,
+      cta_y: 1092,
+      cta_size: 18,
+      source_limit: 90,
+      font_sizes: [78, 74, 70, 66, 62, 58, 54, 50, 46, 42, 38, 34, 30, 26],
+      max_lines: 10,
+      wrap_factor: 0.92
+    }
+  end
+
+  defp platform_quote_spec("portrait") do
+    %{
+      width: 1080,
+      height: 1350,
+      text_x: 130,
+      text_right: 950,
+      text_width: 760,
+      brand_y: 142,
+      brand_size: 20,
+      kicker_size: 16,
+      rule_y: 178,
+      quote_top: 290,
+      quote_bottom: 1_010,
+      quote_mark_size: 176,
+      accent_y: 1_080,
+      accent_width: 240,
+      footer_y: 1_142,
+      footer_size: 23,
+      cta_y: 1_262,
+      cta_size: 18,
+      source_limit: 76,
+      font_sizes: [80, 76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24],
+      max_lines: 12,
+      wrap_factor: 0.88
+    }
+  end
+
+  defp platform_quote_spec("short") do
+    %{
+      width: 1080,
+      height: 1920,
+      text_x: 130,
+      text_right: 950,
+      text_width: 740,
+      brand_y: 170,
+      brand_size: 23,
+      kicker_size: 17,
+      rule_y: 210,
+      quote_top: 360,
+      quote_bottom: 1_440,
+      quote_mark_size: 210,
+      accent_y: 1_560,
+      accent_width: 280,
+      footer_y: 1_638,
+      footer_size: 25,
+      cta_y: 1_790,
+      cta_size: 22,
+      source_limit: 68,
+      font_sizes: [104, 98, 92, 86, 80, 74, 68, 62, 56, 50, 44, 38, 34, 30],
+      max_lines: 14,
+      wrap_factor: 0.85
+    }
+  end
+
+  defp platform_quote_label("linkedin"), do: "LinkedIn"
+  defp platform_quote_label("portrait"), do: "Instagram"
+  defp platform_quote_label("short"), do: "Short"
+
   def page_title(%Campaign{} = campaign, highlight) when is_map(highlight) do
     quote = highlight |> highlight_text() |> sanitize_text(90)
     truncate("“#{quote}” · #{campaign.title}", 120)
@@ -1070,10 +1325,17 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end)
   end
 
-  def question_asset_attr(campaign, question, style \\ @default_style)
+  def question_asset_attr(
+        campaign,
+        question,
+        style \\ @default_style,
+        format \\ "landscape"
+      )
 
-  def question_asset_attr(%Campaign{} = campaign, question, style) when is_map(question) do
+  def question_asset_attr(%Campaign{} = campaign, question, style, format)
+      when is_map(question) do
     style = normalize_style(style)
+    format = normalize_quote_format(format)
 
     with text when is_binary(text) and text != "" <-
            question |> get("question") |> sanitize_text(nil),
@@ -1081,16 +1343,20 @@ defmodule GridMediaManager.Promotion.ShareCard do
       %{
         title: "Question quote",
         kind: "question_quote_card",
-        url: question_image_path(campaign, id, style),
+        url: question_image_path(campaign, id, style, format),
         mime_type: "image/svg+xml",
         text: text,
         node_id: question |> get("node_id") |> string_value(),
         highlight_id: nil,
-        recommended_platforms: ["instagram", "linkedin", "x", "bluesky"],
+        recommended_platforms: quote_platforms(format),
         style: style,
         source_type: "question",
         source_id: id,
-        metadata: %{"question_kind" => get(question, "kind")}
+        metadata:
+          Map.merge(
+            %{"question_kind" => get(question, "kind")},
+            quote_format_metadata(format)
+          )
       }
     else
       _ -> nil
@@ -1125,30 +1391,91 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end
   end
 
-  def highlight_asset_attr(campaign, highlight, style \\ @default_style)
+  def highlight_asset_attr(
+        campaign,
+        highlight,
+        style \\ @default_style,
+        format \\ "landscape"
+      )
 
-  def highlight_asset_attr(%Campaign{} = campaign, highlight, style) do
+  def highlight_asset_attr(%Campaign{} = campaign, highlight, style, format) do
     style = normalize_style(style)
+    format = normalize_quote_format(format)
 
     with highlight_id when not is_nil(highlight_id) <- parse_highlight_id(highlight),
          text when is_binary(text) and text != "" <- highlight_text(highlight) do
       %{
         title: "Highlighted quote",
         kind: "highlight_card",
-        url: highlight_image_path(campaign, highlight_id, style),
+        url: highlight_image_path(campaign, highlight_id, style, format),
         mime_type: "image/svg+xml",
         text: text,
         node_id: highlight_node_id(highlight),
         highlight_id: highlight_id,
-        recommended_platforms: ["instagram", "linkedin", "x", "bluesky"],
+        recommended_platforms: quote_platforms(format),
         style: style,
         source_type: "highlight",
         source_id: Integer.to_string(highlight_id),
-        metadata: %{}
+        metadata: quote_format_metadata(format)
       }
     else
       _ -> nil
     end
+  end
+
+  def question_short_video_asset_attr(%Campaign{} = campaign, question, style)
+      when is_map(question) do
+    style = normalize_style(style)
+    id = question |> get("id") |> string_value()
+    text = question |> get("question") |> sanitize_text(nil)
+
+    %{
+      title: "Question · Short video",
+      kind: "question_video",
+      url: question_short_video_path(campaign, id, style),
+      mime_type: "video/mp4",
+      text: text,
+      node_id: question |> get("node_id") |> string_value(),
+      highlight_id: nil,
+      recommended_platforms: ["youtube", "instagram"],
+      style: style,
+      source_type: "question_video",
+      source_id: id,
+      metadata: %{
+        "format" => "short_video",
+        "platform" => "shorts",
+        "width" => 1080,
+        "height" => 1920,
+        "duration_seconds" => 6.0,
+        "question_kind" => get(question, "kind")
+      }
+    }
+  end
+
+  def highlight_short_video_asset_attr(%Campaign{} = campaign, highlight, style) do
+    style = normalize_style(style)
+    highlight_id = parse_highlight_id(highlight)
+
+    %{
+      title: "Highlight · Short video",
+      kind: "highlight_video",
+      url: highlight_short_video_path(campaign, highlight_id, style),
+      mime_type: "video/mp4",
+      text: highlight_text(highlight),
+      node_id: highlight_node_id(highlight),
+      highlight_id: highlight_id,
+      recommended_platforms: ["youtube", "instagram"],
+      style: style,
+      source_type: "highlight_video",
+      source_id: Integer.to_string(highlight_id),
+      metadata: %{
+        "format" => "short_video",
+        "platform" => "shorts",
+        "width" => 1080,
+        "height" => 1920,
+        "duration_seconds" => 6.0
+      }
+    }
   end
 
   defp answer_question_map(question) do
@@ -1594,11 +1921,22 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end
   end
 
+  defp maybe_add_quote_format_query(path, format) do
+    case normalize_quote_format(format) do
+      "landscape" -> path
+      normalized_format -> append_query(path, %{format: normalized_format})
+    end
+  end
+
   defp maybe_add_format_query(path, "landscape"), do: path
 
   defp maybe_add_format_query(path, format) do
+    append_query(path, %{format: normalize_node_format(format)})
+  end
+
+  defp append_query(path, query) do
     separator = if String.contains?(path, "?"), do: "&", else: "?"
-    path <> separator <> URI.encode_query(%{format: normalize_node_format(format)})
+    path <> separator <> URI.encode_query(query)
   end
 
   defp normalize_node_format(format) when format in ["portrait", "linkedin"], do: format
@@ -1617,6 +1955,32 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   defp key_node_format_metadata(_format) do
+    %{"format" => "landscape", "platform" => "cross_platform", "width" => 1200, "height" => 630}
+  end
+
+  defp normalize_quote_format(format) when format in ["linkedin", "portrait", "short"],
+    do: format
+
+  defp normalize_quote_format(_format), do: "landscape"
+
+  defp quote_platforms("linkedin"), do: ["linkedin"]
+  defp quote_platforms("portrait"), do: ["instagram"]
+  defp quote_platforms("short"), do: ["youtube", "instagram"]
+  defp quote_platforms(_format), do: ["x", "bluesky", "linkedin"]
+
+  defp quote_format_metadata("linkedin") do
+    %{"format" => "linkedin", "platform" => "linkedin", "width" => 1200, "height" => 1200}
+  end
+
+  defp quote_format_metadata("portrait") do
+    %{"format" => "portrait", "platform" => "instagram", "width" => 1080, "height" => 1350}
+  end
+
+  defp quote_format_metadata("short") do
+    %{"format" => "short", "platform" => "shorts", "width" => 1080, "height" => 1920}
+  end
+
+  defp quote_format_metadata(_format) do
     %{"format" => "landscape", "platform" => "cross_platform", "width" => 1200, "height" => 630}
   end
 

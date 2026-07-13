@@ -243,6 +243,72 @@ defmodule GridMediaManager.CampaignsTest do
              )
     end
 
+    test "generates platform-specific question and highlight cards" do
+      assert {:ok, campaign} =
+               Campaigns.import_payload(simplified_payload(), "platform-quotes-test")
+
+      question = "If a drug like soma existed today..."
+      question_id = ShareCard.question_id(question)
+
+      assert {:ok, question_asset} =
+               Campaigns.generate_question_asset(
+                 campaign,
+                 question_id,
+                 "minimal_light",
+                 "linkedin"
+               )
+
+      assert question_asset.metadata["format"] == "linkedin"
+      assert question_asset.metadata["width"] == 1200
+      assert question_asset.recommended_platforms == ["linkedin"]
+      assert question_asset.url =~ "format=linkedin"
+
+      assert {:ok, highlight_asset} =
+               Campaigns.generate_highlight_asset(campaign, 123, "minimal_dark", "portrait")
+
+      assert highlight_asset.metadata["format"] == "portrait"
+      assert highlight_asset.metadata["height"] == 1350
+      assert highlight_asset.recommended_platforms == ["instagram"]
+      assert highlight_asset.url =~ "format=portrait"
+    end
+
+    test "generates a question portrait and uploadable Short package" do
+      assert {:ok, campaign} =
+               Campaigns.import_payload(simplified_payload(), "question-short-package")
+
+      question_candidate =
+        campaign
+        |> Workflow.candidates()
+        |> Enum.find(&(&1.type == "question"))
+
+      if CarouselVideo.available?() do
+        result =
+          Workflow.generate(campaign, [question_candidate],
+            style: "gradient_poster",
+            format: "carousel"
+          )
+
+        assert result.errors == []
+        assert Enum.any?(result.assets, &(&1.kind == "question_quote_card"))
+        assert Enum.any?(result.assets, &(&1.kind == "question_video"))
+
+        video = Enum.find(result.assets, &(&1.kind == "question_video"))
+        assert video.mime_type == "video/mp4"
+        assert video.metadata["width"] == 1080
+        assert video.metadata["height"] == 1920
+        assert video.recommended_platforms == ["youtube", "instagram"]
+      else
+        result =
+          Workflow.generate(campaign, [question_candidate],
+            style: "gradient_poster",
+            format: "carousel"
+          )
+
+        assert Enum.any?(result.assets, &(&1.kind == "question_quote_card"))
+        assert result.errors != []
+      end
+    end
+
     test "generates a key-node image asset on demand" do
       payload = simplified_payload()
 

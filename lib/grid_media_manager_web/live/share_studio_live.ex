@@ -101,7 +101,10 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
            :generated_highlight_ids,
            MapSet.put(
              socket.assigns.generated_highlight_ids,
-             styled_source_key(asset.highlight_id, style)
+             styled_source_key(
+               "#{asset.highlight_id}|#{Map.get(asset.metadata || %{}, "format", "landscape")}",
+               style
+             )
            )
          )
          |> stream_insert(:media_assets, asset)
@@ -140,7 +143,10 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
            :generated_question_ids,
            MapSet.put(
              socket.assigns.generated_question_ids,
-             styled_source_key(question_id, style)
+             styled_source_key(
+               "#{question_id}|#{Map.get(asset.metadata || %{}, "format", "landscape")}",
+               style
+             )
            )
          )
          |> stream_insert(:media_assets, asset)
@@ -1180,7 +1186,10 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
   defp generated_highlight_ids(media_assets) do
     media_assets
     |> Enum.filter(&(&1.kind == "highlight_card" and &1.source_type == "highlight"))
-    |> Enum.map(&styled_source_key(&1.highlight_id, &1.style))
+    |> Enum.map(fn asset ->
+      format = Map.get(asset.metadata || %{}, "format", "landscape")
+      styled_source_key("#{asset.highlight_id}|#{format}", asset.style)
+    end)
     |> MapSet.new()
   end
 
@@ -1208,7 +1217,9 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     media_assets
     |> Enum.filter(&(&1.kind == "question_quote_card"))
     |> Enum.map(fn asset ->
-      styled_source_key(ShareCard.question_id(asset.text, asset.node_id), asset.style)
+      question_id = ShareCard.question_id(asset.text, asset.node_id)
+      format = Map.get(asset.metadata || %{}, "format", "landscape")
+      styled_source_key("#{question_id}|#{format}", asset.style)
     end)
     |> MapSet.new()
   end
@@ -1221,8 +1232,11 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     MapSet.member?(generated_grid_styles, ShareCard.normalize_style(style))
   end
 
-  defp generated_highlight?(generated_highlight_ids, highlight_id, style) do
-    MapSet.member?(generated_highlight_ids, styled_source_key(highlight_id, style))
+  defp generated_highlight?(generated_highlight_ids, highlight_id, style, format \\ "landscape") do
+    MapSet.member?(
+      generated_highlight_ids,
+      styled_source_key("#{highlight_id}|#{format}", style)
+    )
   end
 
   defp question_id(question) when is_binary(question), do: ShareCard.question_id(question)
@@ -1248,8 +1262,11 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     end
   end
 
-  defp generated_question?(generated_question_ids, question_id, style) do
-    MapSet.member?(generated_question_ids, styled_source_key(question_id, style))
+  defp generated_question?(generated_question_ids, question_id, style, format \\ "landscape") do
+    MapSet.member?(
+      generated_question_ids,
+      styled_source_key("#{question_id}|#{format}", style)
+    )
   end
 
   defp key_node_id(node) when is_map(node) do

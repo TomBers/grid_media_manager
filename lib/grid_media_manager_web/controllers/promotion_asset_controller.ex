@@ -111,8 +111,30 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
         |> put_svg_cache_headers()
         |> send_resp(
           200,
-          ShareCard.question_image_svg(campaign, question, Map.get(params, "style"))
+          ShareCard.question_platform_image_svg(
+            campaign,
+            question,
+            Map.get(params, "style"),
+            Map.get(params, "format", "landscape")
+          )
         )
+    end
+  end
+
+  def question_short_video(conn, %{"id" => id, "question_id" => question_id} = params) do
+    campaign = Campaigns.get_campaign!(id)
+    style = ShareCard.normalize_style(Map.get(params, "style"))
+
+    case ShareCard.find_question(campaign, question_id) do
+      nil ->
+        send_resp(conn, 404, "Question not found")
+
+      question ->
+        CarouselVideo.render_static(
+          {:question, campaign.id, question_id, style, question},
+          fn -> ShareCard.question_platform_image_png(campaign, question, style, "short") end
+        )
+        |> send_short_video(conn, "rationalgrid-question-#{question_id}.mp4")
     end
   end
 
@@ -128,10 +150,46 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
         |> put_svg_cache_headers()
         |> send_resp(
           200,
-          ShareCard.highlight_image_svg(campaign, highlight, Map.get(params, "style"))
+          ShareCard.highlight_platform_image_svg(
+            campaign,
+            highlight,
+            Map.get(params, "style"),
+            Map.get(params, "format", "landscape")
+          )
         )
     end
   end
+
+  def highlight_short_video(conn, %{"id" => id, "highlight_id" => highlight_id} = params) do
+    campaign = Campaigns.get_campaign!(id)
+    style = ShareCard.normalize_style(Map.get(params, "style"))
+
+    case ShareCard.find_highlight(campaign, highlight_id) do
+      nil ->
+        send_resp(conn, 404, "Highlight not found")
+
+      highlight ->
+        CarouselVideo.render_static(
+          {:highlight, campaign.id, highlight_id, style, highlight},
+          fn -> ShareCard.highlight_platform_image_png(campaign, highlight, style, "short") end
+        )
+        |> send_short_video(conn, "rationalgrid-highlight-#{highlight_id}.mp4")
+    end
+  end
+
+  defp send_short_video({:ok, path}, conn, filename) do
+    conn
+    |> put_resp_content_type("video/mp4")
+    |> put_resp_header("cache-control", "public, max-age=3600")
+    |> put_resp_header("content-disposition", ~s(inline; filename="#{filename}"))
+    |> send_file(200, path)
+  end
+
+  defp send_short_video({:error, :ffmpeg_not_found}, conn, _filename),
+    do: send_resp(conn, 503, "Video rendering requires FFmpeg")
+
+  defp send_short_video({:error, _reason}, conn, _filename),
+    do: send_resp(conn, 500, "Could not render short video")
 
   defp put_svg_cache_headers(conn) do
     conn
