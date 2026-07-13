@@ -86,6 +86,40 @@ defmodule GridMediaManager.RationalGrid.ClientTest do
     assert Client.request_headers() == [{"authorization", "Bearer env-token"}]
   end
 
+  test "sorts grid index entries from newest to oldest" do
+    payload = %{
+      "grids" => [
+        %{
+          "slug" => "undated-grid",
+          "title" => "Undated"
+        },
+        %{
+          "slug" => "old-grid",
+          "title" => "Old",
+          "inserted_at" => "2026-01-10T10:00:00Z",
+          "updated_at" => "2026-07-10T10:00:00Z"
+        },
+        %{
+          "slug" => "new-grid",
+          "title" => "New",
+          "inserted_at" => "2026-06-15T09:00:00+02:00"
+        },
+        %{
+          "slug" => "fallback-grid",
+          "title" => "Fallback date",
+          "updated_at" => "2026-05-01"
+        }
+      ]
+    }
+
+    assert Enum.map(Client.normalize_grid_index(payload), & &1.slug) == [
+             "new-grid",
+             "fallback-grid",
+             "old-grid",
+             "undated-grid"
+           ]
+  end
+
   test "normalizes flexible grid index payloads" do
     payload = %{
       "grids" => [
