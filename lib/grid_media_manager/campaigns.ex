@@ -8,6 +8,7 @@ defmodule GridMediaManager.Campaigns do
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Campaigns.PostDraft
+  alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.RationalGrid.Client
   alias GridMediaManager.RationalGrid.MediaPayload
@@ -100,15 +101,42 @@ defmodule GridMediaManager.Campaigns do
   def generate_highlight_asset(
         %Campaign{} = campaign,
         highlight_id,
-        style \\ ShareCard.default_style()
+        style \\ ShareCard.default_style(),
+        format \\ "landscape"
       ) do
     campaign = get_campaign!(campaign.id)
 
     with highlight when is_map(highlight) <- ShareCard.find_highlight(campaign, highlight_id),
-         attrs when is_map(attrs) <- ShareCard.highlight_asset_attr(campaign, highlight, style) do
+         attrs when is_map(attrs) <-
+           ShareCard.highlight_asset_attr(campaign, highlight, style, format) do
       upsert_generated_asset_with_drafts(campaign, attrs)
     else
       _ -> {:error, :not_found}
+    end
+  end
+
+  def generate_highlight_short_video(
+        %Campaign{} = campaign,
+        highlight_id,
+        style \\ ShareCard.default_style()
+      ) do
+    campaign = get_campaign!(campaign.id)
+    style = ShareCard.normalize_style(style)
+
+    with highlight when is_map(highlight) <- ShareCard.find_highlight(campaign, highlight_id),
+         {:ok, _path} <-
+           CarouselVideo.render_static(
+             {:highlight, campaign.id, highlight_id, style, highlight},
+             fn ->
+               ShareCard.highlight_platform_image_png(campaign, highlight, style, "short")
+             end
+           ) do
+      campaign
+      |> ShareCard.highlight_short_video_asset_attr(highlight, style)
+      |> then(&upsert_generated_asset_with_drafts(campaign, &1))
+    else
+      nil -> {:error, :not_found}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -149,18 +177,62 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
+  def generate_key_node_video(
+        %Campaign{} = campaign,
+        node_id,
+        style \\ ShareCard.default_style()
+      ) do
+    campaign = get_campaign!(campaign.id)
+    style = ShareCard.normalize_style(style)
+
+    with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
+         {:ok, _video_path} <- CarouselVideo.render(campaign, node, style) do
+      campaign
+      |> CarouselVideo.asset_attr(node, style)
+      |> then(&upsert_generated_asset_with_drafts(campaign, &1))
+    else
+      nil -> {:error, :not_found}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   def generate_question_asset(
+        %Campaign{} = campaign,
+        question_id,
+        style \\ ShareCard.default_style(),
+        format \\ "landscape"
+      ) do
+    campaign = get_campaign!(campaign.id)
+
+    with question when is_map(question) <- ShareCard.find_question(campaign, question_id),
+         attrs when is_map(attrs) <-
+           ShareCard.question_asset_attr(campaign, question, style, format) do
+      upsert_generated_asset_with_drafts(campaign, attrs)
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def generate_question_short_video(
         %Campaign{} = campaign,
         question_id,
         style \\ ShareCard.default_style()
       ) do
     campaign = get_campaign!(campaign.id)
+    style = ShareCard.normalize_style(style)
 
     with question when is_map(question) <- ShareCard.find_question(campaign, question_id),
-         attrs when is_map(attrs) <- ShareCard.question_asset_attr(campaign, question, style) do
-      upsert_generated_asset_with_drafts(campaign, attrs)
+         {:ok, _path} <-
+           CarouselVideo.render_static(
+             {:question, campaign.id, question_id, style, question},
+             fn -> ShareCard.question_platform_image_png(campaign, question, style, "short") end
+           ) do
+      campaign
+      |> ShareCard.question_short_video_asset_attr(question, style)
+      |> then(&upsert_generated_asset_with_drafts(campaign, &1))
     else
-      _ -> {:error, :not_found}
+      nil -> {:error, :not_found}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -187,6 +259,9 @@ defmodule GridMediaManager.Campaigns do
 
   def first_answer_excerpt(%Campaign{raw_payload: raw_payload}),
     do: MediaPayload.first_answer_excerpt(raw_payload)
+
+  def answer_questions(%Campaign{raw_payload: raw_payload}),
+    do: MediaPayload.answer_questions(raw_payload)
 
   def follow_up_questions(%Campaign{raw_payload: raw_payload}),
     do: MediaPayload.follow_up_questions(raw_payload)

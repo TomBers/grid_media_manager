@@ -7,8 +7,9 @@ Internal RationalGrid Share Studio for turning RationalGrid media payloads into 
 - Accepts a RationalGrid URL, direct media endpoint URL, or slug
 - Fetches the RationalGrid media JSON with `Req`
 - Persists a campaign, media assets, and editable post drafts
-- Generates and previews local SVG share cards/highlight cards
-- Generates simple template-based drafts for X, Bluesky, LinkedIn, Instagram, and Substack
+- Generates and previews upload-ready PNG share cards and highlight cards
+- Renders carousel slides as PNGs and stitches them into vertical MP4s for Reels and Shorts
+- Generates simple template-based drafts for X, Bluesky, LinkedIn, Instagram, YouTube Shorts, and Substack
 - Copies draft text and asset URLs for manual publishing
 
 No authentication, LLM support, scheduling, or direct posting is included yet.
@@ -95,29 +96,68 @@ The importer derives the Share Studio context from this raw graph data:
 - the first node with class `answer` becomes the first answer excerpt source.
 - nodes with class `question` or `user` become user questions.
 - question sentences found in graph node content are extracted as follow-up questions.
+- answer Markdown is parsed into media-safe semantic blocks so headings, paragraphs, lists, numbering, blockquotes, citation labels, and spacing survive in generated cards and videos.
 - top-level `highlights` become generated highlight-card source material.
 
 The importer still understands the older `grid`/`content` and `raw`/`assets` response shapes during transition.
 
-Generated SVG asset routes:
+Generated PNG asset routes:
 
 ```text
-GET /campaigns/:id/share-card.svg
-GET /campaigns/:id/nodes/:node_id/share-card.svg
-GET /campaigns/:id/questions/:question_id/share-card.svg
-GET /campaigns/:id/highlights/:highlight_id/share-card.svg
+GET /campaigns/:id/share-card.png
+GET /campaigns/:id/nodes/:node_id/share-card.png
+GET /campaigns/:id/questions/:question_id/share-card.png
+GET /campaigns/:id/highlights/:highlight_id/share-card.png
 ```
+
+SVG is used only as an internal layout intermediate before rasterization; Studio assets and public image routes are PNG.
 
 The importer does not generate images on load. Title/grid cards, highlight cards, key-node cards, and identified-question quote cards are generated on demand from the Share Studio context panel.
 
-Share Studio includes a card style picker. The same key node or question can be generated in multiple styles, currently:
+Share Studio includes a card style picker. The same key node or question can be generated in multiple styles.
 
-- `editorial_dark`
-- `gradient_poster`
-- `minimal_academic`
-- `warm_paper`
+Foundation styles:
 
-Generated style variants are persisted as separate media assets. Generated assets can be deleted from the asset gallery, which also removes their associated generated drafts so variants can be regenerated during testing. Extracted question text is preserved in full; generated question drafts may exceed platform character limits and will show the normal character-count warning.
+- `minimal_light` — black text on a flat white background with decoration disabled
+- `minimal_dark` — white text on a flat black background with decoration disabled
+
+Social/editorial styles:
+
+- `editorial_dark` — premium dark treatment for quotes and explainers
+- `gradient_poster` — high-energy color for hooks and launches
+- `minimal_academic` — cool light editorial treatment for thoughtful explainers
+- `warm_paper` — warm cinematic treatment for reflective excerpts
+- `signal_red` — high-urgency treatment for debate prompts
+- `deep_ocean` — analytical dark treatment for complex topics
+- `newsprint` — tactile print treatment for quotes and cultural topics
+
+Question, highlight, and key-node production includes channel-specific layouts:
+
+- `landscape` — 1200×630 feed hook for X, Bluesky, and link previews
+- `linkedin` — 1200×1200 square explainer with denser body copy
+- `portrait` — 1080×1350 Instagram reading card
+- `carousel` — key nodes become 1080×1350 Instagram slides plus a multi-frame Short; questions and highlights become a portrait plus a six-second 1080×1920 MP4
+
+Generated style and layout variants are persisted as separate media assets. Generated assets can be deleted from the asset gallery, which also removes their associated generated drafts so variants can be regenerated during testing. Extracted question text is preserved in full; generated question drafts may exceed platform character limits and will show the normal character-count warning.
+
+## Short-form video rendering
+
+Carousel video exports require FFmpeg at runtime. By default the app finds `ffmpeg` on `PATH`; a custom executable can be configured with:
+
+```elixir
+config :grid_media_manager, :ffmpeg_path, "/path/to/ffmpeg"
+```
+
+The generated MP4 is 1080×1920 H.264/yuv420p with approximately three seconds per slide and gentle transitions. Video frames use a dedicated full-screen layout with larger hook typography rather than padding the Instagram carousel images. Videos are cached in the system temporary directory using a content-derived key. If FFmpeg is unavailable, carousel PNGs still generate and the guided studio shows a video-encoding warning.
+
+Generated carousel routes:
+
+```text
+GET /campaigns/:id/nodes/:node_id/carousel.png?slide=1
+GET /campaigns/:id/nodes/:node_id/carousel.mp4
+GET /campaigns/:id/questions/:question_id/short.mp4
+GET /campaigns/:id/highlights/:highlight_id/short.mp4
+```
 
 ## Start the Phoenix server
 

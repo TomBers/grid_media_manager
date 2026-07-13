@@ -108,6 +108,9 @@ defmodule GridMediaManager.Social.Templates do
       "instagram" ->
         "Key node: #{node_title}\n\n#{excerpt}\n\nFrom the RationalGrid: #{campaign.title}\n\n#{hashtags(campaign)}"
 
+      "youtube" ->
+        "#{node_title}\n\n#{excerpt}\n\nExplore the complete argument and contribute your perspective on RationalGrid:\n#{link}\n\n#Shorts #RationalGrid"
+
       "substack" ->
         "A key node from #{campaign.title}:\n\n#{node_title}\n\n#{excerpt}\n\nThe full grid shows how this node connects to the surrounding argument.\n\n#{link}"
 
@@ -193,8 +196,13 @@ defmodule GridMediaManager.Social.Templates do
     MediaPayload.recommended_question(campaign.raw_payload) || ensure_question(campaign.title)
   end
 
-  defp asset_angle(%MediaAsset{kind: "key_node_card"}), do: "key_node"
-  defp asset_angle(%MediaAsset{kind: "question_quote_card"}), do: "question_quote"
+  defp asset_angle(%MediaAsset{kind: kind}) when kind in ["key_node_card", "key_node_video"],
+    do: "key_node"
+
+  defp asset_angle(%MediaAsset{kind: kind})
+       when kind in ["question_quote_card", "question_video"],
+       do: "question_quote"
+
   defp asset_angle(%MediaAsset{text: text}) when text in [nil, ""], do: "visual"
   defp asset_angle(%MediaAsset{}), do: "highlight"
 

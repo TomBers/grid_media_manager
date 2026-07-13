@@ -101,7 +101,10 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
            :generated_highlight_ids,
            MapSet.put(
              socket.assigns.generated_highlight_ids,
-             styled_source_key(asset.highlight_id, style)
+             styled_source_key(
+               "#{asset.highlight_id}|#{Map.get(asset.metadata || %{}, "format", "landscape")}",
+               style
+             )
            )
          )
          |> stream_insert(:media_assets, asset)
@@ -140,7 +143,10 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
            :generated_question_ids,
            MapSet.put(
              socket.assigns.generated_question_ids,
-             styled_source_key(question_id, style)
+             styled_source_key(
+               "#{question_id}|#{Map.get(asset.metadata || %{}, "format", "landscape")}",
+               style
+             )
            )
          )
          |> stream_insert(:media_assets, asset)
@@ -156,7 +162,10 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     style =
       ShareCard.normalize_style(Map.get(params, "style") || socket.assigns.selected_card_style)
 
-    format = if Map.get(params, "format") == "portrait", do: "portrait", else: "landscape"
+    requested_format = Map.get(params, "format")
+
+    format =
+      if requested_format in ["portrait", "linkedin"], do: requested_format, else: "landscape"
 
     case Campaigns.generate_key_node_asset(socket.assigns.campaign, node_id, style, format) do
       {:ok, asset} ->
@@ -300,18 +309,27 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                 </p>
               </div>
 
-              <div class="grid grid-cols-3 gap-2 rounded-3xl border border-base-content/10 bg-base-200/50 p-2 text-center">
-                <div class="rounded-2xl bg-base-100 px-4 py-3">
-                  <p class="text-2xl font-semibold">{@campaign.node_count || 0}</p>
-                  <p class="text-xs uppercase tracking-wide text-base-content/50">nodes</p>
-                </div>
-                <div class="rounded-2xl bg-base-100 px-4 py-3">
-                  <p class="text-2xl font-semibold">{@asset_count}</p>
-                  <p class="text-xs uppercase tracking-wide text-base-content/50">assets</p>
-                </div>
-                <div class="rounded-2xl bg-base-100 px-4 py-3">
-                  <p class="text-2xl font-semibold">{@draft_count}</p>
-                  <p class="text-xs uppercase tracking-wide text-base-content/50">drafts</p>
+              <div class="space-y-3">
+                <.link
+                  id="open-guided-studio"
+                  navigate={~p"/campaigns/#{@campaign.id}/studio"}
+                  class="inline-flex w-full items-center justify-center rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-orange-950/15 transition hover:-translate-y-0.5 hover:bg-orange-400"
+                >
+                  <.icon name="hero-sparkles" class="mr-2 size-4" /> Open guided studio v2
+                </.link>
+                <div class="grid grid-cols-3 gap-2 rounded-3xl border border-base-content/10 bg-base-200/50 p-2 text-center">
+                  <div class="rounded-2xl bg-base-100 px-4 py-3">
+                    <p class="text-2xl font-semibold">{@campaign.node_count || 0}</p>
+                    <p class="text-xs uppercase tracking-wide text-base-content/50">nodes</p>
+                  </div>
+                  <div class="rounded-2xl bg-base-100 px-4 py-3">
+                    <p class="text-2xl font-semibold">{@asset_count}</p>
+                    <p class="text-xs uppercase tracking-wide text-base-content/50">assets</p>
+                  </div>
+                  <div class="rounded-2xl bg-base-100 px-4 py-3">
+                    <p class="text-2xl font-semibold">{@draft_count}</p>
+                    <p class="text-xs uppercase tracking-wide text-base-content/50">drafts</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -687,6 +705,39 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                         <% end %>
                       </button>
                       <button
+                        id={"generate-key-node-linkedin-image-#{dom_id_part(key_node_id(node))}"}
+                        type="button"
+                        phx-click="generate_key_node_asset"
+                        phx-value-id={key_node_id(node)}
+                        phx-value-style={@selected_card_style}
+                        phx-value-format="linkedin"
+                        disabled={
+                          generated_key_node?(
+                            @generated_key_node_ids,
+                            key_node_id(node),
+                            @selected_card_style,
+                            "linkedin"
+                          )
+                        }
+                        class={
+                          generate_key_node_button_class(
+                            generated_key_node?(
+                              @generated_key_node_ids,
+                              key_node_id(node),
+                              @selected_card_style,
+                              "linkedin"
+                            )
+                          )
+                        }
+                      >
+                        <.icon name="hero-briefcase" class="mr-1.5 size-3.5" />
+                        <%= if generated_key_node?(@generated_key_node_ids, key_node_id(node), @selected_card_style, "linkedin") do %>
+                          LinkedIn explainer generated
+                        <% else %>
+                          LinkedIn explainer
+                        <% end %>
+                      </button>
+                      <button
                         id={"generate-key-node-reading-image-#{dom_id_part(key_node_id(node))}"}
                         type="button"
                         phx-click="generate_key_node_asset"
@@ -803,6 +854,16 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                   id={id}
                   class={asset_card_class(@selected_asset_id == Integer.to_string(asset.id))}
                 >
+                  <video
+                    :if={video_asset?(asset)}
+                    id={"classic-video-preview-#{asset.id}"}
+                    src={asset.url}
+                    controls
+                    playsinline
+                    preload="metadata"
+                    class="aspect-[9/16] max-h-[34rem] w-full rounded-2xl border border-base-content/10 bg-slate-950 object-contain"
+                  >
+                  </video>
                   <button
                     id={"select-asset-#{asset.id}"}
                     type="button"
@@ -811,11 +872,18 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                     class="block w-full text-left"
                   >
                     <img
+                      :if={not video_asset?(asset)}
                       src={asset.url}
                       alt={asset.title}
                       loading="lazy"
-                      class="aspect-[1.91/1] w-full rounded-2xl border border-base-content/10 bg-base-200 object-contain"
+                      class={asset_image_class(asset)}
                     />
+                    <span
+                      :if={video_asset?(asset)}
+                      class="mt-3 inline-flex items-center rounded-full border border-base-content/15 px-3 py-1.5 text-xs font-semibold text-base-content/65"
+                    >
+                      Filter drafts to this video
+                    </span>
                   </button>
                   <div class="mt-3 text-left">
                     <div class="flex items-start justify-between gap-3">
@@ -824,7 +892,10 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                         <p class="text-xs text-base-content/50">
                           {asset.kind}<span :if={asset.style}> · {asset.style}</span>
                           <span :if={Map.get(asset.metadata || %{}, "format") == "portrait"}>
-                            · reading card
+                            · Instagram portrait
+                          </span>
+                          <span :if={Map.get(asset.metadata || %{}, "format") == "linkedin"}>
+                            · LinkedIn explainer
                           </span>
                         </p>
                       </div>
@@ -1061,6 +1132,20 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     |> assign(:generated_question_ids, generated_question_ids(media_assets))
   end
 
+  defp asset_image_class(%MediaAsset{metadata: %{"format" => "portrait"}}),
+    do: "aspect-[4/5] w-full rounded-2xl border border-base-content/10 bg-base-200 object-contain"
+
+  defp asset_image_class(%MediaAsset{metadata: %{"format" => "linkedin"}}),
+    do:
+      "aspect-square w-full rounded-2xl border border-base-content/10 bg-base-200 object-contain"
+
+  defp asset_image_class(_asset),
+    do:
+      "aspect-[1.91/1] w-full rounded-2xl border border-base-content/10 bg-base-200 object-contain"
+
+  defp video_asset?(%MediaAsset{mime_type: "video/mp4"}), do: true
+  defp video_asset?(_asset), do: false
+
   defp generated_asset?(%MediaAsset{source_type: source_type})
        when is_binary(source_type) and source_type != "",
        do: true
@@ -1101,7 +1186,10 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
   defp generated_highlight_ids(media_assets) do
     media_assets
     |> Enum.filter(&(&1.kind == "highlight_card" and &1.source_type == "highlight"))
-    |> Enum.map(&styled_source_key(&1.highlight_id, &1.style))
+    |> Enum.map(fn asset ->
+      format = Map.get(asset.metadata || %{}, "format", "landscape")
+      styled_source_key("#{asset.highlight_id}|#{format}", asset.style)
+    end)
     |> MapSet.new()
   end
 
@@ -1129,7 +1217,9 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     media_assets
     |> Enum.filter(&(&1.kind == "question_quote_card"))
     |> Enum.map(fn asset ->
-      styled_source_key(ShareCard.question_id(asset.text, asset.node_id), asset.style)
+      question_id = ShareCard.question_id(asset.text, asset.node_id)
+      format = Map.get(asset.metadata || %{}, "format", "landscape")
+      styled_source_key("#{question_id}|#{format}", asset.style)
     end)
     |> MapSet.new()
   end
@@ -1142,8 +1232,11 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     MapSet.member?(generated_grid_styles, ShareCard.normalize_style(style))
   end
 
-  defp generated_highlight?(generated_highlight_ids, highlight_id, style) do
-    MapSet.member?(generated_highlight_ids, styled_source_key(highlight_id, style))
+  defp generated_highlight?(generated_highlight_ids, highlight_id, style, format \\ "landscape") do
+    MapSet.member?(
+      generated_highlight_ids,
+      styled_source_key("#{highlight_id}|#{format}", style)
+    )
   end
 
   defp question_id(question) when is_binary(question), do: ShareCard.question_id(question)
@@ -1169,8 +1262,11 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     end
   end
 
-  defp generated_question?(generated_question_ids, question_id, style) do
-    MapSet.member?(generated_question_ids, styled_source_key(question_id, style))
+  defp generated_question?(generated_question_ids, question_id, style, format \\ "landscape") do
+    MapSet.member?(
+      generated_question_ids,
+      styled_source_key("#{question_id}|#{format}", style)
+    )
   end
 
   defp key_node_id(node) when is_map(node) do
@@ -1182,8 +1278,9 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     MapSet.member?(generated_key_node_ids, styled_source_key("#{node_id}|#{format}", style))
   end
 
-  defp generated_node_flash(title, "portrait"), do: "Generated reading card for #{title}"
-  defp generated_node_flash(title, _format), do: "Generated hook card for #{title}"
+  defp generated_node_flash(title, "portrait"), do: "Generated Instagram portrait for #{title}"
+  defp generated_node_flash(title, "linkedin"), do: "Generated LinkedIn explainer for #{title}"
+  defp generated_node_flash(title, _format), do: "Generated feed hook for #{title}"
 
   defp styled_source_key(source_id, style) do
     "#{source_id}|#{ShareCard.normalize_style(style)}"
@@ -1209,6 +1306,12 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
       )
     ]
   end
+
+  defp style_swatch_class("minimal_light"),
+    do: "bg-white ring-1 ring-inset ring-black/15"
+
+  defp style_swatch_class("minimal_dark"),
+    do: "bg-black ring-1 ring-inset ring-white/20"
 
   defp style_swatch_class("editorial_dark"),
     do: "bg-gradient-to-br from-rose-400 via-indigo-950 to-cyan-400"

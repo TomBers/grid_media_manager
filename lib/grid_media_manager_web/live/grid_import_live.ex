@@ -64,7 +64,7 @@ defmodule GridMediaManagerWeb.GridImportLive do
             </h1>
 
             <p class="mt-5 max-w-2xl text-base leading-8 text-base-content/70 sm:text-lg">
-              Paste a RationalGrid URL or slug. We’ll fetch the media payload, save a campaign, preview the share cards, and generate deterministic drafts for X, Bluesky, LinkedIn, Instagram, and Substack.
+              Paste a RationalGrid URL or slug. We’ll fetch the media payload, save a campaign, preview the share cards, and generate deterministic drafts for X, Bluesky, LinkedIn, Instagram, YouTube Shorts, and Substack.
             </p>
 
             <.form
@@ -212,7 +212,7 @@ defmodule GridMediaManagerWeb.GridImportLive do
               <.link
                 :for={{id, campaign} <- @streams.campaigns}
                 id={id}
-                navigate={~p"/campaigns/#{campaign.id}"}
+                navigate={~p"/campaigns/#{campaign.id}/studio"}
                 class="group block rounded-2xl border border-base-content/10 bg-base-100 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-950/5"
               >
                 <div class="flex items-start justify-between gap-4">
@@ -252,7 +252,7 @@ defmodule GridMediaManagerWeb.GridImportLive do
         {:noreply,
          socket
          |> put_flash(:info, "Loaded #{campaign.title}")
-         |> push_navigate(to: ~p"/campaigns/#{campaign.id}")}
+         |> push_navigate(to: ~p"/campaigns/#{campaign.id}/studio")}
 
       {:error, reason} ->
         {:noreply,

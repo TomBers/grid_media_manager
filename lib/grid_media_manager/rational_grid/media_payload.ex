@@ -77,6 +77,27 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
     end
   end
 
+  def answer_questions(payload) when is_map(payload) do
+    origin = origin_question(payload)
+
+    payload
+    |> answer_sources()
+    |> Enum.flat_map(fn answer ->
+      answer
+      |> answer_texts()
+      |> Enum.flat_map(&extract_questions_from_text/1)
+      |> Enum.reject(&same_question?(&1, origin))
+      |> Enum.map(fn question ->
+        %{
+          "question" => question,
+          "node_id" => node_id(answer),
+          "answer_title" => node_title(answer)
+        }
+      end)
+    end)
+    |> Enum.uniq_by(&normalize_question(&1["question"]))
+  end
+
   def follow_up_questions(payload) when is_map(payload) do
     explicit =
       payload
@@ -162,6 +183,26 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
         node_question_text(node)
       end
     end)
+  end
+
+  defp answer_sources(payload) do
+    answer_nodes = payload |> graph_nodes() |> Enum.filter(&answer_node?/1)
+
+    if answer_nodes == [] do
+      case first_answer(payload) do
+        answer when is_map(answer) -> [answer]
+        _ -> []
+      end
+    else
+      answer_nodes
+    end
+  end
+
+  defp answer_texts(answer) do
+    [node_content(answer), field(answer, "excerpt")]
+    |> Enum.map(&string_value/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
   end
 
   defp first_answer_node(payload) do
@@ -539,8 +580,6 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
   end
-
-  defp truncate_string(nil, _max), do: nil
 
   defp truncate_string(text, max) when is_binary(text) and max > 1 do
     if String.length(text) <= max do

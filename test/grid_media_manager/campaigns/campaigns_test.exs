@@ -2,16 +2,61 @@ defmodule GridMediaManager.CampaignsTest do
   use GridMediaManager.DataCase, async: true
 
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.RationalGrid.MediaPayload
+  alias GridMediaManager.Studio.Workflow
 
   test "exposes distinct style presets for different editorial moods" do
     styles = ShareCard.styles()
     ids = Enum.map(styles, & &1.id)
 
-    assert Enum.all?(["signal_red", "deep_ocean", "newsprint"], &(&1 in ids))
+    assert Enum.all?(
+             ["minimal_light", "minimal_dark", "signal_red", "deep_ocean", "newsprint"],
+             &(&1 in ids)
+           )
+
     assert length(ids) == length(Enum.uniq(ids))
     assert ShareCard.normalize_style("newsprint") == "newsprint"
+
+    assert Enum.count(styles, &(&1.category == "Foundation")) == 2
+    assert Enum.count(styles, &(&1.category == "Social")) == 7
+  end
+
+  test "renders Markdown structure in key-node media" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "markdown-media")
+
+    node = %{
+      "id" => "markdown-node",
+      "class" => "answer",
+      "title" => "A structured answer",
+      "content" => """
+      # A structured answer
+
+      An opening paragraph with **important language** and a [useful source](https://example.com).
+
+      ## The Shared Blueprint
+
+      > A claim worth examining closely.
+
+      - **The Hero:** A recurring pattern.
+      - The Shadow: what remains hidden.
+      """
+    }
+
+    svg = ShareCard.node_linkedin_image_svg(campaign, node, "minimal_light")
+
+    assert svg =~ "The Shared Blueprint"
+    assert svg =~ "font-style=\"italic\""
+    assert svg =~ "•  The Hero:"
+    assert svg =~ "important language"
+    assert svg =~ "useful source"
+    refute svg =~ "**"
+    refute svg =~ "https://example.com"
+
+    slides = ShareCard.carousel_slides(campaign, node)
+    assert Enum.any?(slides, &(&1.title == "The Shared Blueprint"))
+    assert Enum.any?(slides, &String.contains?(&1.body, "• The Hero:"))
   end
 
   describe "import_payload/2" do
@@ -118,6 +163,29 @@ defmodule GridMediaManager.CampaignsTest do
                "Is it possible for a society to achieve perfect safety without losing freedom?"
              ]
 
+      assert Campaigns.answer_questions(campaign) == [
+               %{
+                 "question" =>
+                   "If a drug like soma existed today, would we choose comfort over freedom?",
+                 "node_id" => "2",
+                 "answer_title" => "What Can a Brave New World Teach Us?"
+               },
+               %{
+                 "question" => "How do modern social media algorithms mimic soma?",
+                 "node_id" => "2",
+                 "answer_title" => "What Can a Brave New World Teach Us?"
+               }
+             ]
+
+      assert Enum.any?(ShareCard.questions(campaign), fn question ->
+               question["kind"] == "answer_question" and question["node_id"] == "2" and
+                 question["id"] ==
+                   ShareCard.question_id(
+                     "If a drug like soma existed today, would we choose comfort over freedom?",
+                     "2"
+                   )
+             end)
+
       assert [
                %{
                  "node_id" => "4",
@@ -147,7 +215,8 @@ defmodule GridMediaManager.CampaignsTest do
       assert {:ok, grid_asset} = Campaigns.generate_grid_asset(campaign, "gradient_poster")
       assert grid_asset.kind == "grid_card"
       assert grid_asset.style == "gradient_poster"
-      assert grid_asset.url == "/campaigns/#{campaign.id}/share-card.svg?style=gradient_poster"
+      assert grid_asset.url == "/campaigns/#{campaign.id}/share-card.png?style=gradient_poster"
+      assert grid_asset.mime_type == "image/png"
 
       assert {:ok, highlight_asset} =
                Campaigns.generate_highlight_asset(campaign, 123, "warm_paper")
@@ -156,7 +225,9 @@ defmodule GridMediaManager.CampaignsTest do
       assert highlight_asset.style == "warm_paper"
 
       assert highlight_asset.url ==
-               "/campaigns/#{campaign.id}/highlights/123/share-card.svg?style=warm_paper"
+               "/campaigns/#{campaign.id}/highlights/123/share-card.png?style=warm_paper"
+
+      assert highlight_asset.mime_type == "image/png"
 
       highlight = %{"id" => 123, "text" => "Perfect comfort can become a cage."}
       warm_svg = ShareCard.highlight_image_svg(campaign, highlight, "warm_paper")
@@ -187,7 +258,8 @@ defmodule GridMediaManager.CampaignsTest do
       assert asset.kind == "question_quote_card"
       assert asset.text == long_question
       assert asset.style == "editorial_dark"
-      assert asset.url == "/campaigns/#{campaign.id}/questions/#{question_id}/share-card.svg"
+      assert asset.url == "/campaigns/#{campaign.id}/questions/#{question_id}/share-card.png"
+      assert asset.mime_type == "image/png"
 
       assert {:ok, styled_asset} =
                Campaigns.generate_question_asset(campaign, question_id, "minimal_academic")
@@ -195,7 +267,7 @@ defmodule GridMediaManager.CampaignsTest do
       assert styled_asset.style == "minimal_academic"
 
       assert styled_asset.url ==
-               "/campaigns/#{campaign.id}/questions/#{question_id}/share-card.svg?style=minimal_academic"
+               "/campaigns/#{campaign.id}/questions/#{question_id}/share-card.png?style=minimal_academic"
 
       question_assets =
         Campaigns.list_media_assets(campaign) |> Enum.filter(&(&1.kind == "question_quote_card"))
@@ -211,6 +283,72 @@ defmodule GridMediaManager.CampaignsTest do
              )
     end
 
+    test "generates platform-specific question and highlight cards" do
+      assert {:ok, campaign} =
+               Campaigns.import_payload(simplified_payload(), "platform-quotes-test")
+
+      question = "If a drug like soma existed today..."
+      question_id = ShareCard.question_id(question)
+
+      assert {:ok, question_asset} =
+               Campaigns.generate_question_asset(
+                 campaign,
+                 question_id,
+                 "minimal_light",
+                 "linkedin"
+               )
+
+      assert question_asset.metadata["format"] == "linkedin"
+      assert question_asset.metadata["width"] == 1200
+      assert question_asset.recommended_platforms == ["linkedin"]
+      assert question_asset.url =~ "format=linkedin"
+
+      assert {:ok, highlight_asset} =
+               Campaigns.generate_highlight_asset(campaign, 123, "minimal_dark", "portrait")
+
+      assert highlight_asset.metadata["format"] == "portrait"
+      assert highlight_asset.metadata["height"] == 1350
+      assert highlight_asset.recommended_platforms == ["instagram"]
+      assert highlight_asset.url =~ "format=portrait"
+    end
+
+    test "generates a question portrait and uploadable Short package" do
+      assert {:ok, campaign} =
+               Campaigns.import_payload(simplified_payload(), "question-short-package")
+
+      question_candidate =
+        campaign
+        |> Workflow.candidates()
+        |> Enum.find(&(&1.type == "question"))
+
+      if CarouselVideo.available?() do
+        result =
+          Workflow.generate(campaign, [question_candidate],
+            style: "gradient_poster",
+            format: "carousel"
+          )
+
+        assert result.errors == []
+        assert Enum.any?(result.assets, &(&1.kind == "question_quote_card"))
+        assert Enum.any?(result.assets, &(&1.kind == "question_video"))
+
+        video = Enum.find(result.assets, &(&1.kind == "question_video"))
+        assert video.mime_type == "video/mp4"
+        assert video.metadata["width"] == 1080
+        assert video.metadata["height"] == 1920
+        assert video.recommended_platforms == ["youtube", "instagram"]
+      else
+        result =
+          Workflow.generate(campaign, [question_candidate],
+            style: "gradient_poster",
+            format: "carousel"
+          )
+
+        assert Enum.any?(result.assets, &(&1.kind == "question_quote_card"))
+        assert result.errors != []
+      end
+    end
+
     test "generates a key-node image asset on demand" do
       payload = simplified_payload()
 
@@ -220,38 +358,49 @@ defmodule GridMediaManager.CampaignsTest do
       assert {:ok, asset} = Campaigns.generate_key_node_asset(campaign, "1")
       assert asset.kind == "key_node_card"
       assert asset.style == "editorial_dark"
-      assert asset.url == "/campaigns/#{campaign.id}/nodes/1/share-card.svg"
+      assert asset.url == "/campaigns/#{campaign.id}/nodes/1/share-card.png"
+      assert asset.mime_type == "image/png"
       assert asset.node_id == "1"
 
       assert {:ok, styled_asset} = Campaigns.generate_key_node_asset(campaign, "1", "warm_paper")
       assert styled_asset.style == "warm_paper"
 
       assert styled_asset.url ==
-               "/campaigns/#{campaign.id}/nodes/1/share-card.svg?style=warm_paper"
+               "/campaigns/#{campaign.id}/nodes/1/share-card.png?style=warm_paper"
 
       assert {:ok, portrait_asset} =
                Campaigns.generate_key_node_asset(campaign, "1", "warm_paper", "portrait")
 
       assert portrait_asset.url ==
-               "/campaigns/#{campaign.id}/nodes/1/share-card.svg?style=warm_paper&format=portrait"
+               "/campaigns/#{campaign.id}/nodes/1/share-card.png?style=warm_paper&format=portrait"
 
       assert portrait_asset.metadata["format"] == "portrait"
+      assert portrait_asset.recommended_platforms == ["instagram"]
 
-      assert ShareCard.node_reading_image_svg(
-               campaign,
-               ShareCard.find_key_node(campaign, "1"),
-               "warm_paper"
-             ) =~ "width=\"1080\""
+      assert {:ok, linkedin_asset} =
+               Campaigns.generate_key_node_asset(campaign, "1", "warm_paper", "linkedin")
+
+      assert linkedin_asset.url ==
+               "/campaigns/#{campaign.id}/nodes/1/share-card.png?style=warm_paper&format=linkedin"
+
+      assert linkedin_asset.metadata["format"] == "linkedin"
+      assert linkedin_asset.metadata["width"] == 1200
+      assert linkedin_asset.metadata["height"] == 1200
+      assert linkedin_asset.recommended_platforms == ["linkedin"]
+
+      node = ShareCard.find_key_node(campaign, "1")
+      assert ShareCard.node_reading_image_svg(campaign, node, "warm_paper") =~ "width=\"1080\""
+      assert ShareCard.node_linkedin_image_svg(campaign, node, "warm_paper") =~ "height=\"1200\""
 
       assets = Campaigns.list_media_assets(campaign)
-      assert length(Enum.filter(assets, &(&1.kind == "key_node_card"))) == 3
+      assert length(Enum.filter(assets, &(&1.kind == "key_node_card"))) == 4
 
       drafts = Campaigns.list_post_drafts(campaign)
       assert Enum.any?(drafts, &(&1.platform == "linkedin" and &1.angle == "key_node"))
 
       assert {:ok, _asset} = Campaigns.generate_key_node_asset(campaign, "1")
       assets = Campaigns.list_media_assets(campaign)
-      assert length(Enum.filter(assets, &(&1.kind == "key_node_card"))) == 3
+      assert length(Enum.filter(assets, &(&1.kind == "key_node_card"))) == 4
     end
 
     test "generates an ordered carousel of key-node slides" do
@@ -265,6 +414,10 @@ defmodule GridMediaManager.CampaignsTest do
       assert Enum.at(assets, 0).metadata["slide_index"] == 1
       assert Enum.at(assets, 0).recommended_platforms == ["instagram", "linkedin"]
       assert Enum.at(assets, 0).mime_type == "image/png"
+
+      assert Enum.at(assets, 0).text ==
+               "Follow the reasoning, test the assumptions, and decide where you stand."
+
       assert Enum.at(assets, 0).url =~ "/carousel.png?"
       assert Enum.all?(Enum.drop(assets, 1), &(&1.recommended_platforms == []))
 
@@ -272,6 +425,51 @@ defmodule GridMediaManager.CampaignsTest do
                Campaigns.list_post_drafts(campaign),
                &(&1.media_asset_id == Enum.at(assets, 0).id)
              )
+    end
+
+    test "renders a carousel as a vertical short-form MP4" do
+      assert {:ok, campaign} =
+               Campaigns.import_payload(simplified_payload(), "carousel-video-test")
+
+      if CarouselVideo.available?() do
+        assert {:ok, asset} =
+                 Campaigns.generate_key_node_video(campaign, "1", "gradient_poster")
+
+        assert asset.kind == "key_node_video"
+        assert asset.mime_type == "video/mp4"
+        assert asset.metadata["width"] == 1080
+        assert asset.metadata["height"] == 1920
+        assert asset.metadata["duration_seconds"] > 0
+        assert "youtube" in asset.recommended_platforms
+
+        node = ShareCard.find_key_node(campaign, "1")
+        assert {:ok, path} = CarouselVideo.render(campaign, node, "gradient_poster")
+        video = File.read!(path)
+        assert binary_part(video, 4, 4) == "ftyp"
+
+        assert Enum.any?(
+                 Campaigns.list_post_drafts(campaign, platform: "youtube"),
+                 &(&1.media_asset_id == asset.id and &1.angle == "key_node")
+               )
+
+        key_node_candidate =
+          campaign
+          |> Workflow.candidates()
+          |> Enum.find(&(&1.type == "key_node" and &1.source_id == "1"))
+
+        result =
+          Workflow.generate(campaign, [key_node_candidate],
+            style: "gradient_poster",
+            format: "carousel"
+          )
+
+        assert result.errors == []
+        assert Enum.any?(result.assets, &(&1.kind == "key_node_video"))
+        assert Enum.any?(result.assets, &(&1.kind == "key_node_carousel_slide"))
+      else
+        assert {:error, :ffmpeg_not_found} =
+                 Campaigns.generate_key_node_video(campaign, "1", "gradient_poster")
+      end
     end
 
     test "deletes a generated image asset and its generated drafts" do

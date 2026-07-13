@@ -94,6 +94,7 @@ defmodule GridMediaManager.RationalGrid.Client do
     |> Enum.filter(&is_map/1)
     |> Enum.map(&normalize_grid_summary/1)
     |> Enum.reject(&is_nil/1)
+    |> Enum.sort_by(&grid_sort_key/1, :desc)
   end
 
   defp build_media_url(slug) do
@@ -186,6 +187,40 @@ defmodule GridMediaManager.RationalGrid.Client do
         inserted_at: first_string(metadata, ["inserted_at", :inserted_at]),
         source: slug
       }
+    end
+  end
+
+  defp grid_sort_key(grid) do
+    timestamp = grid.inserted_at || grid.updated_at
+
+    case parse_timestamp(timestamp) do
+      {:ok, datetime} -> {1, DateTime.to_unix(datetime, :microsecond)}
+      :error -> {0, 0}
+    end
+  end
+
+  defp parse_timestamp(timestamp) when is_binary(timestamp) do
+    case DateTime.from_iso8601(timestamp) do
+      {:ok, datetime, _offset} ->
+        {:ok, datetime}
+
+      {:error, _reason} ->
+        parse_naive_or_date(timestamp)
+    end
+  end
+
+  defp parse_timestamp(_timestamp), do: :error
+
+  defp parse_naive_or_date(timestamp) do
+    case NaiveDateTime.from_iso8601(timestamp) do
+      {:ok, naive_datetime} ->
+        {:ok, DateTime.from_naive!(naive_datetime, "Etc/UTC")}
+
+      {:error, _reason} ->
+        case Date.from_iso8601(timestamp) do
+          {:ok, date} -> {:ok, DateTime.new!(date, ~T[00:00:00], "Etc/UTC")}
+          {:error, _reason} -> :error
+        end
     end
   end
 
