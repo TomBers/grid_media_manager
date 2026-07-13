@@ -7,7 +7,7 @@ Internal RationalGrid Share Studio for turning RationalGrid media payloads into 
 - Accepts a RationalGrid URL, direct media endpoint URL, or slug
 - Fetches the RationalGrid media JSON with `Req`
 - Persists a campaign, media assets, and editable post drafts
-- Generates and previews local SVG share cards/highlight cards
+- Generates and previews upload-ready PNG share cards and highlight cards
 - Renders carousel slides as PNGs and stitches them into vertical MP4s for Reels and Shorts
 - Generates simple template-based drafts for X, Bluesky, LinkedIn, Instagram, YouTube Shorts, and Substack
 - Copies draft text and asset URLs for manual publishing
