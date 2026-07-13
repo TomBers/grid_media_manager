@@ -96,18 +96,21 @@ The importer derives the Share Studio context from this raw graph data:
 - the first node with class `answer` becomes the first answer excerpt source.
 - nodes with class `question` or `user` become user questions.
 - question sentences found in graph node content are extracted as follow-up questions.
+- answer Markdown is parsed into media-safe semantic blocks so headings, paragraphs, lists, numbering, blockquotes, citation labels, and spacing survive in generated cards and videos.
 - top-level `highlights` become generated highlight-card source material.
 
 The importer still understands the older `grid`/`content` and `raw`/`assets` response shapes during transition.
 
-Generated SVG asset routes:
+Generated PNG asset routes:
 
 ```text
-GET /campaigns/:id/share-card.svg
-GET /campaigns/:id/nodes/:node_id/share-card.svg
-GET /campaigns/:id/questions/:question_id/share-card.svg
-GET /campaigns/:id/highlights/:highlight_id/share-card.svg
+GET /campaigns/:id/share-card.png
+GET /campaigns/:id/nodes/:node_id/share-card.png
+GET /campaigns/:id/questions/:question_id/share-card.png
+GET /campaigns/:id/highlights/:highlight_id/share-card.png
 ```
+
+SVG is used only as an internal layout intermediate before rasterization; Studio assets and public image routes are PNG.
 
 The importer does not generate images on load. Title/grid cards, highlight cards, key-node cards, and identified-question quote cards are generated on demand from the Share Studio context panel.
 

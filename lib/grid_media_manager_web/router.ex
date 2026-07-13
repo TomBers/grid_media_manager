@@ -18,16 +18,15 @@ defmodule GridMediaManagerWeb.Router do
     pipe_through :browser
 
     live "/", GridImportLive, :new
-    get "/campaigns/:id/share-card.svg", PromotionAssetController, :grid_card
-    get "/campaigns/:id/nodes/:node_id/share-card.svg", PromotionAssetController, :node_card
-    get "/campaigns/:id/nodes/:node_id/carousel.svg", PromotionAssetController, :node_carousel
+    get "/campaigns/:id/share-card.png", PromotionAssetController, :grid_card
+    get "/campaigns/:id/nodes/:node_id/share-card.png", PromotionAssetController, :node_card
     get "/campaigns/:id/nodes/:node_id/carousel.png", PromotionAssetController, :node_carousel_png
 
     get "/campaigns/:id/nodes/:node_id/carousel.mp4",
         PromotionAssetController,
         :node_carousel_video
 
-    get "/campaigns/:id/questions/:question_id/share-card.svg",
+    get "/campaigns/:id/questions/:question_id/share-card.png",
         PromotionAssetController,
         :question_card
 
@@ -35,7 +34,7 @@ defmodule GridMediaManagerWeb.Router do
         PromotionAssetController,
         :question_short_video
 
-    get "/campaigns/:id/highlights/:highlight_id/share-card.svg",
+    get "/campaigns/:id/highlights/:highlight_id/share-card.png",
         PromotionAssetController,
         :highlight_card
 

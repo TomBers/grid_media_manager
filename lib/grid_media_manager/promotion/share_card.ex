@@ -11,6 +11,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   """
 
   alias GridMediaManager.Campaigns.Campaign
+  alias GridMediaManager.Promotion.Markdown
   alias GridMediaManager.RationalGrid.MediaPayload
 
   @image_width 1200
@@ -109,7 +110,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       title: campaign.title,
       kind: "grid_card",
       url: graph_image_path(campaign, style),
-      mime_type: "image/svg+xml",
+      mime_type: "image/png",
       text: nil,
       node_id: nil,
       highlight_id: nil,
@@ -124,7 +125,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def graph_image_path(campaign, style \\ @default_style)
 
   def graph_image_path(%Campaign{id: id}, style) do
-    "/campaigns/#{id}/share-card.svg"
+    "/campaigns/#{id}/share-card.png"
     |> maybe_add_style_query(style)
   end
 
@@ -132,7 +133,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
     do: highlight_image_path(campaign, highlight_id, style, "landscape")
 
   def highlight_image_path(%Campaign{id: id}, highlight_id, style, format) do
-    "/campaigns/#{id}/highlights/#{highlight_id}/share-card.svg"
+    "/campaigns/#{id}/highlights/#{highlight_id}/share-card.png"
     |> maybe_add_style_query(style)
     |> maybe_add_quote_format_query(format)
   end
@@ -147,7 +148,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def node_image_path(%Campaign{id: id}, node_id, style, format) do
     encoded_node_id = URI.encode(to_string(node_id), &URI.char_unreserved?/1)
 
-    "/campaigns/#{id}/nodes/#{encoded_node_id}/share-card.svg"
+    "/campaigns/#{id}/nodes/#{encoded_node_id}/share-card.png"
     |> maybe_add_style_query(style)
     |> maybe_add_format_query(format)
   end
@@ -165,7 +166,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
     do: question_image_path(campaign, question_id, style, "landscape")
 
   def question_image_path(%Campaign{id: id}, question_id, style, format) do
-    "/campaigns/#{id}/questions/#{URI.encode(to_string(question_id), &URI.char_unreserved?/1)}/share-card.svg"
+    "/campaigns/#{id}/questions/#{URI.encode(to_string(question_id), &URI.char_unreserved?/1)}/share-card.png"
     |> maybe_add_style_query(style)
     |> maybe_add_quote_format_query(format)
   end
@@ -296,6 +297,23 @@ defmodule GridMediaManager.Promotion.ShareCard do
     """
   end
 
+  def graph_image_png(campaign, style \\ @default_style) do
+    campaign
+    |> graph_image_svg(style)
+    |> rasterize_svg()
+  end
+
+  def node_image_png(campaign, node, style \\ @default_style, format \\ "landscape") do
+    svg =
+      case normalize_node_format(format) do
+        "linkedin" -> node_linkedin_image_svg(campaign, node, style)
+        "portrait" -> node_reading_image_svg(campaign, node, style)
+        "landscape" -> node_image_svg(campaign, node, style)
+      end
+
+    rasterize_svg(svg)
+  end
+
   def node_image_svg(campaign, node, style \\ @default_style)
 
   def node_image_svg(%Campaign{} = campaign, node, style) when is_map(node) do
@@ -391,14 +409,12 @@ defmodule GridMediaManager.Promotion.ShareCard do
     palette = quote_palette(style)
     node_title = node |> get("title") |> sanitize_text(320) |> fallback("Key node")
 
-    node_content =
+    node_markdown =
       node
       |> get("content")
       |> fallback(get(node, "excerpt"))
       |> fallback("")
-      |> strip_node_markdown()
-      |> sanitize_text(2_400)
-      |> strip_leading_title(node_title)
+      |> to_string()
 
     node_class =
       node |> get("class") |> sanitize_text(48) |> fallback("node") |> String.replace("_", " ")
@@ -409,10 +425,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
     title_start_y = 242
     title_last_y = title_start_y + (length(title_lines) - 1) * title_line_gap
     body_font_size = 30
-    body_line_gap = 43
     body_start_y = title_last_y + 106
-    body_max_lines = max(div(1_045 - body_start_y, body_line_gap) + 1, 5) |> min(15)
-    body_lines = wrap_lines_by_width(node_content, 950 / body_font_size, body_max_lines)
 
     title_markup =
       title_lines
@@ -422,11 +435,14 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end)
 
     body_markup =
-      body_lines
-      |> Enum.with_index()
-      |> Enum.map_join("", fn {line, index} ->
-        ~s(<tspan x="124" y="#{body_start_y + index * body_line_gap}">#{escape_xml(line)}</tspan>)
-      end)
+      markdown_body_markup(node_markdown, node_title, %{
+        x: 124,
+        start_y: body_start_y,
+        max_y: 1_045,
+        width: 950,
+        font_size: body_font_size,
+        palette: palette
+      })
 
     """
     <svg xmlns="http://www.w3.org/2000/svg" width="#{@square_size}" height="#{@square_size}" viewBox="0 0 #{@square_size} #{@square_size}" role="img" aria-labelledby="title desc">
@@ -473,9 +489,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         #{title_markup}
       </text>
       <rect x="124" y="#{body_start_y - 58}" width="240" height="7" rx="3.5" fill="url(#linkedinAccent)" opacity="0.96" />
-      <text fill="#{palette.secondary_text}" font-size="#{body_font_size}" font-weight="500" font-family="#{@ui_font_family}" opacity="0.94">
-        #{body_markup}
-      </text>
+      #{body_markup}
 
       <line x1="124" y1="1070" x2="1076" y2="1070" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
       <text x="124" y="1108" fill="#{palette.muted}" font-size="18" font-weight="700" font-family="#{@ui_font_family}">A key idea from #{escape_xml(sanitize_text(campaign.title, 92))}</text>
@@ -490,14 +504,12 @@ defmodule GridMediaManager.Promotion.ShareCard do
     palette = quote_palette(style)
     node_title = node |> get("title") |> sanitize_text(320) |> fallback("Key node")
 
-    node_content =
+    node_markdown =
       node
       |> get("content")
       |> fallback(get(node, "excerpt"))
       |> fallback("")
-      |> strip_node_markdown()
-      |> sanitize_text(1500)
-      |> strip_leading_title(node_title)
+      |> to_string()
 
     node_class =
       node |> get("class") |> sanitize_text(48) |> fallback("node") |> String.replace("_", " ")
@@ -507,10 +519,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
     title_lines = wrap_lines_by_width(node_title, 820 / title_font_size, 4)
     title_start_y = 232
     body_font_size = 29
-    body_line_gap = 42
     body_start_y = title_start_y + (length(title_lines) - 1) * title_line_gap + 92
-    body_max_lines = max(min(div(1160 - body_start_y, body_line_gap), 18), 4)
-    body_lines = wrap_lines_by_width(node_content, 820 / body_font_size, body_max_lines)
 
     title_markup =
       title_lines
@@ -521,12 +530,14 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end)
 
     body_markup =
-      body_lines
-      |> Enum.with_index()
-      |> Enum.map_join("", fn {line, index} ->
-        y = body_start_y + index * body_line_gap
-        ~s(<tspan x="130" y="#{y}">#{escape_xml(line)}</tspan>)
-      end)
+      markdown_body_markup(node_markdown, node_title, %{
+        x: 130,
+        start_y: body_start_y,
+        max_y: 1_160,
+        width: 820,
+        font_size: body_font_size,
+        palette: palette
+      })
 
     """
     <svg xmlns="http://www.w3.org/2000/svg" width="#{@portrait_width}" height="#{@portrait_height}" viewBox="0 0 #{@portrait_width} #{@portrait_height}" role="img" aria-labelledby="title desc">
@@ -573,9 +584,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         #{title_markup}
       </text>
       <rect x="130" y="#{body_start_y - 54}" width="210" height="7" rx="3.5" fill="url(#portraitAccent)" opacity="0.96" />
-      <text fill="#{palette.secondary_text}" font-size="#{body_font_size}" font-weight="500" font-family="#{@ui_font_family}" letter-spacing="0" opacity="0.94">
-        #{body_markup}
-      </text>
+      #{body_markup}
 
       <line x1="130" y1="1210" x2="950" y2="1210" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
       <text x="130" y="1248" fill="#{palette.muted}" font-size="18" font-weight="700" font-family="#{@ui_font_family}" letter-spacing="0.2">Explore the full argument on RationalGrid</text>
@@ -593,33 +602,23 @@ defmodule GridMediaManager.Promotion.ShareCard do
       |> fallback("")
       |> to_string()
 
-    sections =
-      Regex.split(~r/(?m)^##+\s+/, content, trim: true)
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
+    content_slides =
+      content
+      |> Markdown.sections()
       |> Enum.map(fn section ->
-        case String.split(section, "\n", parts: 2) do
-          [heading, body] -> %{title: String.trim(heading), body: String.trim(body)}
-          [body] -> %{title: "The argument", body: body}
-        end
-      end)
+        title =
+          if same_markdown_title?(section.title, node_title),
+            do: "Opening idea",
+            else: section.title
 
-    body_sections =
-      sections
-      |> Enum.map(fn section ->
         %{
-          section
-          | body: section.body |> strip_node_markdown() |> strip_leading_title(node_title)
+          label: "Argument",
+          title: title,
+          body: section.text,
+          blocks: section.blocks
         }
       end)
-      |> Enum.reject(&(&1.body == ""))
-
-    content_slides =
-      body_sections
       |> Enum.take(3)
-      |> Enum.map(fn section ->
-        %{label: "Argument", title: section.title, body: section.body}
-      end)
 
     question =
       campaign.raw_payload
@@ -632,7 +631,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         %{
           label: "Thesis",
           title: node_title,
-          body: "A key move in the argument mapped by RationalGrid."
+          body: "Follow the reasoning, test the assumptions, and decide where you stand."
         }
       ] ++
         content_slides ++
@@ -680,16 +679,18 @@ defmodule GridMediaManager.Promotion.ShareCard do
     slides = carousel_slides(campaign, node)
     slide = Enum.at(slides, slide_index - 1) || List.first(slides)
     palette = quote_palette(style)
-    body_lines = wrap_lines_by_width(slide.body, 820 / 31, 15)
     body_start_y = 480
     title_image_data_uri = carousel_title_image_data_uri(slide.title, palette.text)
 
     body_markup =
-      body_lines
-      |> Enum.with_index()
-      |> Enum.map_join("", fn {line, index} ->
-        ~s(<tspan x="130" y="#{body_start_y + index * 45}">#{escape_xml(line)}</tspan>)
-      end)
+      markdown_body_markup(Map.get(slide, :blocks, slide.body), nil, %{
+        x: 130,
+        start_y: body_start_y,
+        max_y: 1_160,
+        width: 820,
+        font_size: 31,
+        palette: palette
+      })
 
     """
     <svg xmlns="http://www.w3.org/2000/svg" width="#{@portrait_width}" height="#{@portrait_height}" viewBox="0 0 #{@portrait_width} #{@portrait_height}" role="img" aria-labelledby="title desc">
@@ -731,9 +732,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <line x1="130" y1="176" x2="950" y2="176" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
       <image x="130" y="205" width="820" height="190" href="#{title_image_data_uri}" preserveAspectRatio="none" />
       <rect x="130" y="430" width="210" height="7" rx="3.5" fill="url(#carouselAccent)" opacity="0.96" />
-      <text fill="#{palette.secondary_text}" font-size="31" font-weight="500" font-family="#{@ui_font_family}" letter-spacing="0" opacity="0.94">
-        #{body_markup}
-      </text>
+      #{body_markup}
       <line x1="130" y1="1210" x2="950" y2="1210" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
       <text x="130" y="1248" fill="#{palette.muted}" font-size="18" font-weight="700" font-family="#{@ui_font_family}">#{slide_index} / #{length(slides)} · #{escape_xml(sanitize_text(campaign.title, 76))}</text>
     </svg>
@@ -768,9 +767,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
     title_last_y = title_start_y + (length(title_lines) - 1) * title_line_gap
     body_start_y = max(title_last_y + 128, 790)
     body_font_size = if cover?, do: 44, else: 40
-    body_line_gap = round(body_font_size * 1.42)
-    body_max_lines = max(div(1_650 - body_start_y, body_line_gap) + 1, 5) |> min(14)
-    body_lines = wrap_lines_by_width(slide.body, 820 / body_font_size, body_max_lines)
 
     title_markup =
       title_lines
@@ -780,11 +776,14 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end)
 
     body_markup =
-      body_lines
-      |> Enum.with_index()
-      |> Enum.map_join("", fn {line, index} ->
-        ~s(<tspan x="130" y="#{body_start_y + index * body_line_gap}">#{escape_xml(line)}</tspan>)
-      end)
+      markdown_body_markup(Map.get(slide, :blocks, slide.body), nil, %{
+        x: 130,
+        start_y: body_start_y,
+        max_y: 1_650,
+        width: 820,
+        font_size: body_font_size,
+        palette: palette
+      })
 
     """
     <svg xmlns="http://www.w3.org/2000/svg" width="#{@short_width}" height="#{@short_height}" viewBox="0 0 #{@short_width} #{@short_height}" role="img" aria-labelledby="title desc">
@@ -833,9 +832,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         #{title_markup}
       </text>
       <rect x="130" y="#{body_start_y - 72}" width="260" height="9" rx="4.5" fill="url(#shortAccent)" opacity="0.98" />
-      <text fill="#{palette.secondary_text}" font-size="#{body_font_size}" font-weight="550" font-family="#{@ui_font_family}" opacity="0.96">
-        #{body_markup}
-      </text>
+      #{body_markup}
 
       <line x1="130" y1="1738" x2="950" y2="1738" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
       <text x="130" y="1790" fill="#{palette.muted}" font-size="22" font-weight="700" font-family="#{@ui_font_family}">Explore the full conversation on RationalGrid</text>
@@ -1094,15 +1091,13 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def question_platform_image_png(campaign, question, style, format) do
     campaign
     |> question_platform_image_svg(question, style, format)
-    |> Image.from_svg!()
-    |> Image.write!(:memory, suffix: ".png")
+    |> rasterize_svg()
   end
 
   def highlight_platform_image_png(campaign, highlight, style, format) do
     campaign
     |> highlight_platform_image_svg(highlight, style, format)
-    |> Image.from_svg!()
-    |> Image.write!(:memory, suffix: ".png")
+    |> rasterize_svg()
   end
 
   defp platform_quote_image_svg(campaign, text, source, kind, style, format) do
@@ -1344,7 +1339,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         title: "Question quote",
         kind: "question_quote_card",
         url: question_image_path(campaign, id, style, format),
-        mime_type: "image/svg+xml",
+        mime_type: "image/png",
         text: text,
         node_id: question |> get("node_id") |> string_value(),
         highlight_id: nil,
@@ -1375,7 +1370,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         title: title,
         kind: "key_node_card",
         url: node_image_path(campaign, node_id, style, format),
-        mime_type: "image/svg+xml",
+        mime_type: "image/png",
         text: node |> get("excerpt") |> sanitize_text(nil) |> fallback(title),
         node_id: node_id,
         highlight_id: nil,
@@ -1408,7 +1403,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         title: "Highlighted quote",
         kind: "highlight_card",
         url: highlight_image_path(campaign, highlight_id, style, format),
-        mime_type: "image/svg+xml",
+        mime_type: "image/png",
         text: text,
         node_id: highlight_node_id(highlight),
         highlight_id: highlight_id,
@@ -1993,27 +1988,172 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end
   end
 
-  defp strip_leading_title(text, title) do
-    text = text |> String.trim_leading("#") |> String.trim_leading()
+  defp markdown_body_markup(content, title, opts) do
+    blocks =
+      case content do
+        blocks when is_list(blocks) -> blocks
+        markdown -> Markdown.blocks(markdown)
+      end
+      |> Markdown.drop_leading_title(title)
 
-    cond do
-      text == title ->
-        ""
+    {markup, _last_y, _rendered?} =
+      Enum.reduce_while(blocks, {[], opts.start_y, false}, fn block,
+                                                              {markup, last_y, rendered?} ->
+        style = markdown_block_style(block, opts)
+        first_y = if rendered?, do: last_y + style.line_gap + style.gap, else: opts.start_y
+        max_units = (opts.width - style.indent) / style.font_size * 0.9
+        lines = wrap_all_lines_by_width(block.text, max_units)
+        available_lines = max(div(opts.max_y - first_y, style.line_gap) + 1, 0)
 
-      String.starts_with?(text, title) ->
-        String.trim_leading(String.slice(text, String.length(title)..-1//1), " :—–-\n")
+        if available_lines == 0 do
+          {:halt, {markup, last_y, rendered?}}
+        else
+          visible_lines = Enum.take(lines, available_lines)
+          truncated? = length(visible_lines) < length(lines)
+          visible_lines = maybe_mark_markdown_truncated(visible_lines, max_units, truncated?)
+          block_markup = markdown_block_markup(block, visible_lines, first_y, style, opts)
+          block_last_y = first_y + max(length(visible_lines) - 1, 0) * style.line_gap
+          result = {markup ++ [block_markup], block_last_y, true}
 
-      true ->
-        text
+          if truncated?, do: {:halt, result}, else: {:cont, result}
+        end
+      end)
+
+    Enum.join(markup, "")
+  end
+
+  defp markdown_block_style(%{type: :heading}, opts) do
+    font_size = opts.font_size + 5
+
+    %{
+      font_size: font_size,
+      line_gap: round(font_size * 1.28),
+      gap: 18,
+      indent: 0,
+      weight: 800,
+      style: "normal",
+      family: @ui_font_family,
+      color: opts.palette.text,
+      opacity: "1"
+    }
+  end
+
+  defp markdown_block_style(%{type: :blockquote}, opts) do
+    %{
+      font_size: opts.font_size,
+      line_gap: round(opts.font_size * 1.42),
+      gap: 18,
+      indent: 30,
+      weight: 600,
+      style: "italic",
+      family: @quote_font_family,
+      color: opts.palette.secondary_text,
+      opacity: "0.96"
+    }
+  end
+
+  defp markdown_block_style(%{type: :list_item}, opts) do
+    font_size = max(opts.font_size - 1, 16)
+
+    %{
+      font_size: font_size,
+      line_gap: round(font_size * 1.38),
+      gap: 7,
+      indent: 38,
+      weight: 550,
+      style: "normal",
+      family: @ui_font_family,
+      color: opts.palette.secondary_text,
+      opacity: "0.95"
+    }
+  end
+
+  defp markdown_block_style(_block, opts) do
+    %{
+      font_size: opts.font_size,
+      line_gap: round(opts.font_size * 1.42),
+      gap: 14,
+      indent: 0,
+      weight: 500,
+      style: "normal",
+      family: @ui_font_family,
+      color: opts.palette.secondary_text,
+      opacity: "0.94"
+    }
+  end
+
+  defp markdown_block_markup(block, lines, first_y, style, opts) do
+    text_markup =
+      lines
+      |> Enum.with_index()
+      |> Enum.map_join("", fn {line, index} ->
+        {x, text} = markdown_line(block, line, index, opts.x, style.indent)
+        text = decorate_markdown_quote(block, text, index, length(lines))
+        y = first_y + index * style.line_gap
+
+        ~s(<text x="#{x}" y="#{y}" fill="#{style.color}" font-size="#{style.font_size}" font-weight="#{style.weight}" font-style="#{style.style}" font-family="#{style.family}" opacity="#{style.opacity}">#{escape_xml(text)}</text>)
+      end)
+
+    case block do
+      %{type: :blockquote} ->
+        last_y = first_y + max(length(lines) - 1, 0) * style.line_gap
+
+        ~s(<rect x="#{opts.x}" y="#{first_y - style.font_size}" width="5" height="#{last_y - first_y + style.line_gap}" rx="2.5" fill="#{opts.palette.accent_a}" opacity="0.72" />) <>
+          text_markup
+
+      _ ->
+        text_markup
     end
   end
 
-  defp strip_node_markdown(text) when is_binary(text) do
-    text
-    |> String.replace(~r/^[[:space:]]*#+[[:space:]]*/m, "")
-    |> String.replace(~r/\*\*([^*]+)\*\*/, "\\1")
-    |> String.replace(~r/\*([^*]+)\*/, "\\1")
-    |> String.replace(~r/\[([^\]]+)\]\([^\)]+\)/, "\\1")
+  defp markdown_line(%{type: :list_item, marker: marker}, line, 0, x, _indent),
+    do: {x, "#{marker}  #{line}"}
+
+  defp markdown_line(%{type: :list_item}, line, _index, x, indent),
+    do: {x + indent, line}
+
+  defp markdown_line(%{type: :blockquote}, line, _index, x, indent),
+    do: {x + indent, line}
+
+  defp markdown_line(_block, line, _index, x, _indent), do: {x, line}
+
+  defp decorate_markdown_quote(%{type: :blockquote}, text, 0, 1), do: "“#{text}”"
+  defp decorate_markdown_quote(%{type: :blockquote}, text, 0, _count), do: "“#{text}"
+
+  defp decorate_markdown_quote(%{type: :blockquote}, text, index, count)
+       when index == count - 1,
+       do: "#{text}”"
+
+  defp decorate_markdown_quote(_block, text, _index, _count), do: text
+
+  defp maybe_mark_markdown_truncated([], _max_units, _truncated?), do: []
+  defp maybe_mark_markdown_truncated(lines, _max_units, false), do: lines
+
+  defp maybe_mark_markdown_truncated(lines, max_units, true) do
+    List.update_at(lines, -1, fn line ->
+      line
+      |> String.trim_trailing("…")
+      |> Kernel.<>("…")
+      |> truncate_line_to_units(max_units)
+    end)
+  end
+
+  defp same_markdown_title?(left, right) do
+    normalize_markdown_title(left) == normalize_markdown_title(right)
+  end
+
+  defp normalize_markdown_title(title) do
+    title
+    |> Markdown.plain_inline()
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/u, " ")
+    |> String.trim()
+  end
+
+  defp rasterize_svg(svg) do
+    svg
+    |> Image.from_svg!()
+    |> Image.write!(:memory, suffix: ".png")
   end
 
   defp quote_palette(style) do

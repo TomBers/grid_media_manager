@@ -19,7 +19,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @fade_seconds 0.25
   @frame_rate 30
   @render_timeout 90_000
-  @cache_version 3
+  @cache_version 4
 
   def available?, do: is_binary(ffmpeg_path())
 
