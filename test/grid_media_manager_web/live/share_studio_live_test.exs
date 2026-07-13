@@ -32,8 +32,11 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     assert has_element?(view, "#generate-title-image")
     assert has_element?(view, "#generate-highlight-image-123")
     assert has_element?(view, "#generate-key-node-image-1")
+    assert has_element?(view, "#generate-key-node-linkedin-image-1")
     assert has_element?(view, "#generate-key-node-reading-image-1")
     assert has_element?(view, "#generate-key-node-carousel-1")
+    assert has_element?(view, "#card-style-minimal_light")
+    assert has_element?(view, "#card-style-minimal_dark")
     assert has_element?(view, "#card-style-signal_red")
     assert has_element?(view, "#card-style-deep_ocean")
     assert has_element?(view, "#card-style-newsprint")
@@ -111,6 +114,24 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     assets = Campaigns.list_media_assets(campaign)
     assert Enum.any?(assets, &(&1.kind == "key_node_card" and &1.node_id == "1"))
     assert has_element?(view, "#generate-key-node-image-1[disabled]")
+  end
+
+  test "generates a LinkedIn explainer from the key-node button", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "linkedin-live-test")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}")
+
+    view
+    |> element("#generate-key-node-linkedin-image-1")
+    |> render_click()
+
+    assert Enum.any?(
+             Campaigns.list_media_assets(campaign),
+             &(&1.kind == "key_node_card" and &1.metadata["format"] == "linkedin" and
+                 &1.recommended_platforms == ["linkedin"])
+           )
+
+    assert has_element?(view, "#generate-key-node-linkedin-image-1[disabled]")
   end
 
   test "generates a portrait reading card from the key-node button", %{conn: conn} do

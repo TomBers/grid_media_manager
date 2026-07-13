@@ -8,6 +8,7 @@ defmodule GridMediaManager.Campaigns do
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Campaigns.PostDraft
+  alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.RationalGrid.Client
   alias GridMediaManager.RationalGrid.MediaPayload
@@ -149,6 +150,25 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
+  def generate_key_node_video(
+        %Campaign{} = campaign,
+        node_id,
+        style \\ ShareCard.default_style()
+      ) do
+    campaign = get_campaign!(campaign.id)
+    style = ShareCard.normalize_style(style)
+
+    with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
+         {:ok, _video_path} <- CarouselVideo.render(campaign, node, style) do
+      campaign
+      |> CarouselVideo.asset_attr(node, style)
+      |> then(&upsert_generated_asset_with_drafts(campaign, &1))
+    else
+      nil -> {:error, :not_found}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   def generate_question_asset(
         %Campaign{} = campaign,
         question_id,
@@ -187,6 +207,9 @@ defmodule GridMediaManager.Campaigns do
 
   def first_answer_excerpt(%Campaign{raw_payload: raw_payload}),
     do: MediaPayload.first_answer_excerpt(raw_payload)
+
+  def answer_questions(%Campaign{raw_payload: raw_payload}),
+    do: MediaPayload.answer_questions(raw_payload)
 
   def follow_up_questions(%Campaign{raw_payload: raw_payload}),
     do: MediaPayload.follow_up_questions(raw_payload)

@@ -2,6 +2,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
   use GridMediaManagerWeb.ConnCase
 
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
 
   test "serves a generated grid share-card SVG", %{conn: conn} do
@@ -34,6 +35,48 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert response(conn, 200) =~ "RationalGrid.ai"
   end
 
+  test "serves true minimal light and dark foundations", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "minimal-foundations")
+
+    light_conn = get(conn, ~p"/campaigns/#{campaign.id}/share-card.svg?style=minimal_light")
+    light_svg = response(light_conn, 200)
+
+    assert light_svg =~ ~s(stop-color="#ffffff")
+    assert light_svg =~ ~s(fill="#000000")
+    assert light_svg =~ ~s(fill-opacity="0")
+    refute light_svg =~ "#fb7185"
+    refute light_svg =~ "#22d3ee"
+
+    dark_conn =
+      get(recycle(conn), ~p"/campaigns/#{campaign.id}/share-card.svg?style=minimal_dark")
+
+    dark_svg = response(dark_conn, 200)
+
+    assert dark_svg =~ ~s(stop-color="#000000")
+    assert dark_svg =~ ~s(fill="#ffffff")
+    assert dark_svg =~ ~s(fill-opacity="0")
+    refute dark_svg =~ "#fb7185"
+    refute dark_svg =~ "#22d3ee"
+  end
+
+  test "removes social decoration from minimal question cards", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "minimal-question")
+    question = "If a drug like soma existed today..."
+    question_id = ShareCard.question_id(question)
+
+    conn =
+      get(
+        conn,
+        ~p"/campaigns/#{campaign.id}/questions/#{question_id}/share-card.svg?style=minimal_light"
+      )
+
+    svg = response(conn, 200)
+    assert svg =~ ~s(stroke="#111111" stroke-opacity="0")
+    assert svg =~ ~s(fill="#000000")
+    refute svg =~ "#fb7185"
+    refute svg =~ "#22d3ee"
+  end
+
   test "serves styled key-node card variants", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
 
@@ -41,6 +84,23 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     assert response(conn, 200) =~ "#f8fafc"
     assert response(conn, 200) =~ "#0f172a"
+  end
+
+  test "serves LinkedIn square explainers for key nodes", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "linkedin-explainer")
+
+    conn =
+      get(
+        conn,
+        ~p"/campaigns/#{campaign.id}/nodes/2/share-card.svg?style=minimal_light&format=linkedin"
+      )
+
+    svg = response(conn, 200)
+    assert response_content_type(conn, :svg) == "image/svg+xml; charset=utf-8"
+    assert svg =~ "width=\"1200\""
+    assert svg =~ "height=\"1200\""
+    assert svg =~ "LINKEDIN · answer"
+    assert svg =~ "A dystopian lesson about comfort."
   end
 
   test "serves portrait reading cards for key nodes", %{conn: conn} do
@@ -56,6 +116,17 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert response(conn, 200) =~ "width=\"1080\""
     assert response(conn, 200) =~ "height=\"1350\""
     assert response(conn, 200) =~ "What Can a Brave New World Teach Us?"
+  end
+
+  test "renders dedicated full-screen frames for short video", %{} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "short-frame")
+    node = ShareCard.find_key_node(campaign, "2")
+    svg = ShareCard.node_short_video_frame_svg(campaign, node, "gradient_poster", 1)
+
+    assert svg =~ "width=\"1080\""
+    assert svg =~ "height=\"1920\""
+    assert svg =~ "font-size=\"90\""
+    assert svg =~ "SHORT · 1/"
   end
 
   test "serves carousel slides for key nodes", %{conn: conn} do
@@ -84,6 +155,25 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     assert response_content_type(conn, :png) == "image/png; charset=utf-8"
     assert response(conn, 200) |> binary_part(0, 8) == <<137, 80, 78, 71, 13, 10, 26, 10>>
+  end
+
+  test "serves a vertical MP4 carousel video for short-form platforms", %{conn: conn} do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "carousel-video-route")
+
+    conn =
+      get(
+        conn,
+        ~p"/campaigns/#{campaign.id}/nodes/2/carousel.mp4?style=gradient_poster"
+      )
+
+    if CarouselVideo.available?() do
+      assert get_resp_header(conn, "content-type") |> List.first() =~ "video/mp4"
+      assert response(conn, 200) |> binary_part(4, 4) == "ftyp"
+      assert get_resp_header(conn, "content-disposition") |> List.first() =~ ".mp4"
+    else
+      assert response(conn, 503) == "Video rendering requires FFmpeg"
+    end
   end
 
   test "keeps long key-node content inside the generated SVG text area", %{conn: conn} do

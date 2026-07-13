@@ -23,6 +23,10 @@ defmodule GridMediaManagerWeb.Router do
     get "/campaigns/:id/nodes/:node_id/carousel.svg", PromotionAssetController, :node_carousel
     get "/campaigns/:id/nodes/:node_id/carousel.png", PromotionAssetController, :node_carousel_png
 
+    get "/campaigns/:id/nodes/:node_id/carousel.mp4",
+        PromotionAssetController,
+        :node_carousel_video
+
     get "/campaigns/:id/questions/:question_id/share-card.svg",
         PromotionAssetController,
         :question_card
@@ -31,6 +35,7 @@ defmodule GridMediaManagerWeb.Router do
         PromotionAssetController,
         :highlight_card
 
+    live "/campaigns/:id/studio", GuidedShareStudioLive, :show
     live "/campaigns/:id", ShareStudioLive, :show
   end
 

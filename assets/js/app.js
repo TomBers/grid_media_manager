@@ -32,7 +32,10 @@ Hooks.CopyToClipboard = {
     this.originalText = this.el.textContent
 
     this.el.addEventListener("click", async () => {
-      const text = this.el.dataset.copyText || ""
+      const source = this.el.dataset.copySource
+        ? document.querySelector(this.el.dataset.copySource)
+        : null
+      const text = source?.value ?? this.el.dataset.copyText ?? ""
 
       try {
         await navigator.clipboard.writeText(text)

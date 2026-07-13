@@ -2,6 +2,7 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
   use GridMediaManagerWeb, :controller
 
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
 
   def grid_card(conn, %{"id" => id} = params) do
@@ -70,6 +71,34 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
     end
   end
 
+  def node_carousel_video(conn, %{"id" => id, "node_id" => node_id} = params) do
+    campaign = Campaigns.get_campaign!(id)
+
+    case ShareCard.find_key_node(campaign, node_id) do
+      nil ->
+        send_resp(conn, 404, "Key node not found")
+
+      node ->
+        case CarouselVideo.render(campaign, node, Map.get(params, "style")) do
+          {:ok, path} ->
+            conn
+            |> put_resp_content_type("video/mp4")
+            |> put_resp_header("cache-control", "public, max-age=3600")
+            |> put_resp_header(
+              "content-disposition",
+              ~s(inline; filename="rationalgrid-#{campaign.id}-#{node_id}.mp4")
+            )
+            |> send_file(200, path)
+
+          {:error, :ffmpeg_not_found} ->
+            send_resp(conn, 503, "Video rendering requires FFmpeg")
+
+          {:error, _reason} ->
+            send_resp(conn, 500, "Could not render carousel video")
+        end
+    end
+  end
+
   def question_card(conn, %{"id" => id, "question_id" => question_id} = params) do
     campaign = Campaigns.get_campaign!(id)
 
@@ -118,6 +147,10 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
 
   defp node_svg(campaign, node, %{"format" => "portrait"} = params) do
     ShareCard.node_reading_image_svg(campaign, node, Map.get(params, "style"))
+  end
+
+  defp node_svg(campaign, node, %{"format" => "linkedin"} = params) do
+    ShareCard.node_linkedin_image_svg(campaign, node, Map.get(params, "style"))
   end
 
   defp node_svg(campaign, node, params) do

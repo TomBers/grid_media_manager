@@ -18,6 +18,12 @@ defmodule GridMediaManager.Social.Platforms do
       max_chars: 2_200,
       style: "Caption-first and image-led"
     },
+    %{
+      id: "youtube",
+      label: "YouTube Shorts",
+      max_chars: 5_000,
+      style: "Searchable title, concise context, and a clear invitation"
+    },
     %{id: "substack", label: "Substack", max_chars: nil, style: "Newsletter intro or note"}
   ]
 
