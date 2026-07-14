@@ -69,30 +69,42 @@ defmodule GridMediaManager.Studio.Workflow do
     style = opts |> Keyword.get(:style) |> ShareCard.normalize_style()
     format = normalize_format(Keyword.get(opts, :format, "landscape"))
 
-    if format == "combined_carousel" do
-      generate_combined_carousel(campaign, candidates, style)
-    else
-      {assets, errors} =
-        Enum.reduce(candidates, {[], []}, fn candidate, {assets, errors} ->
-          case generate_candidate(campaign, candidate, style, format) do
-            {:ok, generated_assets} ->
-              {Enum.reverse(List.wrap(generated_assets), assets), errors}
+    result =
+      if format == "combined_carousel" do
+        generate_combined_carousel(campaign, candidates, style)
+      else
+        {assets, errors} =
+          Enum.reduce(candidates, {[], []}, fn candidate, {assets, errors} ->
+            case generate_candidate(campaign, candidate, style, format) do
+              {:ok, generated_assets} ->
+                {Enum.reverse(List.wrap(generated_assets), assets), errors}
 
-            {:partial, generated_assets, reason} ->
-              {
-                Enum.reverse(List.wrap(generated_assets), assets),
-                [%{candidate: candidate, reason: reason} | errors]
-              }
+              {:partial, generated_assets, reason} ->
+                {
+                  Enum.reverse(List.wrap(generated_assets), assets),
+                  [%{candidate: candidate, reason: reason} | errors]
+                }
 
-            {:error, reason} ->
-              {assets, [%{candidate: candidate, reason: reason} | errors]}
-          end
-        end)
+              {:error, reason} ->
+                {assets, [%{candidate: candidate, reason: reason} | errors]}
+            end
+          end)
 
-      %{
-        assets: assets |> Enum.reverse() |> Enum.uniq_by(& &1.id),
-        errors: Enum.reverse(errors)
-      }
+        %{
+          assets: assets |> Enum.reverse() |> Enum.uniq_by(& &1.id),
+          errors: Enum.reverse(errors)
+        }
+      end
+
+    assign_generation_batch(result)
+  end
+
+  defp assign_generation_batch(%{assets: []} = result), do: result
+
+  defp assign_generation_batch(%{assets: assets} = result) do
+    case Campaigns.assign_generation_batch(assets) do
+      {:ok, updated_assets} -> %{result | assets: updated_assets}
+      {:error, _reason} -> result
     end
   end
 

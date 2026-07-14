@@ -165,11 +165,15 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     assert_patch(view, resume_path)
 
+    batch_id = asset.metadata["generation_batch_id"]
+    assert has_element?(view, "#resume-package-#{batch_id}[href='#{resume_path}']")
+
     {:ok, resumed_view, _html} = live(conn, resume_path)
 
     assert has_element?(resumed_view, "#stage-review")
     assert has_element?(resumed_view, "#guided-output-#{asset.id}")
     assert has_element?(resumed_view, "#guided-review-drafts article")
+    assert has_element?(resumed_view, "#resume-package-#{batch_id}")
   end
 
   test "edits and approves associated copy during review", %{conn: conn} do

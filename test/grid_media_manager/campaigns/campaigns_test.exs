@@ -494,6 +494,15 @@ defmodule GridMediaManager.CampaignsTest do
 
       carousel = Enum.find(result.assets, &(&1.kind == "curated_carousel"))
       assert carousel
+
+      batch_ids =
+        result.assets
+        |> Enum.map(& &1.metadata["generation_batch_id"])
+        |> Enum.uniq()
+
+      assert [batch_id] = batch_ids
+      assert is_binary(batch_id)
+      assert Enum.all?(result.assets, &is_binary(&1.metadata["generated_at"]))
       assert carousel.metadata["format"] == "curated_carousel"
       assert carousel.metadata["slide_count"] == length(candidates) + 2
       assert length(carousel.metadata["slides"]) == length(candidates) + 2

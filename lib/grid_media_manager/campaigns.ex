@@ -92,6 +92,25 @@ defmodule GridMediaManager.Campaigns do
     |> Repo.update()
   end
 
+  def assign_generation_batch(assets) when is_list(assets) do
+    batch_id = Ecto.UUID.generate()
+    generated_at = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
+    Repo.transaction(fn ->
+      Enum.map(assets, fn asset ->
+        metadata =
+          Map.merge(asset.metadata || %{}, %{
+            "generation_batch_id" => batch_id,
+            "generated_at" => generated_at
+          })
+
+        asset
+        |> MediaAsset.changeset(%{metadata: metadata})
+        |> Repo.update!()
+      end)
+    end)
+  end
+
   def set_pexels_background(%Campaign{} = campaign, photo) when is_map(photo) do
     background =
       photo
