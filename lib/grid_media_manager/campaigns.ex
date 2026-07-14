@@ -144,13 +144,14 @@ defmodule GridMediaManager.Campaigns do
          true <-
            Platforms.within_limit?(draft.body, draft.platform) ||
              {:error, "The draft is over the #{Platforms.label(draft.platform)} character limit."},
+         {:ok, media_url} <- buffer_media_url(draft.media_asset),
          {:ok, scheduled_for} <- parse_scheduled_for(scheduled_for),
          :lt <- DateTime.compare(DateTime.utc_now(), scheduled_for) do
       scheduled_draft = %{draft | scheduled_for: scheduled_for}
 
       case Buffer.schedule(scheduled_draft,
              channel_id: channel_id,
-             media_url: buffer_media_url(draft.media_asset),
+             media_url: media_url,
              mime_type: buffer_media_mime_type(draft.media_asset)
            ) do
         {:ok, post} ->
@@ -501,12 +502,68 @@ defmodule GridMediaManager.Campaigns do
 
   defp buffer_media_url(%MediaAsset{url: url}) when is_binary(url) do
     case URI.parse(url) do
-      %URI{scheme: scheme} when scheme in ["http", "https"] -> url
-      _uri -> URI.merge(GridMediaManagerWeb.Endpoint.url() <> "/", url) |> URI.to_string()
+      %URI{scheme: scheme} when scheme in ["http", "https"] ->
+        validate_public_media_url(url)
+
+      _uri ->
+        with {:ok, base_url} <- public_base_url(),
+             public_url <- URI.merge(base_url <> "/", url) |> URI.to_string() do
+          validate_public_media_url(public_url)
+        end
     end
   end
 
-  defp buffer_media_url(_asset), do: nil
+  defp buffer_media_url(_asset), do: {:ok, nil}
+
+  defp public_base_url do
+    configured_url =
+      System.get_env("PUBLIC_BASE_URL") ||
+        Application.get_env(:grid_media_manager, :public_base_url) ||
+        GridMediaManagerWeb.Endpoint.url()
+
+    case configured_url do
+      value when is_binary(value) and value != "" -> {:ok, String.trim_trailing(value, "/")}
+      _value -> {:error, public_media_error()}
+    end
+  end
+
+  defp validate_public_media_url(url) do
+    case URI.parse(url) do
+      %URI{scheme: "https", host: host} when is_binary(host) ->
+        if private_host?(host), do: {:error, public_media_error()}, else: {:ok, url}
+
+      _uri ->
+        {:error, public_media_error()}
+    end
+  end
+
+  defp private_host?(host) do
+    host = String.downcase(host)
+
+    host in ["localhost", "0.0.0.0", "127.0.0.1", "::1"] or
+      String.ends_with?(host, ".localhost") or
+      String.starts_with?(host, "127.") or
+      String.starts_with?(host, "10.") or
+      String.starts_with?(host, "192.168.") or
+      private_172_host?(host)
+  end
+
+  defp private_172_host?(host) do
+    case host |> String.split(".") |> Enum.take(2) do
+      ["172", second] ->
+        case Integer.parse(second) do
+          {value, ""} -> value in 16..31
+          _other -> false
+        end
+
+      _parts ->
+        false
+    end
+  end
+
+  defp public_media_error do
+    "Generated media is only available on the local server. Set PUBLIC_BASE_URL to a public HTTPS URL, such as an ngrok or Cloudflare Tunnel URL, before scheduling an image through Buffer."
+  end
 
   defp buffer_media_mime_type(%MediaAsset{mime_type: mime_type}), do: mime_type
   defp buffer_media_mime_type(_asset), do: nil

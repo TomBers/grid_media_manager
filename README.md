@@ -171,6 +171,7 @@ The selected photo is stored with its photographer and Pexels attribution and is
 Buffer scheduling uses Buffer's GraphQL API and requires a personal API key plus a channel ID for each platform you want to schedule:
 
 ```sh
+PUBLIC_BASE_URL=https://your-public-studio.example.com \
 BUFFER_API_KEY=your-key \
 BUFFER_CHANNEL_X=channel-id \
 BUFFER_CHANNEL_BLUESKY=channel-id \
@@ -180,7 +181,7 @@ BUFFER_CHANNEL_YOUTUBE=channel-id \
 mix phx.server
 ```
 
-Schedules are entered in UTC. Buffer requires media to be available from a public HTTPS URL through the scheduled publication time, so local development asset URLs cannot be published successfully. The app stores Buffer's post ID and marks API failures on the draft for review.
+Schedules are entered in UTC. Buffer requires media to be available from a public HTTPS URL through the scheduled publication time. `PUBLIC_BASE_URL` is used to turn generated card paths into URLs Buffer can fetch. In local development, expose the Phoenix server with a service such as ngrok or Cloudflare Tunnel and set `PUBLIC_BASE_URL` to that HTTPS tunnel URL. The scheduler rejects local/private URLs before calling Buffer and stores Buffer's post ID or API failure on the draft for review.
 
 ## Short-form video rendering
 
@@ -190,7 +191,7 @@ Carousel video exports require FFmpeg at runtime. By default the app finds `ffmp
 config :grid_media_manager, :ffmpeg_path, "/path/to/ffmpeg"
 ```
 
-The generated MP4 is 1080×1920 H.264/yuv420p with approximately three seconds per slide and gentle transitions. Video frames use a dedicated full-screen layout with larger hook typography rather than padding the Instagram carousel images. Videos are cached in the system temporary directory using a content-derived key. If FFmpeg is unavailable, carousel PNGs still generate and the guided studio shows a video-encoding warning.
+The generated MP4 is 1080×1920 H.264/yuv420p with approximately three seconds per slide and gentle transitions. Both carousel videos and six-second static Shorts include `priv/static/sounds/rationalgrid_theme.mp4` as a softly mixed AAC background track, looped or trimmed to the exact video duration with short audio fades. A different source can be configured with `config :grid_media_manager, :video_background_audio_path, "/path/to/audio.mp4"`. Video frames use a dedicated full-screen layout with larger hook typography rather than padding the Instagram carousel images. Videos are cached in the system temporary directory using a content-derived key that includes the audio file metadata. If FFmpeg is unavailable, carousel PNGs still generate and the guided studio shows a video-encoding warning.
 
 Generated carousel routes:
 

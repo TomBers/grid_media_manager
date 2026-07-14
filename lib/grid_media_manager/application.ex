@@ -7,6 +7,8 @@ defmodule GridMediaManager.Application do
 
   require Logger
 
+  @public_environment_variables ["RATIONAL_GRID_BASE_URL", "PUBLIC_BASE_URL"]
+
   @secret_environment_variables [
     "RATIONALGRID_PROMOTION_API_TOKEN",
     "BUFFER_API_KEY",
@@ -37,12 +39,17 @@ defmodule GridMediaManager.Application do
 
   @doc false
   def environment_summary do
-    lines = [
-      "RATIONAL_GRID_BASE_URL=#{environment_value("RATIONAL_GRID_BASE_URL")}"
-      | Enum.map(@secret_environment_variables, fn name ->
-          "#{name}=#{secret_environment_value(name)}"
-        end)
-    ]
+    public_lines =
+      Enum.map(@public_environment_variables, fn name ->
+        "#{name}=#{environment_value(name)}"
+      end)
+
+    secret_lines =
+      Enum.map(@secret_environment_variables, fn name ->
+        "#{name}=#{secret_environment_value(name)}"
+      end)
+
+    lines = public_lines ++ secret_lines
 
     "Environment configuration:\n  " <> Enum.join(lines, "\n  ")
   end

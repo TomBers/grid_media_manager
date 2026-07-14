@@ -5,6 +5,9 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
 
   setup do
     previous_config = Application.get_env(:grid_media_manager, :buffer)
+    previous_public_base_url = System.get_env("PUBLIC_BASE_URL")
+
+    System.delete_env("PUBLIC_BASE_URL")
 
     Application.put_env(:grid_media_manager, :buffer,
       api_key: "buffer-test-key",
@@ -20,6 +23,12 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
         Application.delete_env(:grid_media_manager, :buffer)
       else
         Application.put_env(:grid_media_manager, :buffer, previous_config)
+      end
+
+      if previous_public_base_url do
+        System.put_env("PUBLIC_BASE_URL", previous_public_base_url)
+      else
+        System.delete_env("PUBLIC_BASE_URL")
       end
     end)
 
@@ -74,6 +83,56 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
     assert scheduled.error_message == nil
   end
 
+  test "uses PUBLIC_BASE_URL for a generated image" do
+    assert {:ok, campaign} = Campaigns.import_payload(payload(), "buffer-public-media")
+    assert {:ok, asset} = Campaigns.generate_grid_asset(campaign)
+
+    [draft] =
+      Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: asset.id)
+
+    System.put_env("PUBLIC_BASE_URL", "https://studio.example.com")
+    scheduled_for = future_schedule_time()
+
+    Req.Test.expect(__MODULE__, fn conn ->
+      {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
+      input = Jason.decode!(raw_body)["variables"]["input"]
+
+      assert input["assets"] == [
+               %{
+                 "image" => %{
+                   "url" => "https://studio.example.com/campaigns/#{campaign.id}/share-card.png"
+                 }
+               }
+             ]
+
+      Req.Test.json(conn, %{
+        "data" => %{
+          "createPost" => %{
+            "post" => %{
+              "id" => "buffer-image-post",
+              "status" => "scheduled",
+              "dueAt" => DateTime.to_iso8601(scheduled_for)
+            }
+          }
+        }
+      })
+    end)
+
+    assert {:ok, scheduled} = Campaigns.schedule_post_draft(draft.id, scheduled_for)
+    assert scheduled.external_post_id == "buffer-image-post"
+  end
+
+  test "rejects generated images when the server only has a local URL" do
+    assert {:ok, campaign} = Campaigns.import_payload(payload(), "buffer-local-media")
+    assert {:ok, asset} = Campaigns.generate_grid_asset(campaign)
+
+    [draft] =
+      Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: asset.id)
+
+    assert {:error, message} = Campaigns.schedule_post_draft(draft.id, future_schedule_time())
+    assert message =~ "Set PUBLIC_BASE_URL to a public HTTPS URL"
+  end
+
   test "rejects over-limit copy before calling Buffer" do
     assert {:ok, campaign} = Campaigns.import_payload(payload(), "buffer-over-limit")
 
@@ -87,6 +146,13 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
 
     assert Campaigns.schedule_post_draft(draft.id, scheduled_for) ==
              {:error, "The draft is over the X character limit."}
+  end
+
+  defp future_schedule_time do
+    DateTime.utc_now()
+    |> DateTime.add(3_600, :second)
+    |> DateTime.truncate(:second)
+    |> then(&%{&1 | second: 0})
   end
 
   defp payload do

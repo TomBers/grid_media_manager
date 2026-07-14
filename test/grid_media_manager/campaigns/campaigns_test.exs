@@ -497,6 +497,8 @@ defmodule GridMediaManager.CampaignsTest do
         assert asset.metadata["width"] == 1080
         assert asset.metadata["height"] == 1920
         assert asset.metadata["duration_seconds"] > 0
+        assert asset.metadata["background_audio"]
+        assert CarouselVideo.background_audio_available?()
         assert "youtube" in asset.recommended_platforms
 
         node = ShareCard.find_key_node(campaign, "1")

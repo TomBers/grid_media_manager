@@ -5,6 +5,7 @@ defmodule GridMediaManager.ApplicationTest do
 
   @environment_variables [
     "RATIONAL_GRID_BASE_URL",
+    "PUBLIC_BASE_URL",
     "RATIONALGRID_PROMOTION_API_TOKEN",
     "BUFFER_API_KEY",
     "PEXELS_API_KEY"
@@ -25,6 +26,7 @@ defmodule GridMediaManager.ApplicationTest do
 
   test "summarizes launch environment without exposing secrets" do
     System.put_env("RATIONAL_GRID_BASE_URL", "http://localhost:4000")
+    System.put_env("PUBLIC_BASE_URL", "https://studio.example.com")
     System.put_env("RATIONALGRID_PROMOTION_API_TOKEN", "rational-secret-1234")
     System.put_env("BUFFER_API_KEY", "buffer-secret-5678")
     System.put_env("PEXELS_API_KEY", "pexels-secret-9012")
@@ -32,6 +34,7 @@ defmodule GridMediaManager.ApplicationTest do
     summary = Application.environment_summary()
 
     assert summary =~ "RATIONAL_GRID_BASE_URL=http://localhost:4000"
+    assert summary =~ "PUBLIC_BASE_URL=https://studio.example.com"
     assert summary =~ "RATIONALGRID_PROMOTION_API_TOKEN=set (20 chars, ending …1234)"
     assert summary =~ "BUFFER_API_KEY=set (18 chars, ending …5678)"
     assert summary =~ "PEXELS_API_KEY=set (18 chars, ending …9012)"
@@ -47,6 +50,7 @@ defmodule GridMediaManager.ApplicationTest do
     summary = Application.environment_summary()
 
     assert summary =~ "RATIONAL_GRID_BASE_URL=not set"
+    assert summary =~ "PUBLIC_BASE_URL=not set"
     assert summary =~ "RATIONALGRID_PROMOTION_API_TOKEN=not set"
     assert summary =~ "BUFFER_API_KEY=not set"
     assert summary =~ "PEXELS_API_KEY=not set"

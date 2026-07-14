@@ -4,7 +4,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   Videos are cached in the system temporary directory using a content-derived key.
   FFmpeg must be installed in the runtime environment, or configured with the
-  `:ffmpeg_path` application setting.
+  `:ffmpeg_path` application setting. Generated videos include the configured
+  RationalGrid theme as a softly mixed background audio track.
   """
 
   require Logger
@@ -17,9 +18,13 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @slide_seconds 3.0
   @static_seconds 6.0
   @fade_seconds 0.25
+  @audio_fade_seconds 0.5
+  @audio_volume 0.18
+  @audio_bitrate "160k"
   @frame_rate 30
   @render_timeout 90_000
-  @cache_version 4
+  @cache_version 5
+  @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
 
@@ -46,7 +51,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
         "width" => @width,
         "height" => @height,
         "slide_count" => slide_count,
-        "duration_seconds" => duration_seconds(slide_count)
+        "duration_seconds" => duration_seconds(slide_count),
+        "background_audio" => background_audio_available?()
       }
     }
   end
@@ -97,6 +103,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   def duration_seconds(_slide_count), do: 0.0
 
+  def background_audio_available?, do: is_binary(background_audio_path())
+
   defp render_video(ffmpeg, campaign, node, style, cache_dir, output_path) do
     work_dir =
       Path.join(
@@ -108,7 +116,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       try do
         slide_paths = write_slides!(campaign, node, style, work_dir)
         temporary_output = Path.join(work_dir, "carousel.mp4")
-        args = ffmpeg_args(slide_paths, temporary_output)
+        args = ffmpeg_args(slide_paths, background_audio_path(), temporary_output)
 
         case run_ffmpeg(ffmpeg, args) do
           {:ok, _output} ->
@@ -144,7 +152,10 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
         temporary_output = Path.join(work_dir, "short.mp4")
         File.write!(frame_path, frame_fun.())
 
-        case run_ffmpeg(ffmpeg, static_ffmpeg_args(frame_path, temporary_output)) do
+        case run_ffmpeg(
+               ffmpeg,
+               static_ffmpeg_args(frame_path, background_audio_path(), temporary_output)
+             ) do
           {:ok, _output} ->
             with true <- valid_video_file?(temporary_output),
                  :ok <- move_video(temporary_output, output_path) do
@@ -183,7 +194,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     end)
   end
 
-  defp ffmpeg_args(slide_paths, output_path) do
+  defp ffmpeg_args(slide_paths, audio_path, output_path) do
     input_args =
       Enum.flat_map(slide_paths, fn path ->
         [
@@ -198,14 +209,19 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
         ]
       end)
 
+    audio? = is_binary(audio_path)
+
     ["-y", "-hide_banner", "-loglevel", "error"] ++
       input_args ++
+      audio_input_args(audio_path) ++
       [
         "-filter_complex",
-        filter_complex(length(slide_paths)),
+        filter_complex(length(slide_paths), audio?),
         "-map",
-        "[outv]",
-        "-an",
+        "[outv]"
+      ] ++
+      audio_output_args(audio?) ++
+      [
         "-c:v",
         "libx264",
         "-preset",
@@ -226,10 +242,10 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       ]
   end
 
-  defp static_ffmpeg_args(frame_path, output_path) do
+  defp static_ffmpeg_args(frame_path, audio_path, output_path) do
     fade_out_start = @static_seconds - @fade_seconds
 
-    [
+    base_args = [
       "-y",
       "-hide_banner",
       "-loglevel",
@@ -241,14 +257,16 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       "-t",
       decimal(@static_seconds),
       "-i",
-      frame_path,
+      frame_path
+    ]
+
+    video_args = [
       "-vf",
       "scale=#{@width}:#{@height}:force_original_aspect_ratio=decrease," <>
         "pad=#{@width}:#{@height}:(ow-iw)/2:(oh-ih)/2," <>
         "format=yuv420p,fps=#{@frame_rate}," <>
         "fade=t=in:st=0:d=#{decimal(@fade_seconds)}," <>
         "fade=t=out:st=#{decimal(fade_out_start)}:d=#{decimal(@fade_seconds)}",
-      "-an",
       "-c:v",
       "libx264",
       "-preset",
@@ -260,23 +278,57 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       "-r",
       Integer.to_string(@frame_rate),
       "-t",
-      decimal(@static_seconds),
-      "-movflags",
-      "+faststart",
-      "-f",
-      "mp4",
-      output_path
+      decimal(@static_seconds)
     ]
+
+    output_args = ["-movflags", "+faststart", "-f", "mp4", output_path]
+
+    if is_binary(audio_path) do
+      base_args ++
+        audio_input_args(audio_path) ++
+        ["-map", "0:v:0", "-map", "1:a:0", "-af", audio_filter(@static_seconds)] ++
+        video_args ++ audio_codec_args() ++ output_args
+    else
+      base_args ++ ["-an"] ++ video_args ++ output_args
+    end
   end
 
-  defp filter_complex(slide_count) do
+  defp audio_input_args(path) when is_binary(path),
+    do: ["-stream_loop", "-1", "-i", path]
+
+  defp audio_input_args(_path), do: []
+
+  defp audio_output_args(true), do: ["-map", "[outa]"] ++ audio_codec_args()
+  defp audio_output_args(false), do: ["-an"]
+
+  defp audio_codec_args, do: ["-c:a", "aac", "-b:a", @audio_bitrate]
+
+  defp audio_filter(duration) do
+    fade_out_start = max(duration - @audio_fade_seconds, 0.0)
+
+    "atrim=duration=#{decimal(duration)},asetpts=PTS-STARTPTS," <>
+      "volume=#{decimal(@audio_volume)}," <>
+      "afade=t=in:st=0:d=#{decimal(@audio_fade_seconds)}," <>
+      "afade=t=out:st=#{decimal(fade_out_start)}:d=#{decimal(@audio_fade_seconds)}"
+  end
+
+  defp filter_complex(slide_count, audio?) do
     slide_filters =
       0..(slide_count - 1)
       |> Enum.map(&slide_filter/1)
 
     inputs = Enum.map_join(0..(slide_count - 1), "", &"[v#{&1}]")
     concat_filter = "#{inputs}concat=n=#{slide_count}:v=1:a=0[outv]"
-    Enum.join(slide_filters ++ [concat_filter], ";")
+
+    filters =
+      if audio? do
+        duration = duration_seconds(slide_count)
+        slide_filters ++ [concat_filter, "[#{slide_count}:a]#{audio_filter(duration)}[outa]"]
+      else
+        slide_filters ++ [concat_filter]
+      end
+
+    Enum.join(filters, ";")
   end
 
   defp slide_filter(index) do
@@ -323,7 +375,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   defp cache_filename(campaign, node, style) do
     digest =
-      {@cache_version, campaign.id, campaign.title, node, style, @slide_seconds, @fade_seconds}
+      {@cache_version, campaign.id, campaign.title, node, style, @slide_seconds, @fade_seconds,
+       background_audio_signature()}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))
       |> Base.url_encode64(padding: false)
@@ -333,7 +386,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   defp static_cache_filename(cache_key) do
     digest =
-      {@cache_version, :static, cache_key, @static_seconds, @fade_seconds}
+      {@cache_version, :static, cache_key, @static_seconds, @fade_seconds,
+       background_audio_signature()}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))
       |> Base.url_encode64(padding: false)
@@ -355,6 +409,27 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       {:ok, %{type: :regular, size: size}} when size > 0 -> true
       _ -> false
     end
+  end
+
+  defp background_audio_signature do
+    case background_audio_path() do
+      nil ->
+        :no_audio
+
+      path ->
+        case File.stat(path) do
+          {:ok, stat} -> {path, stat.size, stat.mtime, @audio_volume, @audio_fade_seconds}
+          {:error, _reason} -> :no_audio
+        end
+    end
+  end
+
+  defp background_audio_path do
+    configured_path =
+      Application.get_env(:grid_media_manager, :video_background_audio_path) ||
+        Application.app_dir(:grid_media_manager, @default_background_audio_path)
+
+    if is_binary(configured_path) and File.regular?(configured_path), do: configured_path
   end
 
   defp ffmpeg_path do

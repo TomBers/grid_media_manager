@@ -154,7 +154,10 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     if CarouselVideo.available?() do
       assert get_resp_header(conn, "content-type") |> List.first() =~ "video/mp4"
-      assert response(conn, 200) |> binary_part(4, 4) == "ftyp"
+      video = response(conn, 200)
+      assert binary_part(video, 4, 4) == "ftyp"
+      assert video =~ "soun"
+      assert video =~ "mp4a"
       assert get_resp_header(conn, "content-disposition") |> List.first() =~ ".mp4"
     else
       assert response(conn, 503) == "Video rendering requires FFmpeg"
@@ -242,7 +245,10 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     if CarouselVideo.available?() do
       assert get_resp_header(conn, "content-type") |> List.first() =~ "video/mp4"
-      assert response(conn, 200) |> binary_part(4, 4) == "ftyp"
+      video = response(conn, 200)
+      assert binary_part(video, 4, 4) == "ftyp"
+      assert video =~ "soun"
+      assert video =~ "mp4a"
     else
       assert response(conn, 503) == "Video rendering requires FFmpeg"
     end
