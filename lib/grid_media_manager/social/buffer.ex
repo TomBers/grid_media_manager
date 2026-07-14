@@ -60,24 +60,28 @@ defmodule GridMediaManager.Social.Buffer do
   @doc """
   Schedules a post draft for a Buffer channel.
 
-  `opts` requires `:channel_id` and accepts `:media_url` and `:mime_type`.
-  Media defaults to an image; a MIME type of `video/mp4` creates a video asset.
-  The draft's `scheduled_for` value is sent as Buffer's `dueAt`.
+  `opts` requires `:channel_id` and accepts `:media_url`, `:mime_type`, `:title`,
+  `:instagram_type`, and `:youtube_category_id`. Media defaults to an image; a MIME type of `video/mp4`
+  creates a video asset. Instagram images default to `post`, while videos
+  default to `reel`. The draft's `scheduled_for` value is sent as Buffer's `dueAt`.
   """
   def schedule(%PostDraft{} = draft, opts) when is_list(opts) or is_map(opts) do
     with {:ok, key} <- configured_api_key(),
          {:ok, channel_id} <- required_string(option(opts, :channel_id), "channel_id is required"),
          {:ok, text} <- required_string(draft.body, "post draft body is required"),
          {:ok, due_at} <- due_at(draft.scheduled_for),
-         {:ok, assets} <- assets(opts) do
-      input = %{
-        "text" => text,
-        "channelId" => channel_id,
-        "schedulingType" => "automatic",
-        "mode" => "customScheduled",
-        "dueAt" => due_at,
-        "assets" => assets
-      }
+         {:ok, assets} <- assets(opts),
+         {:ok, metadata} <- post_metadata(draft, opts) do
+      input =
+        %{
+          "text" => text,
+          "channelId" => channel_id,
+          "schedulingType" => "automatic",
+          "mode" => "customScheduled",
+          "dueAt" => due_at,
+          "assets" => assets
+        }
+        |> maybe_put_input("metadata", metadata)
 
       create_post(key, input)
     end
@@ -173,6 +177,56 @@ defmodule GridMediaManager.Social.Buffer do
     {:error, "unsupported media MIME type: #{mime_type}; expected image/* or video/mp4"}
   end
 
+  defp post_metadata(%PostDraft{platform: "instagram"}, opts) do
+    mime_type = option(opts, :mime_type) |> string_value() |> to_string() |> String.downcase()
+    requested_type = option(opts, :instagram_type) |> string_value()
+    type = requested_type || if(mime_type == "video/mp4", do: "reel", else: "post")
+
+    if type in ["post", "story", "reel"] do
+      instagram_metadata =
+        %{"type" => type}
+        |> maybe_put_map("shouldShareToFeed", type == "reel" && true)
+
+      {:ok, %{"instagram" => instagram_metadata}}
+    else
+      {:error, "instagram_type must be post, story, or reel"}
+    end
+  end
+
+  defp post_metadata(%PostDraft{platform: "youtube"}, opts) do
+    with {:ok, title} <- required_string(option(opts, :title), "YouTube title is required") do
+      category_id =
+        option(opts, :youtube_category_id)
+        |> string_value()
+        |> fallback_youtube_category_id()
+
+      {:ok,
+       %{
+         "youtube" => %{
+           "title" => fit_youtube_title(title),
+           "categoryId" => category_id
+         }
+       }}
+    end
+  end
+
+  defp post_metadata(%PostDraft{}, _opts), do: {:ok, nil}
+
+  defp fallback_youtube_category_id(nil) do
+    System.get_env("BUFFER_YOUTUBE_CATEGORY_ID")
+    |> string_value()
+    |> case do
+      nil -> config_value(:youtube_category_id) |> string_value() || "27"
+      category_id -> category_id
+    end
+  end
+
+  defp fallback_youtube_category_id(category_id), do: category_id
+
+  defp fit_youtube_title(title) do
+    if String.length(title) <= 100, do: title, else: "RationalGrid video"
+  end
+
   defp due_at(%DateTime{} = scheduled_for), do: {:ok, DateTime.to_iso8601(scheduled_for)}
 
   defp due_at(_scheduled_for) do
@@ -239,6 +293,12 @@ defmodule GridMediaManager.Social.Buffer do
 
   defp maybe_put(options, _key, nil), do: options
   defp maybe_put(options, key, value), do: Keyword.put(options, key, value)
+
+  defp maybe_put_input(input, _key, nil), do: input
+  defp maybe_put_input(input, key, value), do: Map.put(input, key, value)
+
+  defp maybe_put_map(map, _key, false), do: map
+  defp maybe_put_map(map, key, value), do: Map.put(map, key, value)
 
   defp decode_body(body) when is_binary(body) do
     case Jason.decode(body) do

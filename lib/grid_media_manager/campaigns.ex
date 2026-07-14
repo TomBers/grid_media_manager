@@ -8,6 +8,7 @@ defmodule GridMediaManager.Campaigns do
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Campaigns.PostDraft
+  alias GridMediaManager.Promotion.AssetRenderer
   alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.RationalGrid.Client
@@ -16,6 +17,8 @@ defmodule GridMediaManager.Campaigns do
   alias GridMediaManager.Social.Buffer
   alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Social.Templates
+  alias GridMediaManager.Storage.S3
+  alias GridMediaManager.TextNormalizer
 
   def list_campaigns do
     Campaign
@@ -34,6 +37,8 @@ defmodule GridMediaManager.Campaigns do
   end
 
   def import_payload(payload, source_input) when is_map(payload) and is_binary(source_input) do
+    payload = TextNormalizer.normalize(payload)
+    source_input = TextNormalizer.normalize_binary(source_input)
     attrs = MediaPayload.campaign_attrs(payload, source_input)
     asset_attrs = MediaPayload.asset_attrs(payload)
 
@@ -138,13 +143,14 @@ defmodule GridMediaManager.Campaigns do
 
   def schedule_post_draft(id, scheduled_for) do
     draft = get_post_draft_with_asset!(id)
+    campaign = get_campaign!(draft.campaign_id)
 
     with true <- Buffer.configured?() || {:error, "Buffer is not configured."},
          channel_id when is_binary(channel_id) <- Buffer.channel_id(draft.platform),
          true <-
            Platforms.within_limit?(draft.body, draft.platform) ||
              {:error, "The draft is over the #{Platforms.label(draft.platform)} character limit."},
-         {:ok, media_url} <- buffer_media_url(draft.media_asset),
+         {:ok, media_url} <- buffer_media_url(campaign, draft.media_asset),
          {:ok, scheduled_for} <- parse_scheduled_for(scheduled_for),
          :lt <- DateTime.compare(DateTime.utc_now(), scheduled_for) do
       scheduled_draft = %{draft | scheduled_for: scheduled_for}
@@ -152,7 +158,8 @@ defmodule GridMediaManager.Campaigns do
       case Buffer.schedule(scheduled_draft,
              channel_id: channel_id,
              media_url: media_url,
-             mime_type: buffer_media_mime_type(draft.media_asset)
+             mime_type: buffer_media_mime_type(draft.media_asset),
+             title: buffer_post_title(campaign, draft.media_asset)
            ) do
         {:ok, post} ->
           update_post_draft(draft, %{
@@ -500,20 +507,83 @@ defmodule GridMediaManager.Campaigns do
     {:error, to_string(reason)}
   end
 
-  defp buffer_media_url(%MediaAsset{url: url}) when is_binary(url) do
-    case URI.parse(url) do
-      %URI{scheme: scheme} when scheme in ["http", "https"] ->
+  def publish_media_asset(%Campaign{} = campaign, %MediaAsset{} = asset) do
+    case published_media_url(asset) do
+      url when is_binary(url) ->
         validate_public_media_url(url)
 
-      _uri ->
-        with {:ok, base_url} <- public_base_url(),
-             public_url <- URI.merge(base_url <> "/", url) |> URI.to_string() do
-          validate_public_media_url(public_url)
+      nil ->
+        with true <- S3.configured?() || {:error, "S3 is not configured."},
+             {:ok, body} <- AssetRenderer.render(campaign, asset),
+             digest <- :crypto.hash(:sha256, body) |> Base.encode16(case: :lower),
+             key <- s3_object_key(campaign, asset, digest),
+             {:ok, url} <- S3.put_object(key, body, asset.mime_type || "application/octet-stream"),
+             {:ok, _asset} <- persist_published_media(asset, url, key, digest) do
+          {:ok, url}
+        else
+          {:error, reason} when is_binary(reason) -> {:error, reason}
+          {:error, reason} -> {:error, "Could not publish media to S3: #{inspect(reason)}"}
+          false -> {:error, "S3 is not configured."}
         end
     end
   end
 
-  defp buffer_media_url(_asset), do: {:ok, nil}
+  defp buffer_media_url(_campaign, nil), do: {:ok, nil}
+
+  defp buffer_media_url(%Campaign{} = campaign, %MediaAsset{url: url} = asset)
+       when is_binary(url) do
+    case published_media_url(asset) do
+      published_url when is_binary(published_url) ->
+        validate_public_media_url(published_url)
+
+      nil ->
+        case URI.parse(url) do
+          %URI{scheme: scheme} when scheme in ["http", "https"] ->
+            validate_public_media_url(url)
+
+          _uri ->
+            if S3.configured?() do
+              publish_media_asset(campaign, asset)
+            else
+              with {:ok, base_url} <- public_base_url(),
+                   public_url <- URI.merge(base_url <> "/", url) |> URI.to_string() do
+                validate_public_media_url(public_url)
+              end
+            end
+        end
+    end
+  end
+
+  defp published_media_url(%MediaAsset{metadata: metadata}) when is_map(metadata),
+    do: Map.get(metadata, "published_url")
+
+  defp published_media_url(_asset), do: nil
+
+  defp persist_published_media(asset, url, key, digest) do
+    metadata =
+      Map.merge(asset.metadata || %{}, %{
+        "published_url" => url,
+        "s3_key" => key,
+        "sha256" => digest
+      })
+
+    asset
+    |> MediaAsset.changeset(%{metadata: metadata})
+    |> Repo.update()
+  end
+
+  defp s3_object_key(campaign, asset, digest) do
+    campaign_slug = sanitize_s3_segment(campaign.slug || "campaign-#{campaign.id}")
+    extension = if asset.mime_type == "video/mp4", do: "mp4", else: "png"
+    "campaigns/#{campaign_slug}/assets/#{asset.id}/#{String.slice(digest, 0, 24)}.#{extension}"
+  end
+
+  defp sanitize_s3_segment(value) do
+    value
+    |> to_string()
+    |> String.replace(~r/[^A-Za-z0-9._-]+/, "-")
+    |> String.trim("-")
+  end
 
   defp public_base_url do
     configured_url =
@@ -567,6 +637,12 @@ defmodule GridMediaManager.Campaigns do
 
   defp buffer_media_mime_type(%MediaAsset{mime_type: mime_type}), do: mime_type
   defp buffer_media_mime_type(_asset), do: nil
+
+  defp buffer_post_title(_campaign, %MediaAsset{title: title})
+       when is_binary(title) and title != "",
+       do: title
+
+  defp buffer_post_title(%Campaign{title: title}, _asset), do: title
 
   defp filter_platform(query, nil), do: query
   defp filter_platform(query, "all"), do: query

@@ -8,12 +8,21 @@ defmodule GridMediaManager.Social.BufferTest do
 
   setup do
     previous_config = Application.get_env(:grid_media_manager, :buffer)
+    previous_youtube_category_id = System.get_env("BUFFER_YOUTUBE_CATEGORY_ID")
+
+    System.delete_env("BUFFER_YOUTUBE_CATEGORY_ID")
 
     on_exit(fn ->
       if is_nil(previous_config) do
         Application.delete_env(:grid_media_manager, :buffer)
       else
         Application.put_env(:grid_media_manager, :buffer, previous_config)
+      end
+
+      if previous_youtube_category_id do
+        System.put_env("BUFFER_YOUTUBE_CATEGORY_ID", previous_youtube_category_id)
+      else
+        System.delete_env("BUFFER_YOUTUBE_CATEGORY_ID")
       end
     end)
 
@@ -107,6 +116,115 @@ defmodule GridMediaManager.Social.BufferTest do
              )
   end
 
+  test "sets Instagram post metadata for image assets" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
+      input = Jason.decode!(raw_body)["variables"]["input"]
+
+      assert input["metadata"] == %{"instagram" => %{"type" => "post"}}
+      success_response(conn)
+    end)
+
+    instagram_draft = %{draft() | platform: "instagram"}
+
+    assert {:ok, _post} =
+             Buffer.schedule(instagram_draft,
+               channel_id: "instagram-channel",
+               media_url: "https://cdn.example.com/post.png",
+               mime_type: "image/png"
+             )
+  end
+
+  test "sets Instagram reel metadata for video assets" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
+      input = Jason.decode!(raw_body)["variables"]["input"]
+
+      assert input["metadata"] == %{
+               "instagram" => %{"type" => "reel", "shouldShareToFeed" => true}
+             }
+
+      success_response(conn)
+    end)
+
+    instagram_draft = %{draft() | platform: "instagram"}
+
+    assert {:ok, _post} =
+             Buffer.schedule(instagram_draft,
+               channel_id: "instagram-channel",
+               media_url: "https://cdn.example.com/reel.mp4",
+               mime_type: "video/mp4"
+             )
+  end
+
+  test "supports an explicit Instagram story type" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
+      input = Jason.decode!(raw_body)["variables"]["input"]
+
+      assert input["metadata"] == %{"instagram" => %{"type" => "story"}}
+      success_response(conn)
+    end)
+
+    instagram_draft = %{draft() | platform: "instagram"}
+
+    assert {:ok, _post} =
+             Buffer.schedule(instagram_draft,
+               channel_id: "instagram-channel",
+               media_url: "https://cdn.example.com/story.png",
+               mime_type: "image/png",
+               instagram_type: "story"
+             )
+  end
+
+  test "sets required YouTube title and category metadata" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
+      input = Jason.decode!(raw_body)["variables"]["input"]
+
+      assert input["metadata"] == %{
+               "youtube" => %{
+                 "title" => "A RationalGrid Short",
+                 "categoryId" => "27"
+               }
+             }
+
+      success_response(conn)
+    end)
+
+    youtube_draft = %{draft() | platform: "youtube"}
+
+    assert {:ok, _post} =
+             Buffer.schedule(youtube_draft,
+               channel_id: "youtube-channel",
+               media_url: "https://cdn.example.com/short.mp4",
+               mime_type: "video/mp4",
+               title: "A RationalGrid Short"
+             )
+  end
+
+  test "allows the YouTube category to be configured" do
+    System.put_env("BUFFER_YOUTUBE_CATEGORY_ID", "22")
+
+    Req.Test.expect(__MODULE__, fn conn ->
+      {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
+      youtube = Jason.decode!(raw_body)["variables"]["input"]["metadata"]["youtube"]
+
+      assert youtube["categoryId"] == "22"
+      success_response(conn)
+    end)
+
+    youtube_draft = %{draft() | platform: "youtube"}
+
+    assert {:ok, _post} =
+             Buffer.schedule(youtube_draft,
+               channel_id: "youtube-channel",
+               media_url: "https://cdn.example.com/short.mp4",
+               mime_type: "video/mp4",
+               title: "A RationalGrid Short"
+             )
+  end
+
   test "defaults the endpoint and media type to Buffer and image" do
     Application.put_env(:grid_media_manager, :buffer,
       api_key: "test-api-key",
@@ -196,6 +314,11 @@ defmodule GridMediaManager.Social.BufferTest do
 
     assert Buffer.schedule(draft(), channel_id: "channel-123", mime_type: "image/png") ==
              {:error, "media_url is required when mime_type is provided"}
+
+    assert Buffer.schedule(%{draft() | platform: "instagram"},
+             channel_id: "channel-123",
+             instagram_type: "unsupported"
+           ) == {:error, "instagram_type must be post, story, or reel"}
   end
 
   test "returns a configuration error without an API key" do

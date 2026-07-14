@@ -166,18 +166,41 @@ config :grid_media_manager, :pexels, api_key: "your-key"
 
 The selected photo is stored with its photographer and Pexels attribution and is embedded behind the active card theme. Only HTTPS images returned from `images.pexels.com` are fetched by the renderer. If the image is unavailable, cards fall back to the selected built-in theme.
 
+## S3 media publishing
+
+Generated local media can be rendered and uploaded to S3 automatically before Buffer scheduling:
+
+```sh
+S3_BUCKET=your-media-bucket \
+AWS_REGION=eu-west-2 \
+AWS_ACCESS_KEY_ID=your-access-key \
+AWS_SECRET_ACCESS_KEY=your-secret-key \
+S3_PUBLIC_BASE_URL=https://media.example.com \
+mix phx.server
+```
+
+The IAM identity needs `s3:PutObject` for the `campaigns/*` prefix. `S3_PUBLIC_BASE_URL` should point to a public HTTPS bucket endpoint or CloudFront distribution where Buffer can retrieve objects without authentication. If it is omitted, the standard virtual-hosted S3 URL is used, which still requires an appropriate public-read bucket policy. `S3_ENDPOINT` can override the upload endpoint when needed.
+
+Assets use content-hashed object keys. The durable `published_url`, S3 key, and SHA-256 digest are stored in media asset metadata while the original local generation route remains unchanged. The first Buffer schedule uploads the asset; subsequent schedules reuse the persisted S3 URL.
+
 ## Buffer scheduling
 
 Buffer scheduling uses Buffer's GraphQL API and requires a personal API key plus a channel ID for each platform you want to schedule:
 
 ```sh
 PUBLIC_BASE_URL=https://your-public-studio.example.com \
+S3_BUCKET=your-media-bucket \
+AWS_REGION=eu-west-2 \
+AWS_ACCESS_KEY_ID=your-access-key \
+AWS_SECRET_ACCESS_KEY=your-secret-key \
+S3_PUBLIC_BASE_URL=https://media.example.com \
 BUFFER_API_KEY=your-key \
 BUFFER_CHANNEL_X=channel-id \
 BUFFER_CHANNEL_BLUESKY=channel-id \
 BUFFER_CHANNEL_LINKEDIN=channel-id \
 BUFFER_CHANNEL_INSTAGRAM=channel-id \
 BUFFER_CHANNEL_YOUTUBE=channel-id \
+BUFFER_YOUTUBE_CATEGORY_ID=27 \
 mix phx.server
 ```
 

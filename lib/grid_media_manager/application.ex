@@ -7,12 +7,23 @@ defmodule GridMediaManager.Application do
 
   require Logger
 
-  @public_environment_variables ["RATIONAL_GRID_BASE_URL", "PUBLIC_BASE_URL"]
+  @public_environment_variables [
+    "RATIONAL_GRID_BASE_URL",
+    "PUBLIC_BASE_URL",
+    "S3_BUCKET",
+    "AWS_REGION",
+    "S3_ENDPOINT",
+    "S3_PUBLIC_BASE_URL",
+    "BUFFER_YOUTUBE_CATEGORY_ID"
+  ]
 
   @secret_environment_variables [
     "RATIONALGRID_PROMOTION_API_TOKEN",
     "BUFFER_API_KEY",
-    "PEXELS_API_KEY"
+    "PEXELS_API_KEY",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN"
   ]
 
   @impl true

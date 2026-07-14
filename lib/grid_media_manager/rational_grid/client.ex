@@ -15,6 +15,7 @@ defmodule GridMediaManager.RationalGrid.Client do
   """
 
   alias GridMediaManager.RationalGrid.Slug
+  alias GridMediaManager.TextNormalizer
 
   @default_base_url "https://rationalgrid.ai"
   @default_index_path "/api/promotion/grids"
@@ -153,13 +154,19 @@ defmodule GridMediaManager.RationalGrid.Client do
     end
   end
 
-  defp decode_any_response(%{body: body}) when is_map(body) or is_list(body), do: {:ok, body}
+  defp decode_any_response(%{body: body}) when is_map(body) or is_list(body),
+    do: {:ok, TextNormalizer.normalize(body)}
 
   defp decode_any_response(%{body: body}) when is_binary(body) do
     case Jason.decode(body) do
-      {:ok, decoded} when is_map(decoded) or is_list(decoded) -> {:ok, decoded}
-      {:ok, _decoded} -> {:error, :invalid_payload}
-      {:error, reason} -> {:error, {:invalid_json, reason}}
+      {:ok, decoded} when is_map(decoded) or is_list(decoded) ->
+        {:ok, TextNormalizer.normalize(decoded)}
+
+      {:ok, _decoded} ->
+        {:error, :invalid_payload}
+
+      {:error, reason} ->
+        {:error, {:invalid_json, reason}}
     end
   end
 

@@ -3,11 +3,25 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
 
   alias GridMediaManager.Campaigns
 
+  @s3_environment_variables [
+    "S3_BUCKET",
+    "AWS_REGION",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "S3_ENDPOINT",
+    "S3_PUBLIC_BASE_URL"
+  ]
+
   setup do
     previous_config = Application.get_env(:grid_media_manager, :buffer)
+    previous_s3_config = Application.get_env(:grid_media_manager, :s3)
     previous_public_base_url = System.get_env("PUBLIC_BASE_URL")
+    previous_s3_environment = Map.new(@s3_environment_variables, &{&1, System.get_env(&1)})
 
     System.delete_env("PUBLIC_BASE_URL")
+    Enum.each(@s3_environment_variables, &System.delete_env/1)
+    Application.delete_env(:grid_media_manager, :s3)
 
     Application.put_env(:grid_media_manager, :buffer,
       api_key: "buffer-test-key",
@@ -25,11 +39,22 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
         Application.put_env(:grid_media_manager, :buffer, previous_config)
       end
 
+      if previous_s3_config do
+        Application.put_env(:grid_media_manager, :s3, previous_s3_config)
+      else
+        Application.delete_env(:grid_media_manager, :s3)
+      end
+
       if previous_public_base_url do
         System.put_env("PUBLIC_BASE_URL", previous_public_base_url)
       else
         System.delete_env("PUBLIC_BASE_URL")
       end
+
+      Enum.each(previous_s3_environment, fn
+        {name, nil} -> System.delete_env(name)
+        {name, value} -> System.put_env(name, value)
+      end)
     end)
 
     :ok

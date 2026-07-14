@@ -117,6 +117,23 @@ defmodule GridMediaManager.CampaignsTest do
   end
 
   describe "import_payload/2" do
+    test "repairs invalid Windows-1252 bytes before scoring questions" do
+      malformed_question = "What should we protect" <> <<0x94>> <> "?"
+
+      payload = %{
+        "metadata" => %{
+          "title" => "A malformed legacy grid",
+          "slug" => "malformed-legacy-grid",
+          "url" => "https://rationalgrid.ai/g/malformed-legacy-grid"
+        },
+        "content" => %{"follow_up_questions" => [malformed_question]}
+      }
+
+      assert {:ok, campaign} = Campaigns.import_payload(payload, "malformed-legacy-grid")
+      assert Campaigns.recommended_question(campaign) == "What should we protect”?"
+      assert String.valid?(campaign.raw_payload["content"]["follow_up_questions"] |> List.first())
+    end
+
     test "rejects URL fragments when extracting follow-up questions" do
       payload = %{
         "content" => %{
