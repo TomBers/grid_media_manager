@@ -13,6 +13,7 @@ defmodule GridMediaManager.Pexels.Client do
   """
 
   @default_endpoint "https://api.pexels.com/v1/search"
+  @api_key_env "PEXELS_API_KEY"
 
   @type photo :: %{
           id: integer() | String.t() | nil,
@@ -148,8 +149,12 @@ defmodule GridMediaManager.Pexels.Client do
   end
 
   defp api_key do
-    config_value(:api_key)
+    System.get_env(@api_key_env)
     |> non_blank_string()
+    |> case do
+      nil -> config_value(:api_key) |> non_blank_string()
+      key -> key
+    end
   end
 
   defp config_value(key) do

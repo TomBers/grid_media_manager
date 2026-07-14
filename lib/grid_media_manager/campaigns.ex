@@ -455,6 +455,8 @@ defmodule GridMediaManager.Campaigns do
     do: {:ok, DateTime.truncate(value, :second)}
 
   defp parse_scheduled_for(value) when is_binary(value) do
+    value = normalize_datetime_local(value)
+
     case DateTime.from_iso8601(value) do
       {:ok, datetime, _offset} ->
         {:ok, DateTime.truncate(datetime, :second)}
@@ -470,6 +472,16 @@ defmodule GridMediaManager.Campaigns do
   end
 
   defp parse_scheduled_for(_value), do: {:error, "Enter a valid UTC schedule time."}
+
+  defp normalize_datetime_local(value) do
+    value = String.trim(value)
+
+    if Regex.match?(~r/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, value) do
+      value <> ":00"
+    else
+      value
+    end
+  end
 
   defp mark_buffer_failure(draft, scheduled_for, reason) do
     case parse_scheduled_for(scheduled_for) do

@@ -150,6 +150,20 @@ Set `PEXELS_API_KEY` to enable photo search in the guided studio:
 PEXELS_API_KEY=your-key mix phx.server
 ```
 
+Alternatively, export the variable before starting the server:
+
+```sh
+export PEXELS_API_KEY=your-key
+mix phx.server
+```
+
+Phoenix does not load `.env` files automatically, and the server must be restarted after changing its environment. For local development, you can instead add the following to the ignored `config/dev.secret.exs` file:
+
+```elixir
+import Config
+config :grid_media_manager, :pexels, api_key: "your-key"
+```
+
 The selected photo is stored with its photographer and Pexels attribution and is embedded behind the active card theme. Only HTTPS images returned from `images.pexels.com` are fetched by the renderer. If the image is unavailable, cards fall back to the selected built-in theme.
 
 ## Buffer scheduling

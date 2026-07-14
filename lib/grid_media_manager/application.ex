@@ -5,8 +5,18 @@ defmodule GridMediaManager.Application do
 
   use Application
 
+  require Logger
+
+  @secret_environment_variables [
+    "RATIONALGRID_PROMOTION_API_TOKEN",
+    "BUFFER_API_KEY",
+    "PEXELS_API_KEY"
+  ]
+
   @impl true
   def start(_type, _args) do
+    Logger.info(environment_summary())
+
     children = [
       GridMediaManagerWeb.Telemetry,
       GridMediaManager.Repo,
@@ -23,6 +33,43 @@ defmodule GridMediaManager.Application do
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: GridMediaManager.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  @doc false
+  def environment_summary do
+    lines = [
+      "RATIONAL_GRID_BASE_URL=#{environment_value("RATIONAL_GRID_BASE_URL")}"
+      | Enum.map(@secret_environment_variables, fn name ->
+          "#{name}=#{secret_environment_value(name)}"
+        end)
+    ]
+
+    "Environment configuration:\n  " <> Enum.join(lines, "\n  ")
+  end
+
+  defp environment_value(name) do
+    case System.get_env(name) do
+      value when is_binary(value) and value != "" -> value
+      _value -> "not set"
+    end
+  end
+
+  defp secret_environment_value(name) do
+    case System.get_env(name) do
+      value when is_binary(value) -> masked_secret(value)
+      _value -> "not set"
+    end
+  end
+
+  defp masked_secret(value) do
+    value = String.trim(value)
+    length = String.length(value)
+
+    cond do
+      length == 0 -> "not set"
+      length <= 8 -> "set (#{length} chars)"
+      true -> "set (#{length} chars, ending …#{String.slice(value, -4, 4)})"
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration

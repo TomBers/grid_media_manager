@@ -33,7 +33,10 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
       Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: "campaign")
 
     scheduled_for =
-      DateTime.utc_now() |> DateTime.add(3_600, :second) |> DateTime.truncate(:second)
+      DateTime.utc_now()
+      |> DateTime.add(3_600, :second)
+      |> DateTime.truncate(:second)
+      |> then(&%{&1 | second: 0})
 
     Req.Test.expect(__MODULE__, fn conn ->
       {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
@@ -56,8 +59,14 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
       })
     end)
 
+    browser_datetime_value =
+      scheduled_for
+      |> DateTime.to_naive()
+      |> NaiveDateTime.to_iso8601()
+      |> String.slice(0, 16)
+
     assert {:ok, scheduled} =
-             Campaigns.schedule_post_draft(draft.id, DateTime.to_iso8601(scheduled_for))
+             Campaigns.schedule_post_draft(draft.id, browser_datetime_value)
 
     assert scheduled.status == "scheduled"
     assert scheduled.scheduled_for == scheduled_for

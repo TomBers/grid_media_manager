@@ -5,7 +5,9 @@ defmodule GridMediaManager.Pexels.ClientTest do
 
   setup do
     previous_config = Application.get_env(:grid_media_manager, :pexels)
+    previous_api_key = System.get_env("PEXELS_API_KEY")
 
+    System.delete_env("PEXELS_API_KEY")
     Req.Test.verify_on_exit!()
 
     Application.put_env(:grid_media_manager, :pexels,
@@ -20,6 +22,12 @@ defmodule GridMediaManager.Pexels.ClientTest do
       else
         Application.put_env(:grid_media_manager, :pexels, previous_config)
       end
+
+      if previous_api_key do
+        System.put_env("PEXELS_API_KEY", previous_api_key)
+      else
+        System.delete_env("PEXELS_API_KEY")
+      end
     end)
 
     :ok
@@ -33,6 +41,17 @@ defmodule GridMediaManager.Pexels.ClientTest do
 
     Application.delete_env(:grid_media_manager, :pexels)
     refute Client.configured?()
+  end
+
+  test "the environment API key takes precedence over application config" do
+    System.put_env("PEXELS_API_KEY", "environment-key")
+
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert Plug.Conn.get_req_header(conn, "authorization") == ["environment-key"]
+      Req.Test.json(conn, %{"photos" => []})
+    end)
+
+    assert Client.search("mountains") == {:ok, []}
   end
 
   test "search/2 returns not_configured without making a request" do

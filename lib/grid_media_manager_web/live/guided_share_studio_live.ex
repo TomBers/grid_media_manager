@@ -661,8 +661,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   </div>
                 <% else %>
                   <p class="mt-5 rounded-2xl border border-dashed border-base-content/20 bg-base-200/40 p-4 text-sm text-base-content/55">
-                    Set <code class="font-mono font-semibold">PEXELS_API_KEY</code>
-                    to enable photo search.
+                    <code class="font-mono font-semibold">PEXELS_API_KEY</code>
+                    was not visible when the server started. Export it and restart the Phoenix server to enable photo search.
                   </p>
                 <% end %>
 
@@ -1427,7 +1427,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp pexels_orientation(format) when format in ["portrait", "carousel"], do: "portrait"
   defp pexels_orientation(_format), do: "landscape"
 
-  defp pexels_error_message(:not_configured), do: "Set PEXELS_API_KEY to search for photos."
+  defp pexels_error_message(:not_configured),
+    do: "Export PEXELS_API_KEY and restart the Phoenix server before searching."
+
   defp pexels_error_message(:invalid_query), do: "Enter a search term."
 
   defp pexels_error_message({:api_error, _status, message}),
