@@ -46,4 +46,21 @@ defmodule GridMediaManager.Social.Platforms do
       _ -> nil
     end
   end
+
+  @doc "Returns the platform-visible character count for social copy."
+  def character_count(text, "x") when is_binary(text) do
+    text
+    |> String.replace(~r/(^|\s)#[\p{L}\p{N}_]+/u, "\\1")
+    |> String.length()
+  end
+
+  def character_count(text, _platform) when is_binary(text), do: String.length(text)
+  def character_count(_text, _platform), do: 0
+
+  def within_limit?(text, platform) do
+    case max_chars(platform) do
+      limit when is_integer(limit) -> character_count(text, platform) <= limit
+      nil -> true
+    end
+  end
 end

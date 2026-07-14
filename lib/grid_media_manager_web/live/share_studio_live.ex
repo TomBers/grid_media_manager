@@ -5,6 +5,7 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Campaigns.PostDraft
   alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.Social.Buffer
   alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Social.Templates
 
@@ -274,6 +275,25 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
   end
 
   def handle_event("copied", _params, socket), do: {:noreply, socket}
+
+  def handle_event(
+        "schedule_draft",
+        %{"id" => id, "schedule" => %{"scheduled_for" => scheduled_for}},
+        socket
+      ) do
+    case Campaigns.schedule_post_draft(id, scheduled_for) do
+      {:ok, scheduled_draft} ->
+        draft = Campaigns.get_post_draft_with_asset!(scheduled_draft.id)
+
+        {:noreply,
+         socket
+         |> stream_insert(:post_drafts, draft_item(draft))
+         |> put_flash(:info, "Post scheduled through Buffer.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, reason)}
+    end
+  end
 
   def handle_event("approve_draft", %{"id" => id}, socket) do
     case Campaigns.approve_post_draft(id) do
@@ -1044,6 +1064,58 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
                     />
                   </.form>
 
+                  <.form
+                    :if={item.buffer_channel? and item.draft.status != "scheduled"}
+                    for={item.schedule_form}
+                    id={"schedule-form-#{item.id}"}
+                    phx-submit="schedule_draft"
+                    phx-value-id={item.id}
+                    class={[
+                      "mt-3 flex flex-col gap-2 rounded-2xl border border-base-content/10 bg-base-200/40 p-3 sm:flex-row sm:items-end"
+                    ]}
+                  >
+                    <div class="min-w-0 flex-1">
+                      <.input
+                        id={"scheduled-for-#{item.id}"}
+                        field={item.schedule_form[:scheduled_for]}
+                        type="datetime-local"
+                        label="Schedule in UTC"
+                        required
+                      />
+                    </div>
+                    <button
+                      id={"schedule-draft-#{item.id}"}
+                      type="submit"
+                      disabled={item.character_over_limit}
+                      class={[
+                        "inline-flex h-11 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
+                      ]}
+                    >
+                      <.icon name="hero-calendar-days" class="mr-1.5 size-4" /> Schedule
+                    </button>
+                  </.form>
+                  <p
+                    :if={not item.buffer_channel?}
+                    class="mt-3 rounded-2xl border border-dashed border-base-content/15 px-3 py-2 text-xs text-base-content/50"
+                  >
+                    Configure Buffer and a {Platforms.label(item.draft.platform)} channel to schedule this post.
+                  </p>
+                  <p
+                    :if={item.draft.status == "scheduled" and item.draft.scheduled_for}
+                    class="mt-3 rounded-2xl bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-700 dark:text-sky-200"
+                  >
+                    Scheduled through Buffer for {Calendar.strftime(
+                      item.draft.scheduled_for,
+                      "%Y-%m-%d %H:%M UTC"
+                    )}.
+                  </p>
+                  <p
+                    :if={item.draft.error_message}
+                    class="mt-2 text-xs text-red-600 dark:text-red-300"
+                  >
+                    {item.draft.error_message}
+                  </p>
+
                   <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
                     <p class="text-xs text-base-content/50">
                       Status:
@@ -1159,18 +1231,30 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
   defp draft_items(drafts), do: Enum.map(drafts, &draft_item/1)
 
   defp draft_item(%PostDraft{} = draft) do
-    character_count = draft.body |> to_string() |> String.length()
+    character_count = Platforms.character_count(draft.body, draft.platform)
     character_limit = Platforms.max_chars(draft.platform)
 
     %{
       id: draft.id,
       draft: draft,
       form: to_form(%{"body" => draft.body}, as: :post_draft),
+      schedule_form:
+        to_form(%{"scheduled_for" => schedule_input_value(draft.scheduled_for)}, as: :schedule),
+      buffer_channel?: Buffer.configured?() and is_binary(Buffer.channel_id(draft.platform)),
       asset_title: asset_title(draft),
       character_count: character_count,
       character_limit: character_limit,
       character_over_limit: is_integer(character_limit) and character_count > character_limit
     }
+  end
+
+  defp schedule_input_value(nil), do: ""
+
+  defp schedule_input_value(%DateTime{} = datetime) do
+    datetime
+    |> DateTime.to_naive()
+    |> NaiveDateTime.to_iso8601()
+    |> String.slice(0, 16)
   end
 
   defp asset_title(%PostDraft{media_asset: %MediaAsset{} = asset}), do: asset.title

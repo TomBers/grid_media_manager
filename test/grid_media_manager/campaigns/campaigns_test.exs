@@ -23,6 +23,63 @@ defmodule GridMediaManager.CampaignsTest do
     assert Enum.count(styles, &(&1.category == "Social")) == 7
   end
 
+  test "renders full titles and quotes without top-right format labels" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "full-card-copy")
+
+    long_question =
+      "How should a society preserve freedom when comfort, safety, convenience, and certainty all make surrendering agency feel reasonable?"
+
+    question = %{"question" => long_question, "kind" => "follow_up_question"}
+
+    question_svg =
+      ShareCard.question_platform_image_svg(campaign, question, "minimal_dark", "linkedin")
+
+    assert question_svg =~ "surrendering agency feel reasonable?"
+    refute question_svg =~ "…"
+    refute question_svg =~ "LINKEDIN ·"
+
+    long_title =
+      "A complete node title about freedom, comfort, responsibility, technology, and the difficult work of retaining human agency"
+
+    node = %{"id" => "long-node", "title" => long_title, "content" => "A complete explanation."}
+    node_svg = ShareCard.node_linkedin_image_svg(campaign, node, "minimal_dark")
+
+    assert node_svg =~ "difficult work of retaining"
+    assert node_svg =~ "human agency"
+    refute node_svg =~ "LINKEDIN ·"
+
+    carousel_svg = ShareCard.node_carousel_image_svg(campaign, node, "minimal_dark", 1)
+    refute carousel_svg =~ ">Thesis</text>"
+  end
+
+  test "persists and clears a Pexels background with attribution" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "pexels-background")
+
+    photo = %{
+      id: 42,
+      alt: "A mountain view",
+      photographer: "Ada Example",
+      photographer_url: "https://www.pexels.com/@ada-example",
+      pexels_url: "https://www.pexels.com/photo/42",
+      avg_color: "#334155",
+      landscape_url: "https://images.pexels.com/photos/42/landscape.jpeg",
+      portrait_url: "https://images.pexels.com/photos/42/portrait.jpeg",
+      original_url: "https://images.pexels.com/photos/42/original.jpeg",
+      preview_url: "https://images.pexels.com/photos/42/preview.jpeg"
+    }
+
+    assert {:ok, campaign} = Campaigns.set_pexels_background(campaign, photo)
+    background = Campaigns.pexels_background(campaign)
+
+    assert background["id"] == 42
+    assert background["photographer"] == "Ada Example"
+    assert background["pexels_url"] == "https://www.pexels.com/photo/42"
+    refute Map.has_key?(background, "preview_url")
+
+    assert {:ok, campaign} = Campaigns.clear_pexels_background(campaign)
+    assert Campaigns.pexels_background(campaign) == nil
+  end
+
   test "renders Markdown structure in key-node media" do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "markdown-media")
 

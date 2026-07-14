@@ -21,13 +21,12 @@ defmodule GridMediaManager.Promotion.ShareCard do
   @square_size 1200
   @short_width 1080
   @short_height 1920
-  @max_quote_lines 6
+
   @quote_area_left 112
   @quote_area_top 146
   @quote_area_width 920
   @quote_area_height 350
-  @max_svg_quote_chars 800
-  @max_svg_title_chars 220
+
   @sanitize_slice_multiplier 4
   @quote_font_family "Georgia, 'Times New Roman', serif"
   @ui_font_family "Arial, Helvetica, sans-serif"
@@ -234,7 +233,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def graph_image_svg(%Campaign{} = campaign, style) do
     style = normalize_style(style)
     palette = quote_palette(style)
-    title = sanitize_text(campaign.title, @max_svg_title_chars)
+    title = sanitize_text(campaign.title, nil)
     title_layout = grid_title_layout(title)
 
     title_markup =
@@ -277,6 +276,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="1200" height="630" fill="url(#canvas)" />
+      #{pexels_background_markup(campaign, 1200, 630)}
       <rect width="1200" height="630" fill="url(#violetHalo)" />
       <rect width="1200" height="630" fill="url(#blueHalo)" />
       <circle cx="1040" cy="126" r="132" fill="#{palette.bloom_b}" fill-opacity="#{palette.decoration_opacity}" />
@@ -286,7 +286,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect x="52.5" y="44.5" width="1095" height="541" rx="43.5" fill="none" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
       <rect x="52" y="44" width="1096" height="542" rx="44" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" />
 
-      <text x="1092" y="98" text-anchor="end" fill="#{palette.label}" fill-opacity="0.86" font-size="17" font-weight="700" font-family="#{@ui_font_family}" letter-spacing="0.15">RationalGrid.ai</text>
+      <text x="96" y="98" fill="#{palette.label}" fill-opacity="0.86" font-size="17" font-weight="700" font-family="#{@ui_font_family}" letter-spacing="0.15">RationalGrid.ai</text>
       <line x1="96" y1="134" x2="1104" y2="134" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
       <rect x="96" y="478" width="230" height="6" rx="3" fill="url(#accent)" opacity="0.92" />
       <text x="96" y="510" fill="#{palette.muted}" font-size="17" font-weight="700" font-family="#{@ui_font_family}" letter-spacing="0.35">#{escape_xml(label)}</text>
@@ -319,18 +319,17 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def node_image_svg(%Campaign{} = campaign, node, style) when is_map(node) do
     style = normalize_style(style)
     palette = quote_palette(style)
-    node_title = node |> get("title") |> sanitize_text(260) |> fallback("Key node")
+    node_title = node |> get("title") |> sanitize_text(nil) |> fallback("Key node")
 
     node_excerpt =
       node
       |> get("excerpt")
       |> fallback(get(node, "content"))
-      |> sanitize_text(920)
-
-    node_class =
-      node |> get("class") |> sanitize_text(48) |> fallback("node") |> String.replace("_", " ")
+      |> sanitize_text(nil)
 
     layout = node_card_layout(node_title, node_excerpt)
+    footer = "Key node from #{sanitize_text(campaign.title, nil)}"
+    footer_font_size = single_line_font_size(footer, 976, 16, 8)
 
     title_markup =
       layout.title_lines
@@ -377,6 +376,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="1200" height="630" fill="url(#nodeCanvas)" />
+      #{pexels_background_markup(campaign, 1200, 630)}
       <rect width="1200" height="630" fill="url(#nodeViolet)" />
       <rect width="1200" height="630" fill="url(#nodeSky)" />
       <path d="M-44 470 C186 382 364 598 602 474 C790 376 966 408 1252 250" fill="none" stroke="#{palette.accent_a}" stroke-opacity="#{palette.decoration_opacity}" stroke-width="2" />
@@ -387,7 +387,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect x="76" y="70" width="1048" height="490" rx="30" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
 
       <text x="112" y="118" fill="#{palette.label}" font-size="17" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0.35">RationalGrid.ai</text>
-      <text x="1088" y="118" text-anchor="end" fill="#{palette.kicker}" font-size="15" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="1.2" text-transform="uppercase">#{escape_xml(node_class)}</text>
+
       <line x1="112" y1="144" x2="1088" y2="144" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
       <rect x="112" y="516" width="344" height="6" rx="3" fill="url(#nodeAccent)" opacity="0.96" />
 
@@ -397,7 +397,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <text fill="#{palette.secondary_text}" font-size="#{layout.body_font_size}" font-weight="500" font-family="#{@ui_font_family}" letter-spacing="0" opacity="0.92">
         #{excerpt_markup}
       </text>
-      <text x="112" y="548" fill="#{palette.muted}" font-size="16" font-weight="700" font-family="#{@ui_font_family}" letter-spacing="0.2">Key node from #{escape_xml(sanitize_text(campaign.title, 110))}</text>
+      <text x="112" y="548" fill="#{palette.muted}" font-size="#{footer_font_size}" font-weight="700" font-family="#{@ui_font_family}" letter-spacing="0.2">#{escape_xml(footer)}</text>
     </svg>
     """
   end
@@ -407,7 +407,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def node_linkedin_image_svg(%Campaign{} = campaign, node, style) when is_map(node) do
     style = normalize_style(style)
     palette = quote_palette(style)
-    node_title = node |> get("title") |> sanitize_text(320) |> fallback("Key node")
+    node_title = node |> get("title") |> sanitize_text(nil) |> fallback("Key node")
 
     node_markdown =
       node
@@ -416,16 +416,18 @@ defmodule GridMediaManager.Promotion.ShareCard do
       |> fallback("")
       |> to_string()
 
-    node_class =
-      node |> get("class") |> sanitize_text(48) |> fallback("node") |> String.replace("_", " ")
+    title_layout =
+      bounded_text_layout(node_title, 950, 210, [62, 58, 54, 50, 46, 42, 38, 34, 30, 26, 22, 18])
 
-    title_font_size = 62
-    title_line_gap = 68
-    title_lines = wrap_lines_by_width(node_title, 950 / title_font_size, 3)
+    title_font_size = title_layout.font_size
+    title_line_gap = title_layout.line_gap
+    title_lines = title_layout.lines
     title_start_y = 242
     title_last_y = title_start_y + (length(title_lines) - 1) * title_line_gap
     body_font_size = 30
     body_start_y = title_last_y + 106
+    footer = "A key idea from #{sanitize_text(campaign.title, nil)}"
+    footer_font_size = single_line_font_size(footer, 952, 18, 8)
 
     title_markup =
       title_lines
@@ -473,6 +475,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="1200" height="1200" fill="url(#linkedinCanvas)" />
+      #{pexels_background_markup(campaign, 1200, 1200)}
       <rect width="1200" height="1200" fill="url(#linkedinBloomA)" />
       <rect width="1200" height="1200" fill="url(#linkedinBloomB)" />
       <path d="M-60 970 C240 820 430 1110 760 910 C920 812 1040 790 1270 650" fill="none" stroke="#{palette.accent_b}" stroke-opacity="#{palette.decoration_opacity}" stroke-width="3" />
@@ -482,7 +485,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect x="76" y="76" width="1048" height="1048" rx="32" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
 
       <text x="124" y="140" fill="#{palette.label}" font-size="20" font-weight="800" font-family="#{@ui_font_family}">RationalGrid.ai</text>
-      <text x="1076" y="140" text-anchor="end" fill="#{palette.kicker}" font-size="17" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="1.4">LINKEDIN · #{escape_xml(node_class)}</text>
+
       <line x1="124" y1="176" x2="1076" y2="176" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
 
       <text fill="#{palette.text}" font-size="#{title_font_size}" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="-0.7" paint-order="stroke" stroke="#{palette.text_stroke}" stroke-width="2.2" stroke-opacity="#{palette.text_stroke_opacity}">
@@ -492,7 +495,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       #{body_markup}
 
       <line x1="124" y1="1070" x2="1076" y2="1070" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
-      <text x="124" y="1108" fill="#{palette.muted}" font-size="18" font-weight="700" font-family="#{@ui_font_family}">A key idea from #{escape_xml(sanitize_text(campaign.title, 92))}</text>
+      <text x="124" y="1108" fill="#{palette.muted}" font-size="#{footer_font_size}" font-weight="700" font-family="#{@ui_font_family}">#{escape_xml(footer)}</text>
     </svg>
     """
   end
@@ -502,7 +505,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def node_reading_image_svg(%Campaign{} = campaign, node, style) when is_map(node) do
     style = normalize_style(style)
     palette = quote_palette(style)
-    node_title = node |> get("title") |> sanitize_text(320) |> fallback("Key node")
+    node_title = node |> get("title") |> sanitize_text(nil) |> fallback("Key node")
 
     node_markdown =
       node
@@ -511,12 +514,12 @@ defmodule GridMediaManager.Promotion.ShareCard do
       |> fallback("")
       |> to_string()
 
-    node_class =
-      node |> get("class") |> sanitize_text(48) |> fallback("node") |> String.replace("_", " ")
+    title_layout =
+      bounded_text_layout(node_title, 820, 280, [58, 54, 50, 46, 42, 38, 34, 30, 26, 22, 18])
 
-    title_font_size = 58
-    title_line_gap = 66
-    title_lines = wrap_lines_by_width(node_title, 820 / title_font_size, 4)
+    title_font_size = title_layout.font_size
+    title_line_gap = title_layout.line_gap
+    title_lines = title_layout.lines
     title_start_y = 232
     body_font_size = 29
     body_start_y = title_start_y + (length(title_lines) - 1) * title_line_gap + 92
@@ -568,6 +571,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="1080" height="1350" fill="url(#portraitCanvas)" />
+      #{pexels_background_markup(campaign, 1080, 1350)}
       <rect width="1080" height="1350" fill="url(#portraitBloomA)" />
       <rect width="1080" height="1350" fill="url(#portraitBloomB)" />
       <path d="M-80 1040 C220 890 420 1200 730 1010 C870 924 986 878 1160 760" fill="none" stroke="#{palette.accent_b}" stroke-opacity="#{palette.decoration_opacity}" stroke-width="3" />
@@ -577,7 +581,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect x="82" y="82" width="916" height="1186" rx="32" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
 
       <text x="130" y="142" fill="#{palette.label}" fill-opacity="0.92" font-size="20" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0.4">RationalGrid.ai</text>
-      <text x="950" y="142" text-anchor="end" fill="#{palette.kicker}" font-size="17" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="1.4" text-transform="uppercase">#{escape_xml(node_class)}</text>
+
       <line x1="130" y1="176" x2="950" y2="176" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
 
       <text fill="#{palette.text}" font-size="#{title_font_size}" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="-0.7" paint-order="stroke" stroke="#{palette.text_stroke}" stroke-width="2.2" stroke-opacity="#{palette.text_stroke_opacity}">
@@ -681,6 +685,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
     palette = quote_palette(style)
     body_start_y = 480
     title_image_data_uri = carousel_title_image_data_uri(slide.title, palette.text)
+    footer = "#{slide_index} / #{length(slides)} · #{sanitize_text(campaign.title, nil)}"
+    footer_font_size = single_line_font_size(footer, 820, 18, 8)
 
     body_markup =
       markdown_body_markup(Map.get(slide, :blocks, slide.body), nil, %{
@@ -721,6 +727,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="1080" height="1350" fill="url(#carouselCanvas)" />
+      #{pexels_background_markup(campaign, 1080, 1350)}
       <rect width="1080" height="1350" fill="url(#carouselBloomA)" />
       <rect width="1080" height="1350" fill="url(#carouselBloomB)" />
       <rect x="54" y="54" width="972" height="1242" rx="44" fill="#{palette.card}" fill-opacity="#{palette.card_opacity}" filter="url(#carouselShadow)" />
@@ -728,13 +735,13 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect x="82" y="82" width="916" height="1186" rx="32" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
 
       <text x="130" y="142" fill="#{palette.label}" fill-opacity="0.92" font-size="20" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0.4">RationalGrid.ai</text>
-      <text x="950" y="142" text-anchor="end" fill="#{palette.kicker}" font-size="17" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="1.4" text-transform="uppercase">#{escape_xml(slide.label)}</text>
+
       <line x1="130" y1="176" x2="950" y2="176" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
       <image x="130" y="205" width="820" height="190" href="#{title_image_data_uri}" preserveAspectRatio="none" />
       <rect x="130" y="430" width="210" height="7" rx="3.5" fill="url(#carouselAccent)" opacity="0.96" />
       #{body_markup}
       <line x1="130" y1="1210" x2="950" y2="1210" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
-      <text x="130" y="1248" fill="#{palette.muted}" font-size="18" font-weight="700" font-family="#{@ui_font_family}">#{slide_index} / #{length(slides)} · #{escape_xml(sanitize_text(campaign.title, 76))}</text>
+      <text x="130" y="1248" fill="#{palette.muted}" font-size="#{footer_font_size}" font-weight="700" font-family="#{@ui_font_family}">#{escape_xml(footer)}</text>
     </svg>
     """
   end
@@ -760,9 +767,21 @@ defmodule GridMediaManager.Promotion.ShareCard do
     slide = Enum.at(slides, slide_index - 1) || List.first(slides)
     palette = quote_palette(style)
     cover? = slide_index == 1
-    title_font_size = if cover?, do: 90, else: 74
-    title_line_gap = round(title_font_size * 1.08)
-    title_lines = wrap_lines_by_width(slide.title, 820 / title_font_size, 5)
+
+    title_layout =
+      bounded_text_layout(
+        slide.title,
+        820,
+        390,
+        if(cover?,
+          do: [90, 84, 78, 72, 66, 60, 54, 48, 42, 36, 30, 24, 20, 18],
+          else: [74, 68, 62, 56, 50, 44, 38, 32, 28, 24, 20, 18]
+        )
+      )
+
+    title_font_size = title_layout.font_size
+    title_line_gap = title_layout.line_gap
+    title_lines = title_layout.lines
     title_start_y = 410
     title_last_y = title_start_y + (length(title_lines) - 1) * title_line_gap
     body_start_y = max(title_last_y + 128, 790)
@@ -814,6 +833,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="1080" height="1920" fill="url(#shortCanvas)" />
+      #{pexels_background_markup(campaign, 1080, 1920)}
       <rect width="1080" height="1920" fill="url(#shortBloomA)" />
       <rect width="1080" height="1920" fill="url(#shortBloomB)" />
       <circle cx="950" cy="230" r="220" fill="#{palette.bloom_b}" fill-opacity="#{palette.decoration_opacity}" />
@@ -824,7 +844,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect x="82" y="92" width="916" height="1736" rx="34" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
 
       <text x="130" y="170" fill="#{palette.label}" font-size="23" font-weight="800" font-family="#{@ui_font_family}">RationalGrid.ai</text>
-      <text x="950" y="170" text-anchor="end" fill="#{palette.kicker}" font-size="18" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="1.7">SHORT · #{slide_index}/#{length(slides)}</text>
+
       <line x1="130" y1="210" x2="950" y2="210" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
       <text x="130" y="302" fill="#{palette.kicker}" font-size="22" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="2.4">#{escape_xml(String.upcase(slide.label))}</text>
 
@@ -872,14 +892,9 @@ defmodule GridMediaManager.Promotion.ShareCard do
     palette = quote_palette(style)
     question_text = question |> get("question") |> sanitize_text(nil)
 
-    question_type =
-      question
-      |> get("kind")
-      |> sanitize_text(48)
-      |> fallback("question")
-      |> String.replace("_", " ")
-
     layout = full_quote_layout(question_text)
+    campaign_title = sanitize_text(campaign.title, nil)
+    campaign_title_size = single_line_font_size(campaign_title, 1_028, 22, 10)
 
     quote_markup =
       layout.lines
@@ -918,6 +933,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="1200" height="630" fill="url(#questionCanvas)" />
+      #{pexels_background_markup(campaign, 1200, 630)}
       <rect width="1200" height="630" fill="url(#questionRose)" />
       <rect width="1200" height="630" fill="url(#questionCyan)" />
       <path d="M-40 488 C212 390 356 622 604 496 C820 386 948 434 1240 284" fill="none" stroke="#{palette.accent_a}" stroke-opacity="#{palette.decoration_opacity}" stroke-width="2" />
@@ -928,7 +944,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect x="58" y="54" width="1084" height="522" rx="30" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
 
       <text x="86" y="98" fill="#{palette.label}" fill-opacity="0.9" font-size="17" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0">RationalGrid.ai</text>
-      <text x="1114" y="98" text-anchor="end" fill="#{palette.kicker}" font-size="15" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="1.2" text-transform="uppercase">#{escape_xml(question_type)}</text>
+
       <rect x="86" y="126" width="1028" height="1" fill="#{palette.border}" fill-opacity="#{palette.border_opacity}" />
       <rect x="86" y="514" width="344" height="6" rx="3" fill="url(#questionAccent)" opacity="0.96" />
 
@@ -938,7 +954,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         #{quote_markup}
       </text>
 
-      <text x="86" y="552" fill="#{palette.label}" fill-opacity="0.9" font-size="22" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0">#{escape_xml(sanitize_text(campaign.title, 140))}</text>
+      <text x="86" y="552" fill="#{palette.label}" fill-opacity="0.9" font-size="#{campaign_title_size}" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0">#{escape_xml(campaign_title)}</text>
     </svg>
     """
   end
@@ -952,15 +968,16 @@ defmodule GridMediaManager.Promotion.ShareCard do
     quote_text =
       highlight
       |> highlight_text()
-      |> sanitize_text(@max_svg_quote_chars)
+      |> sanitize_text(nil)
 
     quote_layout = quote_layout(quote_text)
 
     source_label =
       campaign
       |> node_title(highlight_node_id(highlight))
-      |> sanitize_text(140)
-      |> truncate_line_to_units(900 / 24)
+      |> sanitize_text(nil)
+
+    source_font_size = single_line_font_size(source_label, 1_028, 24, 10)
 
     quote_markup =
       quote_layout.lines
@@ -1020,6 +1037,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="1200" height="630" fill="url(#quoteCanvas)" />
+      #{pexels_background_markup(campaign, 1200, 630)}
       <rect width="1200" height="630" fill="url(#amberBloom)" />
       <rect width="1200" height="630" fill="url(#tealBloom)" />
       <rect width="1200" height="630" fill="url(#violetBloom)" />
@@ -1045,7 +1063,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         #{quote_markup}
       </text>
 
-      <text x="86" y="552" fill="#{palette.label}" fill-opacity="0.9" font-size="24" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0">#{escape_xml(source_label)}</text>
+      <text x="86" y="552" fill="#{palette.label}" fill-opacity="0.9" font-size="#{source_font_size}" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0">#{escape_xml(source_label)}</text>
     </svg>
     """
   end
@@ -1082,8 +1100,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
     if format == "landscape" do
       highlight_image_svg(campaign, highlight, style)
     else
-      text = highlight |> highlight_text() |> sanitize_text(@max_svg_quote_chars)
-      source = campaign |> node_title(highlight_node_id(highlight)) |> sanitize_text(140)
+      text = highlight |> highlight_text() |> sanitize_text(nil)
+      source = campaign |> node_title(highlight_node_id(highlight)) |> sanitize_text(nil)
       platform_quote_image_svg(campaign, text, source, "highlight", style, format)
     end
   end
@@ -1143,6 +1161,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="#{spec.width}" height="#{spec.height}" fill="url(#platformCanvas)" />
+      #{pexels_background_markup(campaign, spec.width, spec.height)}
       <rect width="#{spec.width}" height="#{spec.height}" fill="url(#platformBloomA)" />
       <rect width="#{spec.width}" height="#{spec.height}" fill="url(#platformBloomB)" />
       <circle cx="#{spec.width - 120}" cy="170" r="190" fill="#{palette.bloom_b}" fill-opacity="#{palette.decoration_opacity}" />
@@ -1153,7 +1172,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect x="82" y="82" width="#{spec.width - 164}" height="#{spec.height - 164}" rx="34" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
 
       <text x="#{spec.text_x}" y="#{spec.brand_y}" fill="#{palette.label}" font-size="#{spec.brand_size}" font-weight="800" font-family="#{@ui_font_family}">RationalGrid.ai</text>
-      <text x="#{spec.text_right}" y="#{spec.brand_y}" text-anchor="end" fill="#{palette.kicker}" font-size="#{spec.kicker_size}" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="1.6">#{escape_xml(String.upcase(platform_label))} · #{escape_xml(String.upcase(String.replace(kind, "_", " ")))}</text>
+
       <line x1="#{spec.text_x}" y1="#{spec.rule_y}" x2="#{spec.text_right}" y2="#{spec.rule_y}" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
 
       <text x="#{spec.text_x - 48}" y="#{spec.quote_top + 52}" fill="#{palette.accent_a}" fill-opacity="0.10" font-size="#{spec.quote_mark_size}" font-weight="700" font-family="#{@quote_font_family}">“</text>
@@ -1163,7 +1182,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </text>
 
       <rect x="#{spec.text_x}" y="#{spec.accent_y}" width="#{spec.accent_width}" height="8" rx="4" fill="url(#platformAccent)" opacity="0.96" />
-      <text x="#{spec.text_x}" y="#{spec.footer_y}" fill="#{palette.label}" font-size="#{spec.footer_size}" font-weight="800" font-family="#{@ui_font_family}">#{escape_xml(sanitize_text(source, spec.source_limit))}</text>
+      <text x="#{spec.text_x}" y="#{spec.footer_y}" fill="#{palette.label}" font-size="#{single_line_font_size(source, spec.text_right - spec.text_x, spec.footer_size, 10)}" font-weight="800" font-family="#{@ui_font_family}">#{escape_xml(sanitize_text(source, nil))}</text>
       <text x="#{spec.text_x}" y="#{spec.cta_y}" fill="#{palette.muted}" font-size="#{spec.cta_size}" font-weight="700" font-family="#{@ui_font_family}">Explore and contribute on RationalGrid</text>
     </svg>
     """
@@ -1195,10 +1214,9 @@ defmodule GridMediaManager.Promotion.ShareCard do
         line_gap: round(List.last(spec.font_sizes) * 1.16),
         start_y: spec.quote_top + List.last(spec.font_sizes),
         lines:
-          wrap_lines_by_width(
+          wrap_all_lines_by_width(
             text,
-            spec.text_width / List.last(spec.font_sizes) * spec.wrap_factor,
-            spec.max_lines
+            spec.text_width / List.last(spec.font_sizes) * spec.wrap_factor
           )
       }
   end
@@ -1224,7 +1242,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       cta_y: 1092,
       cta_size: 18,
       source_limit: 90,
-      font_sizes: [78, 74, 70, 66, 62, 58, 54, 50, 46, 42, 38, 34, 30, 26],
+      font_sizes: [78, 74, 70, 66, 62, 58, 54, 50, 46, 42, 38, 34, 30, 26, 22, 18, 14, 12, 10, 8],
       max_lines: 10,
       wrap_factor: 0.92
     }
@@ -1251,7 +1269,29 @@ defmodule GridMediaManager.Promotion.ShareCard do
       cta_y: 1_262,
       cta_size: 18,
       source_limit: 76,
-      font_sizes: [80, 76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24],
+      font_sizes: [
+        80,
+        76,
+        72,
+        68,
+        64,
+        60,
+        56,
+        52,
+        48,
+        44,
+        40,
+        36,
+        32,
+        28,
+        24,
+        20,
+        16,
+        14,
+        12,
+        10,
+        8
+      ],
       max_lines: 12,
       wrap_factor: 0.88
     }
@@ -1278,7 +1318,29 @@ defmodule GridMediaManager.Promotion.ShareCard do
       cta_y: 1_790,
       cta_size: 22,
       source_limit: 68,
-      font_sizes: [104, 98, 92, 86, 80, 74, 68, 62, 56, 50, 44, 38, 34, 30],
+      font_sizes: [
+        104,
+        98,
+        92,
+        86,
+        80,
+        74,
+        68,
+        62,
+        56,
+        50,
+        44,
+        38,
+        34,
+        30,
+        26,
+        22,
+        18,
+        14,
+        12,
+        10,
+        8
+      ],
       max_lines: 14,
       wrap_factor: 0.85
     }
@@ -1289,18 +1351,15 @@ defmodule GridMediaManager.Promotion.ShareCard do
   defp platform_quote_label("short"), do: "Short"
 
   def page_title(%Campaign{} = campaign, highlight) when is_map(highlight) do
-    quote = highlight |> highlight_text() |> sanitize_text(90)
-    truncate("“#{quote}” · #{campaign.title}", 120)
+    quote = highlight |> highlight_text() |> sanitize_text(nil)
+    "“#{quote}” · #{campaign.title}"
   end
 
   def page_description(%Campaign{} = campaign, highlight) when is_map(highlight) do
     title = node_title(campaign, highlight_node_id(highlight))
-    quote = highlight |> highlight_text() |> sanitize_text(180)
+    quote = highlight |> highlight_text() |> sanitize_text(nil)
 
-    truncate(
-      "Highlighted quote from #{title} in \"#{campaign.title}\" on RationalGrid: “#{quote}”",
-      240
-    )
+    "Highlighted quote from #{title} in \"#{campaign.title}\" on RationalGrid: “#{quote}”"
   end
 
   def node_title(%Campaign{} = campaign, node_id) do
@@ -1310,7 +1369,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       if to_string(get(node, "id")) == to_string(node_id) do
         node
         |> get("title")
-        |> sanitize_text(72)
+        |> sanitize_text(nil)
         |> case do
           "" -> "Node #{node_id}"
           "Untitled" -> "Node #{node_id}"
@@ -1496,55 +1555,13 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end
   end
 
-  defp quote_layout(text) do
-    text
-    |> quote_layout_candidates()
-    |> Enum.max_by(&quote_layout_score/1, fn -> nil end)
-    |> case do
-      nil -> fallback_quote_layout(text)
-      layout -> layout
-    end
-  end
-
-  defp quote_layout_candidates(text) do
-    candidate_font_sizes()
-    |> Enum.map(fn font_size ->
-      lines = wrap_lines_by_width(text, max_line_units(font_size), @max_quote_lines)
-      line_gap = quote_line_gap(font_size)
-      block_height = quote_block_height(lines, line_gap)
-
-      if block_height <= @quote_area_height do
-        %{
-          font_size: font_size,
-          line_gap: line_gap,
-          start_y: quote_start_y(block_height, font_size),
-          lines: lines
-        }
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
-  end
-
-  defp quote_layout_score(%{font_size: font_size, lines: lines}) do
-    max_units = max_line_units(font_size)
-    line_units = Enum.map(lines, &text_units/1)
-    longest_line = Enum.max(line_units, fn -> 1 end)
-    shortest_line = Enum.min(line_units, fn -> 1 end)
-    average_line = Enum.sum(line_units) / max(length(line_units), 1)
-    line_count_penalty = max(length(lines) - 3, 0) * 0.18
-
-    fill_score = average_line / max_units
-    balance_score = shortest_line / max(longest_line, 1)
-    font_score = font_size / 76
-
-    fill_score * 0.45 + balance_score * 0.35 + font_score * 0.2 - line_count_penalty
-  end
+  defp quote_layout(text), do: full_quote_layout(text)
 
   defp full_quote_layout(text) do
     text = sanitize_text(text, nil)
 
     Enum.find_value(
-      [72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 22, 20, 18, 16, 14, 12, 10],
+      [72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6],
       fn font_size ->
         lines = wrap_all_lines_by_width(text, max_line_units(font_size))
         line_gap = quote_line_gap(font_size)
@@ -1563,7 +1580,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   defp fallback_full_quote_layout(text) do
-    font_size = 10
+    font_size = 6
     line_gap = quote_line_gap(font_size)
     lines = wrap_all_lines_by_width(text, max_line_units(font_size))
     block_height = quote_block_height(lines, line_gap)
@@ -1576,23 +1593,9 @@ defmodule GridMediaManager.Promotion.ShareCard do
     }
   end
 
-  defp fallback_quote_layout(text) do
-    font_size = 36
-    line_gap = quote_line_gap(font_size)
-    lines = wrap_lines_by_width(text, max_line_units(font_size), @max_quote_lines)
-    block_height = quote_block_height(lines, line_gap)
-
-    %{
-      font_size: font_size,
-      line_gap: line_gap,
-      start_y: quote_start_y(block_height, font_size),
-      lines: lines
-    }
-  end
-
   defp node_card_layout(title, excerpt) do
-    title_text = sanitize_text(title, @max_svg_title_chars)
-    body_text = sanitize_text(excerpt, 920)
+    title_text = sanitize_text(title, nil)
+    body_text = sanitize_text(excerpt, nil)
     body_present? = body_text != "" and body_text != title_text
 
     node_card_layout_candidates(title_text, body_text, body_present?)
@@ -1604,8 +1607,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   defp node_card_layout_candidates(title_text, body_text, body_present?) do
-    for title_font <- [62, 58, 54, 50, 46, 42, 38, 34],
-        body_font <- [26, 24, 22, 20, 18],
+    for title_font <- [62, 58, 54, 50, 46, 42, 38, 34, 30, 26, 22, 18, 14, 12],
+        body_font <- [26, 24, 22, 20, 18, 16, 14, 12, 10, 8],
         reduce: [] do
       acc ->
         case build_node_card_layout(title_text, body_text, body_present?, title_font, body_font) do
@@ -1617,28 +1620,36 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp build_node_card_layout(title_text, body_text, body_present?, title_font, body_font) do
     title_line_gap = round(title_font * 1.12)
-    title_lines = wrap_lines_by_width(title_text, 910 / title_font, 3)
+    title_lines = wrap_all_lines_by_width(title_text, 910 / title_font)
     title_start_y = 200
     title_last_y = title_start_y + (length(title_lines) - 1) * title_line_gap
     body_start_y = title_last_y + round(title_font * 0.82) + 28
     body_line_gap = round(body_font * 1.42)
-    max_body_lines = max_body_lines(body_start_y, body_line_gap, body_present?)
+
+    body_lines =
+      if body_present? do
+        max_body_lines = max(div(494 - body_start_y, body_line_gap) + 1, 0)
+        max_units = 910 / body_font
+        all_body_lines = wrap_all_lines_by_width(body_text, max_units)
+        visible_body_lines = Enum.take(all_body_lines, max_body_lines)
+
+        maybe_mark_markdown_truncated(
+          visible_body_lines,
+          max_units,
+          length(visible_body_lines) < length(all_body_lines)
+        )
+      else
+        []
+      end
 
     cond do
       title_last_y > 360 ->
         nil
 
-      body_present? and max_body_lines < 3 ->
+      body_present? and length(body_lines) < 2 ->
         nil
 
       true ->
-        body_lines =
-          if body_present? do
-            wrap_lines_by_width(body_text, 910 / body_font, max_body_lines)
-          else
-            []
-          end
-
         %{
           title_font_size: title_font,
           title_line_gap: title_line_gap,
@@ -1653,13 +1664,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end
   end
 
-  defp max_body_lines(_body_start_y, _body_line_gap, false), do: 0
-
-  defp max_body_lines(body_start_y, body_line_gap, true) do
-    max(div(494 - body_start_y, body_line_gap) + 1, 0)
-    |> min(8)
-  end
-
   defp node_card_layout_score(layout) do
     title_score = layout.title_font_size / 62
     body_score = if layout.body_present?, do: layout.body_font_size / 26, else: 1
@@ -1672,38 +1676,55 @@ defmodule GridMediaManager.Promotion.ShareCard do
   defp fallback_node_card_layout(title_text, body_text, body_present?) do
     build_node_card_layout(title_text, body_text, body_present?, 34, 18) ||
       %{
-        title_font_size: 34,
-        title_line_gap: 38,
+        title_font_size: 12,
+        title_line_gap: 14,
         title_start_y: 200,
-        title_lines: wrap_lines_by_width(title_text, 910 / 34, 3),
-        body_font_size: 18,
-        body_line_gap: 26,
+        title_lines: wrap_all_lines_by_width(title_text, 910 / 12),
+        body_font_size: 8,
+        body_line_gap: 11,
         body_start_y: 336,
-        body_lines: if(body_present?, do: wrap_lines_by_width(body_text, 910 / 18, 6), else: []),
+        body_lines: if(body_present?, do: wrap_all_lines_by_width(body_text, 910 / 8), else: []),
         body_present?: body_present?
       }
   end
 
   defp grid_title_layout(text) do
-    title_text = sanitize_text(text, @max_svg_title_chars)
+    title_text = sanitize_text(text, nil)
 
-    Enum.find_value([76, 72, 68, 64, 60, 56, 52, 48, 44, 40], fn font_size ->
-      lines = wrap_lines_by_width(title_text, @quote_area_width / font_size, 3)
-      line_gap = round(font_size * 1.12)
-      block_height = quote_block_height(lines, line_gap)
+    layout =
+      bounded_text_layout(
+        title_text,
+        @quote_area_width,
+        @quote_area_height,
+        [76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12]
+      )
 
-      if block_height <= @quote_area_height do
-        %{
-          font_size: font_size,
-          line_gap: line_gap,
-          start_y: quote_start_y(block_height, font_size),
-          lines: lines
-        }
-      end
-    end) || fallback_quote_layout(title_text)
+    block_height = quote_block_height(layout.lines, layout.line_gap)
+    Map.put(layout, :start_y, quote_start_y(block_height, layout.font_size))
   end
 
-  defp candidate_font_sizes, do: [76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36]
+  defp bounded_text_layout(text, width, max_height, font_sizes) do
+    Enum.find_value(font_sizes, fn font_size ->
+      line_gap = round(font_size * 1.12)
+      lines = wrap_all_lines_by_width(text, width / font_size)
+
+      if quote_block_height(lines, line_gap) <= max_height do
+        %{font_size: font_size, line_gap: line_gap, lines: lines}
+      end
+    end) ||
+      then(List.last(font_sizes), fn font_size ->
+        %{
+          font_size: font_size,
+          line_gap: round(font_size * 1.12),
+          lines: wrap_all_lines_by_width(text, width / font_size)
+        }
+      end)
+  end
+
+  defp single_line_font_size(text, max_width, preferred_size, minimum_size) do
+    fitted_size = floor(max_width / max(text_units(text), 1))
+    fitted_size |> min(preferred_size) |> max(minimum_size)
+  end
 
   defp quote_line_gap(font_size), do: round(font_size * 1.18)
 
@@ -1722,12 +1743,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp max_line_units(font_size), do: @quote_area_width / font_size
 
-  defp wrap_lines_by_width(text, max_units, max_lines) do
-    text
-    |> wrap_all_lines_by_width(max_units)
-    |> limit_lines_by_width(max_units, max_lines)
-  end
-
   defp wrap_all_lines_by_width(text, max_units) do
     text
     |> String.split(" ", trim: true)
@@ -1744,64 +1759,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
       List.replace_at(lines, length(lines) - 1, candidate)
     else
       lines ++ [word]
-    end
-  end
-
-  defp limit_lines_by_width(lines, max_units, max_lines) when length(lines) <= max_lines do
-    lines
-    |> Enum.map(&truncate_line_to_units(&1, max_units))
-    |> balance_line_endings(max_units)
-  end
-
-  defp limit_lines_by_width(lines, max_units, max_lines) do
-    {visible_lines, overflow_lines} = Enum.split(lines, max_lines)
-    overflow_text = Enum.join(overflow_lines, " ")
-    merged_last_line = List.last(visible_lines) <> " " <> overflow_text
-
-    visible_lines
-    |> Enum.map(&truncate_line_to_units(&1, max_units))
-    |> List.replace_at(max_lines - 1, truncate_line_to_units(merged_last_line, max_units))
-    |> balance_line_endings(max_units)
-  end
-
-  defp balance_line_endings(lines, _max_units) when length(lines) < 2, do: lines
-
-  defp balance_line_endings(lines, max_units) do
-    last_line = List.last(lines)
-
-    if String.ends_with?(last_line, "…") or text_units(last_line) >= max_units * 0.42 do
-      lines
-    else
-      previous_index = length(lines) - 2
-      previous_line = Enum.at(lines, previous_index)
-      previous_words = String.split(previous_line, " ", trim: true)
-
-      maybe_move_word_to_last_line(lines, previous_index, previous_words, last_line, max_units)
-    end
-  end
-
-  defp maybe_move_word_to_last_line(
-         lines,
-         _previous_index,
-         previous_words,
-         _last_line,
-         _max_units
-       )
-       when length(previous_words) < 2 do
-    lines
-  end
-
-  defp maybe_move_word_to_last_line(lines, previous_index, previous_words, last_line, max_units) do
-    word = List.last(previous_words)
-    new_previous = previous_words |> Enum.drop(-1) |> Enum.join(" ")
-    new_last = word <> " " <> last_line
-
-    if text_units(new_previous) >= max_units * 0.32 and text_units(new_last) <= max_units do
-      lines
-      |> List.replace_at(previous_index, new_previous)
-      |> List.replace_at(length(lines) - 1, new_last)
-    else
-      lines
     end
   end
 
@@ -2149,6 +2106,31 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> String.replace(~r/[^a-z0-9]+/u, " ")
     |> String.trim()
   end
+
+  defp pexels_background_markup(%Campaign{} = campaign, width, height) do
+    background = get_in(campaign.raw_payload || %{}, ["share_studio", "pexels_background"])
+    url = pexels_background_url(background, width, height)
+
+    with %URI{scheme: "https", host: "images.pexels.com"} <- URI.parse(url || ""),
+         {:ok, %{status: status, body: body}} when status in 200..299 and is_binary(body) <-
+           Req.get(url, receive_timeout: 10_000, retry: :transient) do
+      encoded = Base.encode64(body)
+
+      """
+      <image x="0" y="0" width="#{width}" height="#{height}" href="data:image/jpeg;base64,#{encoded}" preserveAspectRatio="xMidYMid slice" />
+      <rect width="#{width}" height="#{height}" fill="#020617" fill-opacity="0.58" />
+      """
+    else
+      _error -> ""
+    end
+  end
+
+  defp pexels_background_url(background, width, height) when is_map(background) do
+    preferred_key = if height > width, do: "portrait_url", else: "landscape_url"
+    Map.get(background, preferred_key) || Map.get(background, "original_url")
+  end
+
+  defp pexels_background_url(_background, _width, _height), do: nil
 
   defp rasterize_svg(svg) do
     svg

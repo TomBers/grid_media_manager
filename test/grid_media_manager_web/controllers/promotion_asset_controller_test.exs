@@ -86,7 +86,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     svg = ShareCard.node_linkedin_image_svg(campaign, node, "minimal_light")
     assert svg =~ "width=\"1200\""
     assert svg =~ "height=\"1200\""
-    assert svg =~ "LINKEDIN · answer"
+    refute svg =~ "LINKEDIN · answer"
     assert svg =~ "A dystopian lesson about comfort."
   end
 
@@ -115,7 +115,8 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert svg =~ "width=\"1080\""
     assert svg =~ "height=\"1920\""
     assert svg =~ "font-size=\"90\""
-    assert svg =~ "SHORT · 1/"
+    assert svg =~ ">THESIS</text>"
+    refute svg =~ "SHORT · 1/"
   end
 
   test "renders carousel slide layouts internally", %{} do
@@ -207,7 +208,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     assert question_svg =~ "width=\"1200\""
     assert question_svg =~ "height=\"1200\""
-    assert question_svg =~ "LINKEDIN · FOLLOW UP QUESTION"
+    refute question_svg =~ "LINKEDIN · FOLLOW UP QUESTION"
 
     highlight_conn =
       get(
@@ -223,7 +224,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     assert highlight_svg =~ "width=\"1080\""
     assert highlight_svg =~ "height=\"1350\""
-    assert highlight_svg =~ "INSTAGRAM · HIGHLIGHT"
+    refute highlight_svg =~ "INSTAGRAM · HIGHLIGHT"
   end
 
   test "serves an uploadable question Short", %{conn: conn} do

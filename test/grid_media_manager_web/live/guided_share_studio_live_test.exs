@@ -67,6 +67,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#guided-format-linkedin", "LinkedIn explainer")
     assert has_element?(view, "#guided-format-portrait", "Instagram portrait")
     assert has_element?(view, "#guided-format-carousel", "Instagram carousel + Shorts")
+    assert has_element?(view, "#pexels-background-picker")
 
     view
     |> element("#guided-style-warm_paper")
@@ -90,6 +91,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#guided-platform-youtube")
     assert has_element?(view, "#guided-output-assets article")
     assert has_element?(view, "#guided-review-drafts article")
+    assert has_element?(view, "#guided-review-drafts", "Configure Buffer")
 
     assets = Campaigns.list_media_assets(campaign)
     assert length(assets) == 3

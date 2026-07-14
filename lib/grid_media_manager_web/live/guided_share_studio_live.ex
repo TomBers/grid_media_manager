@@ -4,7 +4,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Campaigns.PostDraft
+  alias GridMediaManager.Pexels.Client, as: Pexels
   alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.Social.Buffer
   alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Social.Templates
   alias GridMediaManager.Studio.Workflow
@@ -85,14 +87,21 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:output_asset_count, 0)
       |> assign(:review_draft_count, 0)
       |> assign(:generation_error, nil)
+      |> assign(:pexels_configured?, Pexels.configured?())
+      |> assign(:pexels_search_form, to_form(%{"query" => campaign.title}, as: :pexels))
+      |> assign(:pexels_search_error, nil)
+      |> assign(:pexels_by_id, %{})
+      |> assign(:selected_pexels_background, Campaigns.pexels_background(campaign))
       |> stream_configure(:candidates, dom_id: &"candidate-#{&1.dom_id}")
       |> stream_configure(:selected_aspects, dom_id: &"selected-#{&1.dom_id}")
       |> stream_configure(:output_assets, dom_id: &"guided-output-#{&1.id}")
       |> stream_configure(:review_drafts, dom_id: &"guided-draft-#{&1.id}")
+      |> stream_configure(:pexels_photos, dom_id: &"pexels-photo-#{&1.id}")
       |> stream(:candidates, candidate_items(candidates, selected_keys))
       |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_keys))
       |> stream(:output_assets, [])
       |> stream(:review_drafts, [])
+      |> stream(:pexels_photos, [])
 
     {:ok, socket}
   end
@@ -146,6 +155,57 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
      |> assign(:selected_platform, platform_for_format(format))}
   end
 
+  def handle_event("search_pexels", %{"pexels" => %{"query" => query}}, socket) do
+    case Pexels.search(query,
+           orientation: pexels_orientation(socket.assigns.selected_format),
+           per_page: 8
+         ) do
+      {:ok, photos} ->
+        {:noreply,
+         socket
+         |> assign(:pexels_search_form, to_form(%{"query" => query}, as: :pexels))
+         |> assign(:pexels_search_error, nil)
+         |> assign(:pexels_by_id, Map.new(photos, &{to_string(&1.id), &1}))
+         |> stream(:pexels_photos, photos, reset: true)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :pexels_search_error, pexels_error_message(reason))}
+    end
+  end
+
+  def handle_event("select_pexels_background", %{"id" => id}, socket) do
+    case Map.get(socket.assigns.pexels_by_id, id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "That Pexels photo is no longer available.")}
+
+      photo ->
+        case Campaigns.set_pexels_background(socket.assigns.campaign, photo) do
+          {:ok, campaign} ->
+            {:noreply,
+             socket
+             |> assign(:campaign, campaign)
+             |> assign(:selected_pexels_background, Campaigns.pexels_background(campaign))
+             |> put_flash(:info, "Pexels background selected for this package.")}
+
+          {:error, _changeset} ->
+            {:noreply, put_flash(socket, :error, "Could not save that background.")}
+        end
+    end
+  end
+
+  def handle_event("clear_pexels_background", _params, socket) do
+    case Campaigns.clear_pexels_background(socket.assigns.campaign) do
+      {:ok, campaign} ->
+        {:noreply,
+         socket
+         |> assign(:campaign, campaign)
+         |> assign(:selected_pexels_background, nil)}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not clear that background.")}
+    end
+  end
+
   def handle_event("generate_package", _params, socket) do
     selected_candidates =
       Workflow.selected_candidates(socket.assigns.all_candidates, socket.assigns.selected_keys)
@@ -189,6 +249,31 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
         {:error, _changeset} ->
           {:noreply, put_flash(socket, :error, "Could not save this draft.")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "That draft is not part of this package.")}
+    end
+  end
+
+  def handle_event(
+        "schedule_draft",
+        %{"id" => id, "schedule" => %{"scheduled_for" => scheduled_for}},
+        socket
+      ) do
+    draft = Campaigns.get_post_draft!(id)
+
+    if editable_draft?(socket, draft) do
+      case Campaigns.schedule_post_draft(id, scheduled_for) do
+        {:ok, scheduled_draft} ->
+          scheduled_draft = Campaigns.get_post_draft_with_asset!(scheduled_draft.id)
+
+          {:noreply,
+           socket
+           |> stream_insert(:review_drafts, draft_item(scheduled_draft))
+           |> put_flash(:info, "Post scheduled through Buffer.")}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, reason)}
       end
     else
       {:noreply, put_flash(socket, :error, "That draft is not part of this package.")}
@@ -467,6 +552,160 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     </span>
                   </button>
                 </div>
+              </div>
+
+              <div
+                id="pexels-background-picker"
+                class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 md:p-7"
+              >
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-300">
+                      Optional photo backdrop
+                    </p>
+                    <h2 class="mt-2 text-xl font-semibold text-base-content">
+                      Add a view from Pexels.
+                    </h2>
+                    <p class="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
+                      Search for a calm, relevant scene. The selected image is embedded behind the active card theme with a readability overlay.
+                    </p>
+                  </div>
+                  <button
+                    :if={@selected_pexels_background}
+                    id="clear-pexels-background"
+                    type="button"
+                    phx-click="clear_pexels_background"
+                    class="inline-flex items-center justify-center rounded-xl border border-base-content/15 px-3 py-2 text-xs font-bold text-base-content/60 transition hover:bg-base-200"
+                  >
+                    <.icon name="hero-x-mark" class="mr-1 size-4" /> Remove backdrop
+                  </button>
+                </div>
+
+                <%= if @pexels_configured? do %>
+                  <.form
+                    for={@pexels_search_form}
+                    id="pexels-search-form"
+                    phx-submit="search_pexels"
+                    class={["mt-5 flex flex-col gap-2 sm:flex-row sm:items-end"]}
+                  >
+                    <div class="min-w-0 flex-1">
+                      <.input
+                        field={@pexels_search_form[:query]}
+                        type="search"
+                        label="Search Pexels"
+                        placeholder="Mountains, reading room, ocean horizon…"
+                        required
+                      />
+                    </div>
+                    <button
+                      id="search-pexels"
+                      type="submit"
+                      class="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-600 px-5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-emerald-500"
+                    >
+                      <.icon name="hero-magnifying-glass" class="mr-1.5 size-4" /> Find photos
+                    </button>
+                  </.form>
+
+                  <p :if={@pexels_search_error} class="mt-3 text-sm text-red-600 dark:text-red-300">
+                    {@pexels_search_error}
+                  </p>
+
+                  <div
+                    id="pexels-search-results"
+                    phx-update="stream"
+                    class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+                  >
+                    <article
+                      :for={{id, photo} <- @streams.pexels_photos}
+                      id={id}
+                      class="overflow-hidden rounded-2xl border border-base-content/10 bg-base-100 shadow-sm"
+                    >
+                      <button
+                        id={"select-pexels-photo-#{photo.id}"}
+                        type="button"
+                        phx-click="select_pexels_background"
+                        phx-value-id={photo.id}
+                        class="group block w-full text-left"
+                      >
+                        <img
+                          src={photo.preview_url}
+                          alt={photo.alt || "Pexels background option"}
+                          loading="lazy"
+                          class="aspect-[4/3] w-full bg-base-200 object-cover transition duration-300 group-hover:scale-[1.03]"
+                        />
+                        <span class="block px-3 pt-3 text-xs font-bold text-base-content">
+                          {photo.alt || "Untitled photo"}
+                        </span>
+                      </button>
+                      <p class="px-3 pb-3 pt-1 text-[0.68rem] text-base-content/50">
+                        Photo by
+                        <a
+                          href={photo.photographer_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="font-semibold underline underline-offset-2"
+                        >
+                          {photo.photographer || "Pexels contributor"}
+                        </a>
+                        on
+                        <a
+                          href={photo.pexels_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="font-semibold underline underline-offset-2"
+                        >
+                          Pexels
+                        </a>
+                      </p>
+                    </article>
+                  </div>
+                <% else %>
+                  <p class="mt-5 rounded-2xl border border-dashed border-base-content/20 bg-base-200/40 p-4 text-sm text-base-content/55">
+                    Set <code class="font-mono font-semibold">PEXELS_API_KEY</code>
+                    to enable photo search.
+                  </p>
+                <% end %>
+
+                <div
+                  :if={@selected_pexels_background}
+                  id="selected-pexels-background"
+                  class="mt-5 flex flex-col gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 sm:flex-row sm:items-center"
+                >
+                  <img
+                    src={
+                      @selected_pexels_background["landscape_url"] ||
+                        @selected_pexels_background["original_url"]
+                    }
+                    alt={@selected_pexels_background["alt"] || "Selected Pexels background"}
+                    class="h-20 w-full rounded-xl object-cover sm:w-32"
+                  />
+                  <p class="text-xs leading-5 text-base-content/65">
+                    Selected photo by
+                    <a
+                      href={@selected_pexels_background["photographer_url"]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="font-bold underline underline-offset-2"
+                    >
+                      {@selected_pexels_background["photographer"] || "Pexels contributor"}
+                    </a>
+                    on <a
+                      href={@selected_pexels_background["pexels_url"]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="font-bold underline underline-offset-2"
+                    >Pexels</a>.
+                  </p>
+                </div>
+
+                <p class="mt-4 text-xs text-base-content/45">
+                  Photos provided by <a
+                    href="https://www.pexels.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="font-semibold underline underline-offset-2"
+                  >Pexels</a>.
+                </p>
               </div>
 
               <div class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 md:p-7">
@@ -966,6 +1205,55 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         />
       </.form>
 
+      <.form
+        :if={@item.buffer_channel? and @item.draft.status != "scheduled"}
+        for={@item.schedule_form}
+        id={"guided-schedule-form-#{@item.id}"}
+        phx-submit="schedule_draft"
+        phx-value-id={@item.id}
+        class={[
+          "mt-3 flex flex-col gap-2 rounded-2xl border border-base-content/10 bg-base-200/40 p-3 sm:flex-row sm:items-end"
+        ]}
+      >
+        <div class="min-w-0 flex-1">
+          <.input
+            id={"guided-scheduled-for-#{@item.id}"}
+            field={@item.schedule_form[:scheduled_for]}
+            type="datetime-local"
+            label="Schedule in UTC"
+            required
+          />
+        </div>
+        <button
+          id={"guided-schedule-draft-#{@item.id}"}
+          type="submit"
+          disabled={@item.character_over_limit}
+          class={[
+            "inline-flex h-11 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
+          ]}
+        >
+          <.icon name="hero-calendar-days" class="mr-1.5 size-4" /> Schedule
+        </button>
+      </.form>
+      <p
+        :if={not @item.buffer_channel?}
+        class="mt-3 rounded-2xl border border-dashed border-base-content/15 px-3 py-2 text-xs text-base-content/50"
+      >
+        Configure Buffer and a {Platforms.label(@item.draft.platform)} channel to schedule this post.
+      </p>
+      <p
+        :if={@item.draft.status == "scheduled" and @item.draft.scheduled_for}
+        class="mt-3 rounded-2xl bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-700 dark:text-sky-200"
+      >
+        Scheduled through Buffer for {Calendar.strftime(
+          @item.draft.scheduled_for,
+          "%Y-%m-%d %H:%M UTC"
+        )}.
+      </p>
+      <p :if={@item.draft.error_message} class="mt-2 text-xs text-red-600 dark:text-red-300">
+        {@item.draft.error_message}
+      </p>
+
       <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p class="text-xs text-base-content/45">
           Status: <span class="font-bold uppercase tracking-wide">{@item.draft.status}</span>
@@ -1105,13 +1393,16 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp draft_item(%PostDraft{} = draft) do
-    character_count = draft.body |> to_string() |> String.length()
+    character_count = Platforms.character_count(draft.body, draft.platform)
     character_limit = Platforms.max_chars(draft.platform)
 
     %{
       id: draft.id,
       draft: draft,
       form: to_form(%{"body" => draft.body}, as: :post_draft),
+      schedule_form:
+        to_form(%{"scheduled_for" => schedule_input_value(draft.scheduled_for)}, as: :schedule),
+      buffer_channel?: Buffer.configured?() and is_binary(Buffer.channel_id(draft.platform)),
       asset_title: draft.media_asset.title,
       character_count: character_count,
       character_limit: character_limit,
@@ -1119,9 +1410,33 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     }
   end
 
+  defp schedule_input_value(nil), do: ""
+
+  defp schedule_input_value(%DateTime{} = datetime) do
+    datetime
+    |> DateTime.to_naive()
+    |> NaiveDateTime.to_iso8601()
+    |> String.slice(0, 16)
+  end
+
   defp candidate_items(candidates, selected_keys) do
     Enum.map(candidates, &Map.put(&1, :selected?, MapSet.member?(selected_keys, &1.key)))
   end
+
+  defp pexels_orientation("linkedin"), do: "square"
+  defp pexels_orientation(format) when format in ["portrait", "carousel"], do: "portrait"
+  defp pexels_orientation(_format), do: "landscape"
+
+  defp pexels_error_message(:not_configured), do: "Set PEXELS_API_KEY to search for photos."
+  defp pexels_error_message(:invalid_query), do: "Enter a search term."
+
+  defp pexels_error_message({:api_error, _status, message}),
+    do: "Pexels could not complete the search: #{message}"
+
+  defp pexels_error_message({:http_error, status}),
+    do: "Pexels returned HTTP #{status}. Try again shortly."
+
+  defp pexels_error_message(_reason), do: "Pexels search is unavailable right now."
 
   defp platform_for_format("linkedin"), do: "linkedin"
   defp platform_for_format("portrait"), do: "instagram"

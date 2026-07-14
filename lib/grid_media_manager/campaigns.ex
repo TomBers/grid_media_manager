@@ -13,6 +13,8 @@ defmodule GridMediaManager.Campaigns do
   alias GridMediaManager.RationalGrid.Client
   alias GridMediaManager.RationalGrid.MediaPayload
   alias GridMediaManager.Repo
+  alias GridMediaManager.Social.Buffer
+  alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Social.Templates
 
   def list_campaigns do
@@ -76,6 +78,50 @@ defmodule GridMediaManager.Campaigns do
     |> Repo.update()
   end
 
+  def set_pexels_background(%Campaign{} = campaign, photo) when is_map(photo) do
+    background =
+      photo
+      |> Map.take([
+        :id,
+        :alt,
+        :photographer,
+        :photographer_url,
+        :pexels_url,
+        :avg_color,
+        :landscape_url,
+        :portrait_url,
+        :original_url
+      ])
+      |> Map.new(fn {key, value} -> {Atom.to_string(key), value} end)
+
+    raw_payload = campaign.raw_payload || %{}
+
+    share_studio =
+      raw_payload |> Map.get("share_studio", %{}) |> Map.put("pexels_background", background)
+
+    raw_payload = Map.put(raw_payload, "share_studio", share_studio)
+
+    campaign
+    |> Campaign.changeset(%{raw_payload: raw_payload})
+    |> Repo.update()
+  end
+
+  def clear_pexels_background(%Campaign{} = campaign) do
+    raw_payload =
+      update_in(campaign.raw_payload || %{}, ["share_studio"], fn
+        studio when is_map(studio) -> Map.delete(studio, "pexels_background")
+        _studio -> %{}
+      end)
+
+    campaign
+    |> Campaign.changeset(%{raw_payload: raw_payload})
+    |> Repo.update()
+  end
+
+  def pexels_background(%Campaign{} = campaign) do
+    get_in(campaign.raw_payload || %{}, ["share_studio", "pexels_background"])
+  end
+
   def mark_post_draft_copied(id) do
     id = parse_integer(id)
     post_draft = get_post_draft!(id)
@@ -88,6 +134,42 @@ defmodule GridMediaManager.Campaigns do
     id
     |> get_post_draft!()
     |> update_post_draft(%{status: "approved"})
+  end
+
+  def schedule_post_draft(id, scheduled_for) do
+    draft = get_post_draft_with_asset!(id)
+
+    with true <- Buffer.configured?() || {:error, "Buffer is not configured."},
+         channel_id when is_binary(channel_id) <- Buffer.channel_id(draft.platform),
+         true <-
+           Platforms.within_limit?(draft.body, draft.platform) ||
+             {:error, "The draft is over the #{Platforms.label(draft.platform)} character limit."},
+         {:ok, scheduled_for} <- parse_scheduled_for(scheduled_for),
+         :lt <- DateTime.compare(DateTime.utc_now(), scheduled_for) do
+      scheduled_draft = %{draft | scheduled_for: scheduled_for}
+
+      case Buffer.schedule(scheduled_draft,
+             channel_id: channel_id,
+             media_url: buffer_media_url(draft.media_asset),
+             mime_type: buffer_media_mime_type(draft.media_asset)
+           ) do
+        {:ok, post} ->
+          update_post_draft(draft, %{
+            status: "scheduled",
+            scheduled_for: scheduled_for,
+            external_post_id: post.id,
+            error_message: nil
+          })
+
+        {:error, reason} ->
+          mark_buffer_failure(draft, scheduled_for, reason)
+      end
+    else
+      nil -> {:error, "No Buffer channel is configured for #{Platforms.label(draft.platform)}."}
+      :eq -> {:error, "Choose a future schedule time."}
+      :gt -> {:error, "Choose a future schedule time."}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   def generate_grid_asset(%Campaign{} = campaign, style \\ ShareCard.default_style()) do
@@ -368,6 +450,54 @@ defmodule GridMediaManager.Campaigns do
     |> where_media_asset_id(attrs.media_asset_id)
     |> Repo.one()
   end
+
+  defp parse_scheduled_for(%DateTime{} = value),
+    do: {:ok, DateTime.truncate(value, :second)}
+
+  defp parse_scheduled_for(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, datetime, _offset} ->
+        {:ok, DateTime.truncate(datetime, :second)}
+
+      {:error, _reason} ->
+        with {:ok, naive} <- NaiveDateTime.from_iso8601(value),
+             {:ok, datetime} <- DateTime.from_naive(naive, "Etc/UTC") do
+          {:ok, DateTime.truncate(datetime, :second)}
+        else
+          _error -> {:error, "Enter a valid UTC schedule time."}
+        end
+    end
+  end
+
+  defp parse_scheduled_for(_value), do: {:error, "Enter a valid UTC schedule time."}
+
+  defp mark_buffer_failure(draft, scheduled_for, reason) do
+    case parse_scheduled_for(scheduled_for) do
+      {:ok, datetime} ->
+        update_post_draft(draft, %{
+          status: "failed",
+          scheduled_for: datetime,
+          error_message: to_string(reason)
+        })
+
+      {:error, _reason} ->
+        :ok
+    end
+
+    {:error, to_string(reason)}
+  end
+
+  defp buffer_media_url(%MediaAsset{url: url}) when is_binary(url) do
+    case URI.parse(url) do
+      %URI{scheme: scheme} when scheme in ["http", "https"] -> url
+      _uri -> URI.merge(GridMediaManagerWeb.Endpoint.url() <> "/", url) |> URI.to_string()
+    end
+  end
+
+  defp buffer_media_url(_asset), do: nil
+
+  defp buffer_media_mime_type(%MediaAsset{mime_type: mime_type}), do: mime_type
+  defp buffer_media_mime_type(_asset), do: nil
 
   defp filter_platform(query, nil), do: query
   defp filter_platform(query, "all"), do: query

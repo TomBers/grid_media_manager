@@ -11,8 +11,10 @@ Internal RationalGrid Share Studio for turning RationalGrid media payloads into 
 - Renders carousel slides as PNGs and stitches them into vertical MP4s for Reels and Shorts
 - Generates simple template-based drafts for X, Bluesky, LinkedIn, Instagram, YouTube Shorts, and Substack
 - Copies draft text and asset URLs for manual publishing
+- Searches Pexels for optional attributed photo backdrops
+- Schedules approved or edited drafts through Buffer
 
-No authentication, LLM support, scheduling, or direct posting is included yet.
+No authentication or LLM support is included yet.
 
 ## RationalGrid endpoint configuration
 
@@ -138,7 +140,33 @@ Question, highlight, and key-node production includes channel-specific layouts:
 - `portrait` — 1080×1350 Instagram reading card
 - `carousel` — key nodes become 1080×1350 Instagram slides plus a multi-frame Short; questions and highlights become a portrait plus a six-second 1080×1920 MP4
 
-Generated style and layout variants are persisted as separate media assets. Generated assets can be deleted from the asset gallery, which also removes their associated generated drafts so variants can be regenerated during testing. Extracted question text is preserved in full; generated question drafts may exceed platform character limits and will show the normal character-count warning.
+Generated style and layout variants are persisted as separate media assets. Generated assets can be deleted from the asset gallery, which also removes their associated generated drafts so variants can be regenerated during testing. Titles and quote text are preserved in full and fitted to the available card area. Generated suggestions always stay within their platform limit; when complete source text cannot fit, the template falls back to a compact link invitation instead of truncating the title or quote. X counters exclude hashtags.
+
+## Pexels backgrounds
+
+Set `PEXELS_API_KEY` to enable photo search in the guided studio:
+
+```sh
+PEXELS_API_KEY=your-key mix phx.server
+```
+
+The selected photo is stored with its photographer and Pexels attribution and is embedded behind the active card theme. Only HTTPS images returned from `images.pexels.com` are fetched by the renderer. If the image is unavailable, cards fall back to the selected built-in theme.
+
+## Buffer scheduling
+
+Buffer scheduling uses Buffer's GraphQL API and requires a personal API key plus a channel ID for each platform you want to schedule:
+
+```sh
+BUFFER_API_KEY=your-key \
+BUFFER_CHANNEL_X=channel-id \
+BUFFER_CHANNEL_BLUESKY=channel-id \
+BUFFER_CHANNEL_LINKEDIN=channel-id \
+BUFFER_CHANNEL_INSTAGRAM=channel-id \
+BUFFER_CHANNEL_YOUTUBE=channel-id \
+mix phx.server
+```
+
+Schedules are entered in UTC. Buffer requires media to be available from a public HTTPS URL through the scheduled publication time, so local development asset URLs cannot be published successfully. The app stores Buffer's post ID and marks API failures on the draft for review.
 
 ## Short-form video rendering
 
