@@ -107,6 +107,71 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
            end)
   end
 
+  test "combines multiple selected moments into one carousel output", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-combined")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
+
+    view |> element("#select-aspect-highlight-123") |> render_click()
+    view |> element("#select-aspect-key-node-1") |> render_click()
+    view |> element("#continue-to-design") |> render_click()
+
+    assert has_element?(view, "#guided-format-combined_carousel:not([disabled])")
+
+    view |> element("#guided-format-combined_carousel") |> render_click()
+    view |> element("#continue-to-generate") |> render_click()
+    view |> element("#generate-story-package") |> render_click()
+
+    assert has_element?(view, "#stage-review")
+    assert has_element?(view, "#guided-output-assets article")
+    assert has_element?(view, "#guided-output-assets", "Combined carousel · 5 slides")
+
+    assets = Campaigns.list_media_assets(campaign)
+    carousel = Enum.find(assets, &(&1.kind == "curated_carousel"))
+    assert carousel
+    assert carousel.metadata["slide_count"] == 5
+
+    assert Enum.map(carousel.metadata["slides"], & &1["title"]) == [
+             campaign.title,
+             "If a drug like soma existed today...",
+             "Perfect comfort can become a cage.",
+             "What can a brave new world teach us?",
+             "Where do you stand?"
+           ]
+
+    assert has_element?(view, "#curated-carousel-slide-#{carousel.id}-1")
+    assert has_element?(view, "#curated-carousel-slide-#{carousel.id}-5")
+
+    if GridMediaManager.Promotion.CarouselVideo.available?() do
+      assert Enum.any?(assets, &(&1.kind == "curated_carousel_video"))
+      assert has_element?(view, "#guided-output-assets", "Story Short")
+    end
+  end
+
+  test "restores the generated post screen after a refresh", %{conn: conn} do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "guided-resume-review")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
+
+    view |> element("#continue-to-design") |> render_click()
+    view |> element("#continue-to-generate") |> render_click()
+    view |> element("#generate-story-package") |> render_click()
+
+    [asset] = Campaigns.list_media_assets(campaign)
+
+    resume_path =
+      ~p"/campaigns/#{campaign.id}/studio?#{[step: "review", assets: Integer.to_string(asset.id), platform: "linkedin", asset: "all"]}"
+
+    assert_patch(view, resume_path)
+
+    {:ok, resumed_view, _html} = live(conn, resume_path)
+
+    assert has_element?(resumed_view, "#stage-review")
+    assert has_element?(resumed_view, "#guided-output-#{asset.id}")
+    assert has_element?(resumed_view, "#guided-review-drafts article")
+  end
+
   test "edits and approves associated copy during review", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-review")
 

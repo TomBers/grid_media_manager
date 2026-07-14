@@ -22,6 +22,14 @@ defmodule GridMediaManagerWeb.Router do
     get "/campaigns/:id/nodes/:node_id/share-card.png", PromotionAssetController, :node_card
     get "/campaigns/:id/nodes/:node_id/carousel.png", PromotionAssetController, :node_carousel_png
 
+    get "/campaigns/:id/curated-carousels/:token/slides/:slide/image.png",
+        PromotionAssetController,
+        :curated_carousel_slide
+
+    get "/campaigns/:id/curated-carousels/:token/short.mp4",
+        PromotionAssetController,
+        :curated_carousel_video
+
     get "/campaigns/:id/nodes/:node_id/carousel.mp4",
         PromotionAssetController,
         :node_carousel_video

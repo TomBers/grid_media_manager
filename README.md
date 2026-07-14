@@ -139,6 +139,7 @@ Question, highlight, and key-node production includes channel-specific layouts:
 - `linkedin` — 1200×1200 square explainer with denser body copy
 - `portrait` — 1080×1350 Instagram reading card
 - `carousel` — key nodes become 1080×1350 Instagram slides plus a multi-frame Short; questions and highlights become a portrait plus a six-second 1080×1920 MP4
+- `combined_carousel` — two to six selected questions, highlights, key nodes, or overview cards become one curated carousel package with a cover and closing invitation, plus a companion 1080×1920 Short with theme audio
 
 Generated style and layout variants are persisted as separate media assets. Generated assets can be deleted from the asset gallery, which also removes their associated generated drafts so variants can be regenerated during testing. Titles and quote text are preserved in full and fitted to the available card area. Generated suggestions always stay within their platform limit; when complete source text cannot fit, the template falls back to a compact link invitation instead of truncating the title or quote. X counters exclude hashtags.
 

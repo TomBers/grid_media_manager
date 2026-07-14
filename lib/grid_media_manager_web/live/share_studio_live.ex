@@ -1204,6 +1204,9 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
     |> assign(:generated_question_ids, generated_question_ids(media_assets))
   end
 
+  defp asset_image_class(%MediaAsset{kind: "curated_carousel"}),
+    do: "aspect-[4/5] w-full rounded-2xl border border-base-content/10 bg-base-200 object-contain"
+
   defp asset_image_class(%MediaAsset{metadata: %{"format" => "portrait"}}),
     do: "aspect-[4/5] w-full rounded-2xl border border-base-content/10 bg-base-200 object-contain"
 

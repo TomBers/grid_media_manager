@@ -54,14 +54,32 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       description:
         "Key nodes become a carousel; questions and highlights become a portrait plus a six-second Short.",
       icon: "hero-rectangle-stack"
+    },
+    %{
+      id: "combined_carousel",
+      label: "Combined story carousel",
+      size: "One carousel + one 1080 × 1920 Short",
+      description:
+        "Turn all selected questions, highlights, and key nodes into one coherent swipeable story and companion video.",
+      icon: "hero-squares-plus"
     }
   ]
 
   @impl true
-  def mount(%{"id" => id}, _session, socket) do
+  def mount(%{"id" => id} = params, _session, socket) do
     campaign = Campaigns.get_campaign!(id)
     candidates = Workflow.candidates(campaign)
+    restored_assets = restored_output_assets(campaign, params)
+    restored_asset_ids = MapSet.new(restored_assets, & &1.id)
+    restored_step = if restored_assets == [], do: "curate", else: "review"
+    restored_platform = restore_platform(params)
+    restored_asset_filter = restore_asset_filter(params, restored_asset_ids)
     selected_keys = Workflow.default_selection(candidates)
+
+    selected_order =
+      candidates
+      |> Workflow.selected_candidates(selected_keys)
+      |> Enum.map(& &1.key)
 
     socket =
       socket
@@ -77,14 +95,15 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:candidate_by_key, Map.new(candidates, &{&1.key, &1}))
       |> assign(:candidate_filter, "all")
       |> assign(:selected_keys, selected_keys)
+      |> assign(:selected_order, selected_order)
       |> assign(:selected_count, MapSet.size(selected_keys))
-      |> assign(:step, "curate")
+      |> assign(:step, restored_step)
       |> assign(:selected_style, ShareCard.default_style())
       |> assign(:selected_format, "linkedin")
-      |> assign(:selected_platform, "linkedin")
-      |> assign(:selected_output_asset_id, "all")
-      |> assign(:output_asset_ids, MapSet.new())
-      |> assign(:output_asset_count, 0)
+      |> assign(:selected_platform, restored_platform)
+      |> assign(:selected_output_asset_id, restored_asset_filter)
+      |> assign(:output_asset_ids, restored_asset_ids)
+      |> assign(:output_asset_count, length(restored_assets))
       |> assign(:review_draft_count, 0)
       |> assign(:generation_error, nil)
       |> assign(:pexels_configured?, Pexels.configured?())
@@ -98,13 +117,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> stream_configure(:review_drafts, dom_id: &"guided-draft-#{&1.id}")
       |> stream_configure(:pexels_photos, dom_id: &"pexels-photo-#{&1.id}")
       |> stream(:candidates, candidate_items(candidates, selected_keys))
-      |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_keys))
-      |> stream(:output_assets, [])
+      |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_order))
+      |> stream(:output_assets, restored_assets)
       |> stream(:review_drafts, [])
       |> stream(:pexels_photos, [])
+      |> maybe_restore_review_drafts(restored_assets)
 
     {:ok, socket}
   end
+
+  @impl true
+  def handle_params(_params, _uri, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("filter_candidates", %{"filter" => filter}, socket) do
@@ -208,7 +231,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   def handle_event("generate_package", _params, socket) do
     selected_candidates =
-      Workflow.selected_candidates(socket.assigns.all_candidates, socket.assigns.selected_keys)
+      Workflow.selected_candidates(socket.assigns.all_candidates, socket.assigns.selected_order)
 
     result =
       Workflow.generate(socket.assigns.campaign, selected_candidates,
@@ -226,7 +249,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     {:noreply,
      socket
      |> assign(:selected_platform, platform)
-     |> refresh_review_drafts()}
+     |> refresh_review_drafts()
+     |> maybe_patch_review_url()}
   end
 
   def handle_event("select_output_asset", %{"id" => asset_id}, socket) do
@@ -235,7 +259,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     {:noreply,
      socket
      |> assign(:selected_output_asset_id, asset_id)
-     |> refresh_review_drafts()}
+     |> refresh_review_drafts()
+     |> maybe_patch_review_url()}
   end
 
   def handle_event("save_draft", %{"id" => id, "post_draft" => %{"body" => body}}, socket) do
@@ -723,7 +748,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   </span>
                 </div>
 
-                <div id="guided-format-picker" class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div id="guided-format-picker" class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                   <button
                     :for={format <- @formats}
                     id={"guided-format-#{format.id}"}
@@ -731,6 +756,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     phx-click="select_format"
                     phx-value-format={format.id}
                     aria-pressed={@selected_format == format.id}
+                    disabled={format.id == "combined_carousel" and @selected_count < 2}
                     class={format_card_class(@selected_format == format.id)}
                   >
                     <span class="flex items-center justify-between gap-3">
@@ -1118,6 +1144,30 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         loading="lazy"
         class={asset_image_class(@asset)}
       />
+      <div
+        :if={@asset.kind == "curated_carousel"}
+        id={"curated-carousel-slides-#{@asset.id}"}
+        class="mt-3 grid grid-cols-4 gap-2"
+      >
+        <a
+          :for={{url, index} <- curated_carousel_slide_urls(@asset)}
+          id={"curated-carousel-slide-#{@asset.id}-#{index}"}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="group relative overflow-hidden rounded-lg border border-base-content/10 bg-base-200"
+        >
+          <img
+            src={url}
+            alt={"Carousel slide #{index}"}
+            loading="lazy"
+            class="aspect-[4/5] w-full object-cover transition group-hover:scale-105"
+          />
+          <span class="absolute bottom-1 right-1 rounded-full bg-black/65 px-1.5 py-0.5 text-[0.6rem] font-bold text-white">
+            {index}
+          </span>
+        </a>
+      </div>
       <button
         id={"filter-output-asset-#{@asset.id}"}
         type="button"
@@ -1293,11 +1343,13 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp toggle_candidate(socket, candidate) do
     selected_keys = socket.assigns.selected_keys
+    selected_order = socket.assigns.selected_order
 
     cond do
       MapSet.member?(selected_keys, candidate.key) ->
         selected_keys = MapSet.delete(selected_keys, candidate.key)
-        {:noreply, update_selection(socket, selected_keys, candidate)}
+        selected_order = List.delete(selected_order, candidate.key)
+        {:noreply, update_selection(socket, selected_keys, selected_order, candidate)}
 
       MapSet.size(selected_keys) >= @max_selection ->
         {:noreply,
@@ -1305,21 +1357,23 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
       true ->
         selected_keys = MapSet.put(selected_keys, candidate.key)
-        {:noreply, update_selection(socket, selected_keys, candidate)}
+        selected_order = selected_order ++ [candidate.key]
+        {:noreply, update_selection(socket, selected_keys, selected_order, candidate)}
     end
   end
 
-  defp update_selection(socket, selected_keys, candidate) do
+  defp update_selection(socket, selected_keys, selected_order, candidate) do
     candidates = socket.assigns.all_candidates
 
     socket
     |> assign(:selected_keys, selected_keys)
+    |> assign(:selected_order, selected_order)
     |> assign(:selected_count, MapSet.size(selected_keys))
     |> stream_insert(
       :candidates,
       Map.put(candidate, :selected?, MapSet.member?(selected_keys, candidate.key))
     )
-    |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_keys),
+    |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_order),
       reset: true
     )
   end
@@ -1335,7 +1389,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:step, step)
       |> stream(
         :selected_aspects,
-        Workflow.selected_candidates(socket.assigns.all_candidates, socket.assigns.selected_keys),
+        Workflow.selected_candidates(
+          socket.assigns.all_candidates,
+          socket.assigns.selected_order
+        ),
         reset: true
       )
     else
@@ -1366,8 +1423,68 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         :info,
         "Created #{length(assets)} media #{if(length(assets) == 1, do: "asset", else: "assets")} and associated copy."
       )
+      |> maybe_patch_review_url()
 
     {:noreply, socket}
+  end
+
+  defp restored_output_assets(campaign, %{"step" => "review", "assets" => asset_ids})
+       when is_binary(asset_ids) do
+    assets_by_id = campaign |> Campaigns.list_media_assets() |> Map.new(&{&1.id, &1})
+
+    asset_ids
+    |> String.split(",", trim: true)
+    |> Enum.map(&parse_asset_id/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.map(&Map.get(assets_by_id, &1))
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp restored_output_assets(_campaign, _params), do: []
+
+  defp parse_asset_id(value) do
+    case Integer.parse(value) do
+      {id, ""} -> id
+      _result -> nil
+    end
+  end
+
+  defp restore_platform(%{"platform" => platform})
+       when platform in ~w(x bluesky linkedin instagram youtube substack),
+       do: platform
+
+  defp restore_platform(_params), do: "linkedin"
+
+  defp restore_asset_filter(%{"asset" => asset_id}, asset_ids),
+    do: valid_output_asset_filter(asset_ids, asset_id)
+
+  defp restore_asset_filter(_params, _asset_ids), do: "all"
+
+  defp maybe_restore_review_drafts(socket, []), do: socket
+  defp maybe_restore_review_drafts(socket, _assets), do: refresh_review_drafts(socket)
+
+  defp maybe_patch_review_url(socket) do
+    if socket.assigns.step == "review" and socket.assigns.output_asset_count > 0 do
+      asset_ids =
+        socket.assigns.output_asset_ids
+        |> Enum.sort()
+        |> Enum.map_join(",", &Integer.to_string/1)
+
+      query = [
+        step: "review",
+        assets: asset_ids,
+        platform: socket.assigns.selected_platform,
+        asset: socket.assigns.selected_output_asset_id
+      ]
+
+      push_patch(socket,
+        to: ~p"/campaigns/#{socket.assigns.campaign.id}/studio?#{query}",
+        replace: true
+      )
+    else
+      socket
+    end
   end
 
   defp refresh_review_drafts(socket) do
@@ -1424,7 +1541,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp pexels_orientation("linkedin"), do: "square"
-  defp pexels_orientation(format) when format in ["portrait", "carousel"], do: "portrait"
+
+  defp pexels_orientation(format)
+       when format in ["portrait", "carousel", "combined_carousel"],
+       do: "portrait"
+
   defp pexels_orientation(_format), do: "landscape"
 
   defp pexels_error_message(:not_configured),
@@ -1443,6 +1564,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp platform_for_format("linkedin"), do: "linkedin"
   defp platform_for_format("portrait"), do: "instagram"
   defp platform_for_format("carousel"), do: "instagram"
+  defp platform_for_format("combined_carousel"), do: "instagram"
   defp platform_for_format(_format), do: "x"
 
   defp valid_output_asset_filter(_output_asset_ids, "all"), do: "all"
@@ -1584,7 +1706,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp format_card_class(active?) do
     [
-      "rounded-3xl border p-4 text-left transition duration-200 hover:-translate-y-0.5",
+      "rounded-3xl border p-4 text-left transition duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0",
       if(active?,
         do: "border-sky-500/50 bg-sky-500/8 text-base-content shadow-lg",
         else: "border-base-content/10 bg-base-100 text-base-content/70 hover:bg-base-200"
@@ -1631,6 +1753,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     ]
   end
 
+  defp curated_carousel_slide_urls(%MediaAsset{url: url, metadata: metadata}) do
+    count = Map.get(metadata || %{}, "slide_count", 1)
+
+    Enum.map(1..count, fn index ->
+      {String.replace(url, "/slides/1/", "/slides/#{index}/"), index}
+    end)
+  end
+
+  defp asset_image_class(%MediaAsset{kind: "curated_carousel"}),
+    do: "aspect-[4/5] w-full rounded-2xl border border-base-content/10 bg-base-200 object-contain"
+
   defp asset_image_class(%MediaAsset{metadata: %{"format" => "portrait"}}),
     do: "aspect-[4/5] w-full rounded-2xl border border-base-content/10 bg-base-200 object-contain"
 
@@ -1641,6 +1774,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp asset_image_class(_asset),
     do:
       "aspect-[1.91/1] w-full rounded-2xl border border-base-content/10 bg-base-200 object-contain"
+
+  defp asset_kind_label(%MediaAsset{kind: "curated_carousel", metadata: metadata}),
+    do: "Combined carousel · #{Map.get(metadata, "slide_count")} slides"
+
+  defp asset_kind_label(%MediaAsset{kind: "curated_carousel_video", metadata: metadata}),
+    do: "Story Short · #{Map.get(metadata, "duration_seconds")}s · 1080 × 1920"
 
   defp asset_kind_label(%MediaAsset{kind: "key_node_carousel_slide", metadata: metadata}),
     do: "Carousel · slide #{Map.get(metadata, "slide_index")}"

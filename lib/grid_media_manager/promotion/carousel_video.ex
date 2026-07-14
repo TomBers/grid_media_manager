@@ -1,6 +1,6 @@
 defmodule GridMediaManager.Promotion.CarouselVideo do
   @moduledoc """
-  Renders a key-node carousel as a vertical H.264 MP4 for short-form social video.
+  Renders key-node and curated story carousels as vertical H.264 MP4s for short-form video.
 
   Videos are cached in the system temporary directory using a content-derived key.
   FFmpeg must be installed in the runtime environment, or configured with the
@@ -23,7 +23,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @audio_bitrate "160k"
   @frame_rate 30
   @render_timeout 90_000
-  @cache_version 5
+  @cache_version 6
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -57,6 +57,40 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     }
   end
 
+  def curated_asset_attr(%Campaign{} = campaign, token, slides, style) when is_list(slides) do
+    style = ShareCard.normalize_style(style)
+    slide_count = length(slides)
+
+    %{
+      title: "#{campaign.title} · Story Short",
+      kind: "curated_carousel_video",
+      url: curated_video_path(campaign, token, style),
+      mime_type: "video/mp4",
+      text: campaign.title,
+      node_id: nil,
+      highlight_id: nil,
+      recommended_platforms: ["youtube", "instagram", "linkedin"],
+      style: style,
+      source_type: "curated_carousel_video",
+      source_id: token,
+      metadata: %{
+        "format" => "short_video",
+        "width" => @width,
+        "height" => @height,
+        "slide_count" => slide_count,
+        "duration_seconds" => duration_seconds(slide_count),
+        "background_audio" => background_audio_available?(),
+        "slides" => slides
+      }
+    }
+  end
+
+  def curated_video_path(%Campaign{id: campaign_id}, token, style) do
+    encoded_token = URI.encode(to_string(token), &URI.char_unreserved?/1)
+    query = URI.encode_query(%{style: ShareCard.normalize_style(style)})
+    "/campaigns/#{campaign_id}/curated-carousels/#{encoded_token}/short.mp4?#{query}"
+  end
+
   def video_path(%Campaign{id: campaign_id}, node_id, style) do
     encoded_node_id = URI.encode(to_string(node_id), &URI.char_unreserved?/1)
     query = URI.encode_query(%{style: ShareCard.normalize_style(style)})
@@ -74,6 +108,38 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
         {:ok, output_path}
       else
         render_video(ffmpeg, campaign, node, style, cache_dir, output_path)
+      end
+    else
+      nil -> {:error, :ffmpeg_not_found}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def render_curated(%Campaign{} = campaign, token, slides, style) when is_list(slides) do
+    style = ShareCard.normalize_style(style)
+
+    with ffmpeg when is_binary(ffmpeg) <- ffmpeg_path(),
+         {:ok, cache_dir} <- ensure_cache_dir() do
+      output_path =
+        Path.join(cache_dir, curated_cache_filename(campaign, token, slides, style))
+
+      if valid_video_file?(output_path) do
+        {:ok, output_path}
+      else
+        render_frame_video(
+          ffmpeg,
+          length(slides),
+          cache_dir,
+          output_path,
+          fn index ->
+            ShareCard.curated_carousel_short_video_frame_png(
+              campaign,
+              slides,
+              style,
+              index
+            )
+          end
+        )
       end
     else
       nil -> {:error, :ffmpeg_not_found}
@@ -106,15 +172,20 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   def background_audio_available?, do: is_binary(background_audio_path())
 
   defp render_video(ffmpeg, campaign, node, style, cache_dir, output_path) do
+    slide_count = campaign |> ShareCard.carousel_slides(node) |> length()
+
+    render_frame_video(ffmpeg, slide_count, cache_dir, output_path, fn index ->
+      ShareCard.node_short_video_frame_png(campaign, node, style, index)
+    end)
+  end
+
+  defp render_frame_video(ffmpeg, frame_count, cache_dir, output_path, frame_fun) do
     work_dir =
-      Path.join(
-        cache_dir,
-        "work-#{System.unique_integer([:positive, :monotonic])}"
-      )
+      Path.join(cache_dir, "work-#{System.unique_integer([:positive, :monotonic])}")
 
     with :ok <- File.mkdir_p(work_dir) do
       try do
-        slide_paths = write_slides!(campaign, node, style, work_dir)
+        slide_paths = write_frames!(frame_count, frame_fun, work_dir)
         temporary_output = Path.join(work_dir, "carousel.mp4")
         args = ffmpeg_args(slide_paths, background_audio_path(), temporary_output)
 
@@ -182,14 +253,10 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     end
   end
 
-  defp write_slides!(campaign, node, style, work_dir) do
-    campaign
-    |> ShareCard.carousel_slides(node)
-    |> Enum.with_index(1)
-    |> Enum.map(fn {_slide, index} ->
+  defp write_frames!(frame_count, frame_fun, work_dir) do
+    Enum.map(1..frame_count, fn index ->
       path = Path.join(work_dir, "slide-#{index}.png")
-      png = ShareCard.node_short_video_frame_png(campaign, node, style, index)
-      File.write!(path, png)
+      File.write!(path, frame_fun.(index))
       path
     end)
   end
@@ -382,6 +449,17 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       |> Base.url_encode64(padding: false)
 
     "#{digest}.mp4"
+  end
+
+  defp curated_cache_filename(campaign, token, slides, style) do
+    digest =
+      {@cache_version, :curated, campaign.id, campaign.title, token, slides, style,
+       @slide_seconds, @fade_seconds, background_audio_signature()}
+      |> :erlang.term_to_binary()
+      |> then(&:crypto.hash(:sha256, &1))
+      |> Base.url_encode64(padding: false)
+
+    "curated-#{digest}.mp4"
   end
 
   defp static_cache_filename(cache_key) do

@@ -68,6 +68,25 @@ defmodule GridMediaManager.Promotion.AssetRenderer do
     end
   end
 
+  def render(%Campaign{} = campaign, %MediaAsset{kind: "curated_carousel"} = asset) do
+    slides = Map.get(asset.metadata || %{}, "slides", [])
+    {:ok, ShareCard.curated_carousel_image_png(campaign, slides, asset.style, 1)}
+  end
+
+  def render(%Campaign{} = campaign, %MediaAsset{kind: "curated_carousel_video"} = asset) do
+    slides = Map.get(asset.metadata || %{}, "slides", [])
+
+    with {:ok, path} <-
+           CarouselVideo.render_curated(
+             campaign,
+             asset.source_id,
+             slides,
+             asset.style
+           ) do
+      File.read(path)
+    end
+  end
+
   def render(%Campaign{} = campaign, %MediaAsset{kind: "key_node_video"} = asset) do
     with node when is_map(node) <- ShareCard.find_key_node(campaign, asset.node_id),
          {:ok, path} <- CarouselVideo.render(campaign, node, asset.style) do
@@ -112,6 +131,21 @@ defmodule GridMediaManager.Promotion.AssetRenderer do
   end
 
   def render(%Campaign{}, %MediaAsset{}), do: {:error, :unsupported_asset}
+
+  def render_all(%Campaign{} = campaign, %MediaAsset{kind: "curated_carousel"} = asset) do
+    slides = Map.get(asset.metadata || %{}, "slides", [])
+
+    slides
+    |> Enum.with_index(1)
+    |> Enum.map(fn {_slide, index} ->
+      ShareCard.curated_carousel_image_png(campaign, slides, asset.style, index)
+    end)
+    |> then(&{:ok, &1})
+  end
+
+  def render_all(%Campaign{} = campaign, %MediaAsset{} = asset) do
+    with {:ok, body} <- render(campaign, asset), do: {:ok, [body]}
+  end
 
   defp asset_format(%MediaAsset{metadata: metadata}) when is_map(metadata),
     do: Map.get(metadata, "format", "landscape")

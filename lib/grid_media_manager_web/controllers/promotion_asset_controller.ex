@@ -57,6 +57,49 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
     end
   end
 
+  def curated_carousel_slide(
+        conn,
+        %{"id" => id, "token" => token, "slide" => slide} = params
+      ) do
+    campaign = Campaigns.get_campaign!(id)
+
+    case Campaigns.get_curated_carousel_asset(campaign, token) do
+      nil ->
+        send_resp(conn, 404, "Curated carousel not found")
+
+      asset ->
+        slides = Map.get(asset.metadata || %{}, "slides", [])
+
+        conn
+        |> put_png_cache_headers()
+        |> send_resp(
+          200,
+          ShareCard.curated_carousel_image_png(
+            campaign,
+            slides,
+            Map.get(params, "style") || asset.style,
+            slide
+          )
+        )
+    end
+  end
+
+  def curated_carousel_video(conn, %{"id" => id, "token" => token} = params) do
+    campaign = Campaigns.get_campaign!(id)
+
+    case Campaigns.get_curated_carousel_asset(campaign, token) do
+      nil ->
+        send_resp(conn, 404, "Curated carousel not found")
+
+      asset ->
+        slides = Map.get(asset.metadata || %{}, "slides", [])
+        style = Map.get(params, "style") || asset.style
+
+        CarouselVideo.render_curated(campaign, token, slides, style)
+        |> send_short_video(conn, "rationalgrid-story-#{token}.mp4")
+    end
+  end
+
   def node_carousel_video(conn, %{"id" => id, "node_id" => node_id} = params) do
     campaign = Campaigns.get_campaign!(id)
 

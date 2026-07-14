@@ -4,6 +4,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.Studio.Workflow
 
   test "serves a generated grid share-card PNG", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
@@ -127,6 +128,59 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert svg =~ "width=\"1080\""
     assert svg =~ "1 /"
     assert svg =~ "RationalGrid.ai"
+  end
+
+  test "fits complete long-form copy into video frames without truncation", %{} do
+    assert {:ok, campaign} = Campaigns.import_payload(long_key_node_payload(), "long-video-node")
+    node = ShareCard.find_key_node(campaign, "long-node")
+
+    frames =
+      campaign
+      |> ShareCard.carousel_slides(node)
+      |> Enum.with_index(1)
+      |> Enum.map(fn {_slide, index} ->
+        ShareCard.node_short_video_frame_svg(campaign, node, "editorial_dark", index)
+      end)
+
+    assert Enum.any?(frames, &String.contains?(&1, "sentence 36"))
+    refute Enum.any?(frames, &String.contains?(&1, "…"))
+  end
+
+  test "serves slides from a combined mixed-content carousel", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "combined-route")
+
+    candidates =
+      campaign
+      |> Workflow.candidates()
+      |> Enum.take(3)
+
+    assert {:ok, asset} =
+             Campaigns.generate_curated_carousel(campaign, candidates, "gradient_poster")
+
+    path =
+      ShareCard.curated_carousel_image_path(
+        campaign,
+        asset.source_id,
+        2,
+        asset.style
+      )
+
+    conn = get(conn, path)
+    assert_png_response(conn)
+
+    video_conn =
+      get(
+        recycle(conn),
+        CarouselVideo.curated_video_path(campaign, asset.source_id, asset.style)
+      )
+
+    if CarouselVideo.available?() do
+      video = response(video_conn, 200)
+      assert binary_part(video, 4, 4) == "ftyp"
+      assert video =~ "soun"
+    else
+      assert response(video_conn, 503) == "Video rendering requires FFmpeg"
+    end
   end
 
   test "serves rasterized PNG carousel slides for social publishing", %{conn: conn} do

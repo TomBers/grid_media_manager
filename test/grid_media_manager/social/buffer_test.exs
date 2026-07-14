@@ -96,6 +96,35 @@ defmodule GridMediaManager.Social.BufferTest do
               }}
   end
 
+  test "schedules two ordered image assets and keeps Instagram post metadata" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
+      input = Jason.decode!(raw_body)["variables"]["input"]
+
+      assert input["assets"] == [
+               %{"image" => %{"url" => "https://cdn.example.com/first.png"}},
+               %{"image" => %{"url" => "https://cdn.example.com/second.jpg"}}
+             ]
+
+      assert input["metadata"] == %{
+               "instagram" => %{"type" => "post", "shouldShareToFeed" => true}
+             }
+
+      success_response(conn)
+    end)
+
+    instagram_draft = %{draft() | platform: "instagram"}
+
+    assert {:ok, %{id: "post-456"}} =
+             Buffer.schedule(instagram_draft,
+               channel_id: "instagram-channel",
+               media: [
+                 [url: "https://cdn.example.com/first.png", mime_type: "image/png"],
+                 %{"image" => %{"url" => "https://cdn.example.com/second.jpg"}}
+               ]
+             )
+  end
+
   test "uses a video asset for an mp4 MIME type" do
     Req.Test.expect(__MODULE__, fn conn ->
       {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
@@ -121,7 +150,10 @@ defmodule GridMediaManager.Social.BufferTest do
       {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
       input = Jason.decode!(raw_body)["variables"]["input"]
 
-      assert input["metadata"] == %{"instagram" => %{"type" => "post"}}
+      assert input["metadata"] == %{
+               "instagram" => %{"type" => "post", "shouldShareToFeed" => true}
+             }
+
       success_response(conn)
     end)
 
@@ -162,7 +194,10 @@ defmodule GridMediaManager.Social.BufferTest do
       {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
       input = Jason.decode!(raw_body)["variables"]["input"]
 
-      assert input["metadata"] == %{"instagram" => %{"type" => "story"}}
+      assert input["metadata"] == %{
+               "instagram" => %{"type" => "story", "shouldShareToFeed" => false}
+             }
+
       success_response(conn)
     end)
 
@@ -319,6 +354,26 @@ defmodule GridMediaManager.Social.BufferTest do
              channel_id: "channel-123",
              instagram_type: "unsupported"
            ) == {:error, "instagram_type must be post, story, or reel"}
+  end
+
+  test "rejects invalid items in a media list" do
+    assert Buffer.schedule(draft(),
+             channel_id: "channel-123",
+             media: [[url: "https://cdn.example.com/missing-type.png"]]
+           ) == {:error, "media item 1: mime_type is required"}
+
+    assert Buffer.schedule(draft(),
+             channel_id: "channel-123",
+             media: [
+               %{url: "https://cdn.example.com/valid.png", mime_type: "image/png"},
+               %{url: "https://cdn.example.com/invalid.mov", mime_type: "video/quicktime"}
+             ]
+           ) ==
+             {:error,
+              "media item 2: unsupported media MIME type: video/quicktime; expected image/* or video/mp4"}
+
+    assert Buffer.schedule(draft(), channel_id: "channel-123", media: ["invalid"]) ==
+             {:error, "media item 1: must be a keyword list or map"}
   end
 
   test "returns a configuration error without an API key" do

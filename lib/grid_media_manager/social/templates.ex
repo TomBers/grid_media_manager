@@ -217,6 +217,10 @@ defmodule GridMediaManager.Social.Templates do
     MediaPayload.recommended_question(campaign.raw_payload) || ensure_question(campaign.title)
   end
 
+  defp asset_angle(%MediaAsset{kind: kind})
+       when kind in ["curated_carousel", "curated_carousel_video"],
+       do: "visual"
+
   defp asset_angle(%MediaAsset{kind: kind}) when kind in ["key_node_card", "key_node_video"],
     do: "key_node"
 

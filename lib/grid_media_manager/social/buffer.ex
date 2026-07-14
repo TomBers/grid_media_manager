@@ -60,10 +60,14 @@ defmodule GridMediaManager.Social.Buffer do
   @doc """
   Schedules a post draft for a Buffer channel.
 
-  `opts` requires `:channel_id` and accepts `:media_url`, `:mime_type`, `:title`,
-  `:instagram_type`, and `:youtube_category_id`. Media defaults to an image; a MIME type of `video/mp4`
-  creates a video asset. Instagram images default to `post`, while videos
-  default to `reel`. The draft's `scheduled_for` value is sent as Buffer's `dueAt`.
+  `opts` requires `:channel_id` and accepts `:media`, `:media_url`, `:mime_type`,
+  `:title`, `:instagram_type`, and `:youtube_category_id`. `:media` is an ordered
+  list of items containing `url` and `mime_type`, or normalized Buffer asset maps.
+  It takes precedence over the single-asset `:media_url` and `:mime_type` options.
+  Legacy media defaults to an image; a MIME type of `video/mp4` creates a video
+  asset. Instagram images and multi-asset posts default to `post`, while a single
+  video defaults to `reel`. The draft's `scheduled_for` value is sent as Buffer's
+  `dueAt`.
   """
   def schedule(%PostDraft{} = draft, opts) when is_list(opts) or is_map(opts) do
     with {:ok, key} <- configured_api_key(),
@@ -71,7 +75,7 @@ defmodule GridMediaManager.Social.Buffer do
          {:ok, text} <- required_string(draft.body, "post draft body is required"),
          {:ok, due_at} <- due_at(draft.scheduled_for),
          {:ok, assets} <- assets(opts),
-         {:ok, metadata} <- post_metadata(draft, opts) do
+         {:ok, metadata} <- post_metadata(draft, opts, assets) do
       input =
         %{
           "text" => text,
@@ -147,6 +151,14 @@ defmodule GridMediaManager.Social.Buffer do
   defp parse_graphql_response(_body), do: {:error, "Buffer API returned an unexpected response"}
 
   defp assets(opts) do
+    case option(opts, :media) do
+      nil -> legacy_assets(opts)
+      media when is_list(media) -> normalize_media(media)
+      _other -> {:error, "media must be a list"}
+    end
+  end
+
+  defp legacy_assets(opts) do
     media_url = string_value(option(opts, :media_url))
     mime_type = string_value(option(opts, :mime_type))
 
@@ -161,31 +173,91 @@ defmodule GridMediaManager.Social.Buffer do
         {:ok, [%{"image" => %{"url" => url}}]}
 
       {url, mime_type} ->
-        asset_for_mime_type(url, String.downcase(mime_type))
+        with {:ok, asset} <- asset_for_mime_type(url, String.downcase(mime_type)) do
+          {:ok, [asset]}
+        end
+    end
+  end
+
+  defp normalize_media(media) do
+    media
+    |> Enum.with_index(1)
+    |> Enum.reduce_while({:ok, []}, fn {item, index}, {:ok, assets} ->
+      case normalize_media_item(item) do
+        {:ok, asset} -> {:cont, {:ok, [asset | assets]}}
+        {:error, message} -> {:halt, {:error, "media item #{index}: #{message}"}}
+      end
+    end)
+    |> case do
+      {:ok, assets} -> {:ok, Enum.reverse(assets)}
+      error -> error
+    end
+  end
+
+  defp normalize_media_item(item) when is_list(item) do
+    if Keyword.keyword?(item) do
+      normalize_media_fields(Keyword.get(item, :url), Keyword.get(item, :mime_type))
+    else
+      {:error, "must be a keyword list or map"}
+    end
+  end
+
+  defp normalize_media_item(item) when is_map(item) do
+    case normalized_asset(item) do
+      {:ok, asset} -> {:ok, asset}
+      :not_normalized -> normalize_media_fields(option(item, :url), option(item, :mime_type))
+    end
+  end
+
+  defp normalize_media_item(_item), do: {:error, "must be a keyword list or map"}
+
+  defp normalized_asset(item) do
+    image = Map.get(item, :image) || Map.get(item, "image")
+    video = Map.get(item, :video) || Map.get(item, "video")
+
+    case {image, video} do
+      {image, nil} when is_map(image) -> normalize_asset_url("image", image)
+      {nil, video} when is_map(video) -> normalize_asset_url("video", video)
+      {nil, nil} -> :not_normalized
+      _other -> {:error, "must contain exactly one image or video asset"}
+    end
+  end
+
+  defp normalize_asset_url(type, asset) do
+    case string_value(Map.get(asset, :url) || Map.get(asset, "url")) do
+      nil -> {:error, "#{type} url is required"}
+      url -> {:ok, %{type => %{"url" => url}}}
+    end
+  end
+
+  defp normalize_media_fields(url, mime_type) do
+    with {:ok, url} <- required_string(url, "url is required"),
+         {:ok, mime_type} <- required_string(mime_type, "mime_type is required") do
+      asset_for_mime_type(url, String.downcase(mime_type))
     end
   end
 
   defp asset_for_mime_type(url, "video/mp4") do
-    {:ok, [%{"video" => %{"url" => url}}]}
+    {:ok, %{"video" => %{"url" => url}}}
   end
 
   defp asset_for_mime_type(url, "image/" <> _subtype) do
-    {:ok, [%{"image" => %{"url" => url}}]}
+    {:ok, %{"image" => %{"url" => url}}}
   end
 
   defp asset_for_mime_type(_url, mime_type) do
     {:error, "unsupported media MIME type: #{mime_type}; expected image/* or video/mp4"}
   end
 
-  defp post_metadata(%PostDraft{platform: "instagram"}, opts) do
-    mime_type = option(opts, :mime_type) |> string_value() |> to_string() |> String.downcase()
+  defp post_metadata(%PostDraft{platform: "instagram"}, opts, assets) do
     requested_type = option(opts, :instagram_type) |> string_value()
-    type = requested_type || if(mime_type == "video/mp4", do: "reel", else: "post")
+    type = requested_type || if(single_video?(assets), do: "reel", else: "post")
 
     if type in ["post", "story", "reel"] do
-      instagram_metadata =
-        %{"type" => type}
-        |> maybe_put_map("shouldShareToFeed", type == "reel" && true)
+      instagram_metadata = %{
+        "type" => type,
+        "shouldShareToFeed" => type != "story"
+      }
 
       {:ok, %{"instagram" => instagram_metadata}}
     else
@@ -193,7 +265,7 @@ defmodule GridMediaManager.Social.Buffer do
     end
   end
 
-  defp post_metadata(%PostDraft{platform: "youtube"}, opts) do
+  defp post_metadata(%PostDraft{platform: "youtube"}, opts, _assets) do
     with {:ok, title} <- required_string(option(opts, :title), "YouTube title is required") do
       category_id =
         option(opts, :youtube_category_id)
@@ -210,7 +282,10 @@ defmodule GridMediaManager.Social.Buffer do
     end
   end
 
-  defp post_metadata(%PostDraft{}, _opts), do: {:ok, nil}
+  defp post_metadata(%PostDraft{}, _opts, _assets), do: {:ok, nil}
+
+  defp single_video?([%{"video" => %{"url" => _url}}]), do: true
+  defp single_video?(_assets), do: false
 
   defp fallback_youtube_category_id(nil) do
     System.get_env("BUFFER_YOUTUBE_CATEGORY_ID")
@@ -296,9 +371,6 @@ defmodule GridMediaManager.Social.Buffer do
 
   defp maybe_put_input(input, _key, nil), do: input
   defp maybe_put_input(input, key, value), do: Map.put(input, key, value)
-
-  defp maybe_put_map(map, _key, false), do: map
-  defp maybe_put_map(map, key, value), do: Map.put(map, key, value)
 
   defp decode_body(body) when is_binary(body) do
     case Jason.decode(body) do

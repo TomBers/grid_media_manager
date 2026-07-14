@@ -152,6 +152,15 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> maybe_add_format_query(format)
   end
 
+  def curated_carousel_image_path(campaign, token, slide, style \\ @default_style)
+
+  def curated_carousel_image_path(%Campaign{id: id}, token, slide, style) do
+    encoded_token = URI.encode(to_string(token), &URI.char_unreserved?/1)
+
+    "/campaigns/#{id}/curated-carousels/#{encoded_token}/slides/#{slide}/image.png"
+    |> maybe_add_style_query(style)
+  end
+
   def node_carousel_image_path(campaign, node_id, slide, style \\ @default_style)
 
   def node_carousel_image_path(%Campaign{id: id}, node_id, slide, style) do
@@ -609,20 +618,27 @@ defmodule GridMediaManager.Promotion.ShareCard do
     content_slides =
       content
       |> Markdown.sections()
-      |> Enum.map(fn section ->
-        title =
+      |> Enum.flat_map(fn section ->
+        base_title =
           if same_markdown_title?(section.title, node_title),
             do: "Opening idea",
             else: section.title
 
-        %{
-          label: "Argument",
-          title: title,
-          body: section.text,
-          blocks: section.blocks
-        }
+        section.blocks
+        |> Markdown.paginate_blocks()
+        |> Enum.with_index()
+        |> Enum.map(fn {blocks, page_index} ->
+          title = if page_index == 0, do: base_title, else: "#{base_title} · continued"
+
+          %{
+            label: "Argument",
+            title: title,
+            body: Markdown.readable_text(blocks),
+            blocks: blocks
+          }
+        end)
       end)
-      |> Enum.take(3)
+      |> Enum.take(8)
 
     question =
       campaign.raw_payload
@@ -641,7 +657,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         content_slides ++
         [%{label: "Question", title: "Where do you stand?", body: question}]
 
-    Enum.take(slides, 5)
+    Enum.take(slides, 10)
   end
 
   def key_node_carousel_asset_attrs(%Campaign{} = campaign, node, style \\ @default_style) do
@@ -681,27 +697,53 @@ defmodule GridMediaManager.Promotion.ShareCard do
     style = normalize_style(style)
     slide_index = normalize_slide_index(slide)
     slides = carousel_slides(campaign, node)
-    slide = Enum.at(slides, slide_index - 1) || List.first(slides)
+    selected_slide = Enum.at(slides, slide_index - 1) || List.first(slides)
+
+    carousel_slide_image_svg(campaign, selected_slide, style, slide_index, length(slides))
+  end
+
+  def curated_carousel_image_svg(campaign, slides, style, slide) when is_list(slides) do
+    style = normalize_style(style)
+    slide_index = normalize_slide_index(slide)
+    slides = Enum.map(slides, &normalize_curated_slide/1)
+    selected_slide = Enum.at(slides, slide_index - 1) || List.first(slides)
+
+    carousel_slide_image_svg(campaign, selected_slide, style, slide_index, length(slides))
+  end
+
+  def curated_carousel_image_png(campaign, slides, style, slide) when is_list(slides) do
+    campaign
+    |> curated_carousel_image_svg(slides, style, slide)
+    |> Image.from_svg!()
+    |> Image.write!(:memory, suffix: ".png")
+  end
+
+  defp carousel_slide_image_svg(campaign, slide, style, slide_index, slide_count) do
     palette = quote_palette(style)
     body_start_y = 480
     title_image_data_uri = carousel_title_image_data_uri(slide.title, palette.text)
-    footer = "#{slide_index} / #{length(slides)} · #{sanitize_text(campaign.title, nil)}"
+    footer = "#{slide_index} / #{slide_count} · #{sanitize_text(campaign.title, nil)}"
     footer_font_size = single_line_font_size(footer, 820, 18, 8)
 
     body_markup =
-      markdown_body_markup(Map.get(slide, :blocks, slide.body), nil, %{
-        x: 130,
-        start_y: body_start_y,
-        max_y: 1_160,
-        width: 820,
-        font_size: 31,
-        palette: palette
-      })
+      fitted_markdown_body_markup(
+        Map.get(slide, :blocks, slide.body),
+        nil,
+        %{
+          x: 130,
+          start_y: body_start_y,
+          max_y: 1_160,
+          width: 820,
+          font_size: 31,
+          palette: palette
+        },
+        [31, 28, 26, 24, 22, 20, 18, 16, 14, 12]
+      )
 
     """
     <svg xmlns="http://www.w3.org/2000/svg" width="#{@portrait_width}" height="#{@portrait_height}" viewBox="0 0 #{@portrait_width} #{@portrait_height}" role="img" aria-labelledby="title desc">
       <title id="title">#{escape_xml(slide.title)} · #{escape_xml(campaign.title)} · RationalGrid</title>
-      <desc id="desc">Carousel slide #{slide_index} from #{escape_xml(node |> get("title") |> sanitize_text(180))} on RationalGrid</desc>
+      <desc id="desc">Carousel slide #{slide_index} of #{slide_count} from #{escape_xml(campaign.title)} on RationalGrid</desc>
       <defs>
         <linearGradient id="carouselCanvas" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#{palette.canvas_a}" />
@@ -764,7 +806,30 @@ defmodule GridMediaManager.Promotion.ShareCard do
     style = normalize_style(style)
     slide_index = normalize_slide_index(slide)
     slides = carousel_slides(campaign, node)
-    slide = Enum.at(slides, slide_index - 1) || List.first(slides)
+    selected_slide = Enum.at(slides, slide_index - 1) || List.first(slides)
+
+    short_video_frame_svg(campaign, selected_slide, style, slide_index, length(slides))
+  end
+
+  def curated_carousel_short_video_frame_svg(campaign, slides, style, slide)
+      when is_list(slides) do
+    style = normalize_style(style)
+    slide_index = normalize_slide_index(slide)
+    slides = Enum.map(slides, &normalize_curated_slide/1)
+    selected_slide = Enum.at(slides, slide_index - 1) || List.first(slides)
+
+    short_video_frame_svg(campaign, selected_slide, style, slide_index, length(slides))
+  end
+
+  def curated_carousel_short_video_frame_png(campaign, slides, style, slide)
+      when is_list(slides) do
+    campaign
+    |> curated_carousel_short_video_frame_svg(slides, style, slide)
+    |> Image.from_svg!()
+    |> Image.write!(:memory, suffix: ".png")
+  end
+
+  defp short_video_frame_svg(campaign, slide, style, slide_index, slide_count) do
     palette = quote_palette(style)
     cover? = slide_index == 1
 
@@ -787,6 +852,12 @@ defmodule GridMediaManager.Promotion.ShareCard do
     body_start_y = max(title_last_y + 128, 790)
     body_font_size = if cover?, do: 44, else: 40
 
+    body_font_sizes =
+      Enum.filter(
+        [body_font_size, 40, 36, 32, 28, 24, 22, 20, 18, 16, 14, 12],
+        &(&1 <= body_font_size)
+      )
+
     title_markup =
       title_lines
       |> Enum.with_index()
@@ -795,19 +866,24 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end)
 
     body_markup =
-      markdown_body_markup(Map.get(slide, :blocks, slide.body), nil, %{
-        x: 130,
-        start_y: body_start_y,
-        max_y: 1_650,
-        width: 820,
-        font_size: body_font_size,
-        palette: palette
-      })
+      fitted_markdown_body_markup(
+        Map.get(slide, :blocks, slide.body),
+        nil,
+        %{
+          x: 130,
+          start_y: body_start_y,
+          max_y: 1_650,
+          width: 820,
+          font_size: body_font_size,
+          palette: palette
+        },
+        body_font_sizes
+      )
 
     """
     <svg xmlns="http://www.w3.org/2000/svg" width="#{@short_width}" height="#{@short_height}" viewBox="0 0 #{@short_width} #{@short_height}" role="img" aria-labelledby="title desc">
       <title id="title">#{escape_xml(slide.title)} · #{escape_xml(campaign.title)} · RationalGrid Short</title>
-      <desc id="desc">Vertical short-video frame #{slide_index} of #{length(slides)}</desc>
+      <desc id="desc">Vertical short-video frame #{slide_index} of #{slide_count}</desc>
       <defs>
         <linearGradient id="shortCanvas" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#{palette.canvas_a}" />
@@ -1936,6 +2012,14 @@ defmodule GridMediaManager.Promotion.ShareCard do
     %{"format" => "landscape", "platform" => "cross_platform", "width" => 1200, "height" => 630}
   end
 
+  defp normalize_curated_slide(slide) when is_map(slide) do
+    %{
+      label: slide |> get("label") |> sanitize_text(nil) |> fallback("Story"),
+      title: slide |> get("title") |> sanitize_text(nil) |> fallback("RationalGrid"),
+      body: slide |> get("body") |> sanitize_text(nil)
+    }
+  end
+
   defp normalize_slide_index(slide) when is_integer(slide), do: max(slide, 1)
 
   defp normalize_slide_index(slide) do
@@ -1946,6 +2030,19 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   defp markdown_body_markup(content, title, opts) do
+    content
+    |> render_markdown_body(title, opts)
+    |> Map.fetch!(:markup)
+  end
+
+  defp fitted_markdown_body_markup(content, title, opts, font_sizes) do
+    Enum.find_value(font_sizes, fn font_size ->
+      result = render_markdown_body(content, title, %{opts | font_size: font_size})
+      if result.truncated?, do: nil, else: result.markup
+    end) || complete_body_fallback_markup(opts)
+  end
+
+  defp render_markdown_body(content, title, opts) do
     blocks =
       case content do
         blocks when is_list(blocks) -> blocks
@@ -1953,9 +2050,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end
       |> Markdown.drop_leading_title(title)
 
-    {markup, _last_y, _rendered?} =
-      Enum.reduce_while(blocks, {[], opts.start_y, false}, fn block,
-                                                              {markup, last_y, rendered?} ->
+    {markup, _last_y, _rendered?, truncated?} =
+      Enum.reduce_while(blocks, {[], opts.start_y, false, false}, fn block,
+                                                                     {markup, last_y, rendered?,
+                                                                      _truncated?} ->
         style = markdown_block_style(block, opts)
         first_y = if rendered?, do: last_y + style.line_gap + style.gap, else: opts.start_y
         max_units = (opts.width - style.indent) / style.font_size * 0.9
@@ -1963,20 +2061,33 @@ defmodule GridMediaManager.Promotion.ShareCard do
         available_lines = max(div(opts.max_y - first_y, style.line_gap) + 1, 0)
 
         if available_lines == 0 do
-          {:halt, {markup, last_y, rendered?}}
+          {:halt, {markup, last_y, rendered?, true}}
         else
           visible_lines = Enum.take(lines, available_lines)
-          truncated? = length(visible_lines) < length(lines)
-          visible_lines = maybe_mark_markdown_truncated(visible_lines, max_units, truncated?)
-          block_markup = markdown_block_markup(block, visible_lines, first_y, style, opts)
-          block_last_y = first_y + max(length(visible_lines) - 1, 0) * style.line_gap
-          result = {markup ++ [block_markup], block_last_y, true}
+          block_truncated? = length(visible_lines) < length(lines)
 
-          if truncated?, do: {:halt, result}, else: {:cont, result}
+          display_lines =
+            maybe_mark_markdown_truncated(visible_lines, max_units, block_truncated?)
+
+          block_markup = markdown_block_markup(block, display_lines, first_y, style, opts)
+          block_last_y = first_y + max(length(display_lines) - 1, 0) * style.line_gap
+          result = {markup ++ [block_markup], block_last_y, true, block_truncated?}
+
+          if block_truncated?, do: {:halt, result}, else: {:cont, result}
         end
       end)
 
-    Enum.join(markup, "")
+    %{markup: Enum.join(markup, ""), truncated?: truncated?}
+  end
+
+  defp complete_body_fallback_markup(opts) do
+    block = %{
+      type: :paragraph,
+      text: "Explore the complete argument and supporting context on RationalGrid."
+    }
+
+    style = markdown_block_style(block, %{opts | font_size: max(opts.font_size, 24)})
+    markdown_block_markup(block, [block.text], opts.start_y, style, opts)
   end
 
   defp markdown_block_style(%{type: :heading}, opts) do

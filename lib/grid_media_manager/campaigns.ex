@@ -69,6 +69,15 @@ defmodule GridMediaManager.Campaigns do
 
   def get_media_asset!(id), do: Repo.get!(MediaAsset, parse_integer(id))
 
+  def get_curated_carousel_asset(%Campaign{id: campaign_id}, token) when is_binary(token) do
+    Repo.get_by(MediaAsset,
+      campaign_id: campaign_id,
+      kind: "curated_carousel",
+      source_type: "curated_carousel",
+      source_id: token
+    )
+  end
+
   def get_post_draft!(id), do: Repo.get!(PostDraft, parse_integer(id))
 
   def get_post_draft_with_asset!(id) do
@@ -150,15 +159,15 @@ defmodule GridMediaManager.Campaigns do
          true <-
            Platforms.within_limit?(draft.body, draft.platform) ||
              {:error, "The draft is over the #{Platforms.label(draft.platform)} character limit."},
-         {:ok, media_url} <- buffer_media_url(campaign, draft.media_asset),
+         {:ok, media} <- buffer_media(campaign, draft.media_asset),
          {:ok, scheduled_for} <- parse_scheduled_for(scheduled_for),
          :lt <- DateTime.compare(DateTime.utc_now(), scheduled_for) do
       scheduled_draft = %{draft | scheduled_for: scheduled_for}
 
       case Buffer.schedule(scheduled_draft,
              channel_id: channel_id,
-             media_url: media_url,
-             mime_type: buffer_media_mime_type(draft.media_asset),
+             media: media,
+             title: buffer_post_title(campaign, draft.media_asset),
              title: buffer_post_title(campaign, draft.media_asset)
            ) do
         {:ok, post} ->
@@ -186,6 +195,64 @@ defmodule GridMediaManager.Campaigns do
     campaign
     |> ShareCard.grid_asset_attr(style)
     |> then(&upsert_generated_asset_with_drafts(campaign, &1))
+  end
+
+  def generate_curated_carousel(%Campaign{} = campaign, candidates, style)
+      when is_list(candidates) and length(candidates) >= 2 do
+    campaign = get_campaign!(campaign.id)
+    style = ShareCard.normalize_style(style)
+    token = curated_carousel_token(candidates, style)
+    slides = curated_carousel_slides(campaign, candidates)
+
+    attrs = %{
+      title: "#{campaign.title} · Story carousel",
+      kind: "curated_carousel",
+      url: ShareCard.curated_carousel_image_path(campaign, token, 1, style),
+      mime_type: "image/png",
+      text: campaign.title,
+      node_id: nil,
+      highlight_id: nil,
+      recommended_platforms: ["instagram", "linkedin"],
+      style: style,
+      source_type: "curated_carousel",
+      source_id: token,
+      metadata: %{
+        "format" => "curated_carousel",
+        "width" => 1080,
+        "height" => 1350,
+        "slide_count" => length(slides),
+        "slides" => slides
+      }
+    }
+
+    upsert_generated_asset_with_drafts(campaign, attrs)
+  end
+
+  def generate_curated_carousel(%Campaign{}, _candidates, _style),
+    do: {:error, :not_enough_candidates}
+
+  def generate_curated_carousel_video(
+        %Campaign{} = campaign,
+        %MediaAsset{kind: "curated_carousel"} = carousel
+      ) do
+    campaign = get_campaign!(campaign.id)
+    slides = Map.get(carousel.metadata || %{}, "slides", [])
+
+    with {:ok, _path} <-
+           CarouselVideo.render_curated(
+             campaign,
+             carousel.source_id,
+             slides,
+             carousel.style
+           ) do
+      campaign
+      |> CarouselVideo.curated_asset_attr(
+        carousel.source_id,
+        slides,
+        carousel.style
+      )
+      |> then(&upsert_generated_asset_with_drafts(campaign, &1))
+    end
   end
 
   def generate_highlight_asset(
@@ -364,6 +431,49 @@ defmodule GridMediaManager.Campaigns do
 
   def highlights(%Campaign{raw_payload: raw_payload}), do: MediaPayload.highlights(raw_payload)
 
+  defp curated_carousel_token(candidates, style) do
+    candidates
+    |> Enum.map(&Map.take(&1, [:key, :type, :source_id, :title, :excerpt]))
+    |> then(&{style, &1})
+    |> :erlang.term_to_binary()
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.url_encode64(padding: false)
+    |> binary_part(0, 20)
+  end
+
+  defp curated_carousel_slides(campaign, candidates) do
+    cover = %{
+      "label" => "RationalGrid story",
+      "title" => campaign.title,
+      "body" =>
+        "A curated path through the strongest questions, highlights, and ideas in this grid."
+    }
+
+    selected_slides =
+      Enum.map(candidates, fn candidate ->
+        %{
+          "label" => Map.get(candidate, :label) || humanize_candidate_type(candidate.type),
+          "title" => candidate.title,
+          "body" =>
+            Map.get(candidate, :excerpt) ||
+              "Explore how this moment connects to the wider argument."
+        }
+      end)
+
+    closing = %{
+      "label" => "Join the conversation",
+      "title" => "Where do you stand?",
+      "body" =>
+        "Explore the complete map, follow the connections, and contribute your perspective on RationalGrid."
+    }
+
+    [cover] ++ selected_slides ++ [closing]
+  end
+
+  defp humanize_candidate_type(type) do
+    type |> to_string() |> String.replace("_", " ") |> String.capitalize()
+  end
+
   defp upsert_campaign(attrs) do
     case Repo.get_by(Campaign, slug: attrs.slug) do
       nil ->
@@ -508,18 +618,26 @@ defmodule GridMediaManager.Campaigns do
   end
 
   def publish_media_asset(%Campaign{} = campaign, %MediaAsset{} = asset) do
-    case published_media_url(asset) do
-      url when is_binary(url) ->
-        validate_public_media_url(url)
+    with {:ok, media} <- publish_media_assets(campaign, asset),
+         %{url: url} <- List.first(media) do
+      {:ok, url}
+    else
+      nil -> {:error, "No media was generated for this asset."}
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
-      nil ->
+  def publish_media_assets(%Campaign{} = campaign, %MediaAsset{} = asset) do
+    case published_media(asset) do
+      media when is_list(media) and media != [] ->
+        validate_published_media(media)
+
+      _media ->
         with true <- S3.configured?() || {:error, "S3 is not configured."},
-             {:ok, body} <- AssetRenderer.render(campaign, asset),
-             digest <- :crypto.hash(:sha256, body) |> Base.encode16(case: :lower),
-             key <- s3_object_key(campaign, asset, digest),
-             {:ok, url} <- S3.put_object(key, body, asset.mime_type || "application/octet-stream"),
-             {:ok, _asset} <- persist_published_media(asset, url, key, digest) do
-          {:ok, url}
+             {:ok, bodies} <- AssetRenderer.render_all(campaign, asset),
+             {:ok, published} <- upload_media_bodies(campaign, asset, bodies),
+             {:ok, _asset} <- persist_published_media(asset, published) do
+          {:ok, Enum.map(published, &Map.take(&1, [:url, :mime_type]))}
         else
           {:error, reason} when is_binary(reason) -> {:error, reason}
           {:error, reason} -> {:error, "Could not publish media to S3: #{inspect(reason)}"}
@@ -528,43 +646,97 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
-  defp buffer_media_url(_campaign, nil), do: {:ok, nil}
+  defp buffer_media(_campaign, nil), do: {:ok, []}
 
-  defp buffer_media_url(%Campaign{} = campaign, %MediaAsset{url: url} = asset)
+  defp buffer_media(%Campaign{} = campaign, %MediaAsset{url: url} = asset)
        when is_binary(url) do
-    case published_media_url(asset) do
-      published_url when is_binary(published_url) ->
-        validate_public_media_url(published_url)
+    case published_media(asset) do
+      media when is_list(media) and media != [] ->
+        validate_published_media(media)
 
-      nil ->
+      _media ->
         case URI.parse(url) do
           %URI{scheme: scheme} when scheme in ["http", "https"] ->
-            validate_public_media_url(url)
+            with {:ok, public_url} <- validate_public_media_url(url) do
+              {:ok, [%{url: public_url, mime_type: asset.mime_type}]}
+            end
 
           _uri ->
-            if S3.configured?() do
-              publish_media_asset(campaign, asset)
-            else
-              with {:ok, base_url} <- public_base_url(),
-                   public_url <- URI.merge(base_url <> "/", url) |> URI.to_string() do
-                validate_public_media_url(public_url)
-              end
+            cond do
+              S3.configured?() ->
+                publish_media_assets(campaign, asset)
+
+              asset.kind == "curated_carousel" ->
+                {:error, "Combined carousel scheduling requires S3 media publishing."}
+
+              true ->
+                with {:ok, base_url} <- public_base_url(),
+                     public_url <- URI.merge(base_url <> "/", url) |> URI.to_string(),
+                     {:ok, public_url} <- validate_public_media_url(public_url) do
+                  {:ok, [%{url: public_url, mime_type: asset.mime_type}]}
+                end
             end
         end
     end
   end
 
-  defp published_media_url(%MediaAsset{metadata: metadata}) when is_map(metadata),
-    do: Map.get(metadata, "published_url")
+  defp published_media(%MediaAsset{metadata: metadata, mime_type: mime_type})
+       when is_map(metadata) do
+    case Map.get(metadata, "published_urls") do
+      urls when is_list(urls) and urls != [] ->
+        Enum.map(urls, &%{url: &1, mime_type: mime_type})
 
-  defp published_media_url(_asset), do: nil
+      _urls ->
+        case Map.get(metadata, "published_url") do
+          url when is_binary(url) -> [%{url: url, mime_type: mime_type}]
+          _url -> []
+        end
+    end
+  end
 
-  defp persist_published_media(asset, url, key, digest) do
+  defp published_media(_asset), do: []
+
+  defp validate_published_media(media) do
+    Enum.reduce_while(media, {:ok, []}, fn item, {:ok, valid_media} ->
+      case validate_public_media_url(item.url) do
+        {:ok, url} -> {:cont, {:ok, valid_media ++ [%{item | url: url}]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp upload_media_bodies(campaign, asset, bodies) do
+    bodies
+    |> Enum.with_index(1)
+    |> Enum.reduce_while({:ok, []}, fn {body, index}, {:ok, uploaded} ->
+      digest = :crypto.hash(:sha256, body) |> Base.encode16(case: :lower)
+      key = s3_object_key(campaign, asset, digest, index)
+      mime_type = asset.mime_type || "application/octet-stream"
+
+      case S3.put_object(key, body, mime_type) do
+        {:ok, url} ->
+          item = %{url: url, key: key, digest: digest, mime_type: mime_type}
+          {:cont, {:ok, uploaded ++ [item]}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp persist_published_media(asset, published) do
+    urls = Enum.map(published, & &1.url)
+    keys = Enum.map(published, & &1.key)
+    digests = Enum.map(published, & &1.digest)
+
     metadata =
       Map.merge(asset.metadata || %{}, %{
-        "published_url" => url,
-        "s3_key" => key,
-        "sha256" => digest
+        "published_url" => List.first(urls),
+        "published_urls" => urls,
+        "s3_key" => List.first(keys),
+        "s3_keys" => keys,
+        "sha256" => List.first(digests),
+        "sha256s" => digests
       })
 
     asset
@@ -572,10 +744,11 @@ defmodule GridMediaManager.Campaigns do
     |> Repo.update()
   end
 
-  defp s3_object_key(campaign, asset, digest) do
+  defp s3_object_key(campaign, asset, digest, index) do
     campaign_slug = sanitize_s3_segment(campaign.slug || "campaign-#{campaign.id}")
     extension = if asset.mime_type == "video/mp4", do: "mp4", else: "png"
-    "campaigns/#{campaign_slug}/assets/#{asset.id}/#{String.slice(digest, 0, 24)}.#{extension}"
+
+    "campaigns/#{campaign_slug}/assets/#{asset.id}/#{index}-#{String.slice(digest, 0, 24)}.#{extension}"
   end
 
   defp sanitize_s3_segment(value) do
@@ -634,9 +807,6 @@ defmodule GridMediaManager.Campaigns do
   defp public_media_error do
     "Generated media is only available on the local server. Set PUBLIC_BASE_URL to a public HTTPS URL, such as an ngrok or Cloudflare Tunnel URL, before scheduling an image through Buffer."
   end
-
-  defp buffer_media_mime_type(%MediaAsset{mime_type: mime_type}), do: mime_type
-  defp buffer_media_mime_type(_asset), do: nil
 
   defp buffer_post_title(_campaign, %MediaAsset{title: title})
        when is_binary(title) and title != "",

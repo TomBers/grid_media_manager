@@ -477,6 +477,54 @@ defmodule GridMediaManager.CampaignsTest do
       assert length(Enum.filter(assets, &(&1.kind == "key_node_card"))) == 4
     end
 
+    test "combines selected mixed candidates into one story carousel" do
+      assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "combined-carousel")
+
+      candidates =
+        campaign
+        |> Workflow.candidates()
+        |> Enum.filter(&(&1.type in ["question", "highlight", "key_node"]))
+        |> Enum.take(3)
+
+      result =
+        Workflow.generate(campaign, candidates,
+          style: "gradient_poster",
+          format: "combined_carousel"
+        )
+
+      carousel = Enum.find(result.assets, &(&1.kind == "curated_carousel"))
+      assert carousel
+      assert carousel.metadata["format"] == "curated_carousel"
+      assert carousel.metadata["slide_count"] == length(candidates) + 2
+      assert length(carousel.metadata["slides"]) == length(candidates) + 2
+      assert carousel.recommended_platforms == ["instagram", "linkedin"]
+
+      if CarouselVideo.available?() do
+        assert result.errors == []
+        video = Enum.find(result.assets, &(&1.kind == "curated_carousel_video"))
+        assert video
+        assert video.metadata["slide_count"] == carousel.metadata["slide_count"]
+        assert video.metadata["background_audio"]
+      else
+        assert result.errors != []
+      end
+
+      png =
+        ShareCard.curated_carousel_image_png(
+          campaign,
+          carousel.metadata["slides"],
+          carousel.style,
+          2
+        )
+
+      assert binary_part(png, 0, 8) == <<137, 80, 78, 71, 13, 10, 26, 10>>
+
+      assert Enum.any?(
+               Campaigns.list_post_drafts(campaign, platform: "instagram"),
+               &(&1.media_asset_id == carousel.id)
+             )
+    end
+
     test "generates an ordered carousel of key-node slides" do
       assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "carousel-test")
 

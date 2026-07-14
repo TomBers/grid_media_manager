@@ -55,6 +55,18 @@ defmodule GridMediaManager.Promotion.Markdown do
     |> Enum.reject(&(&1.text == ""))
   end
 
+  @spec paginate_blocks([block()], pos_integer()) :: [[block()]]
+  def paginate_blocks(blocks, max_characters \\ 1_100)
+
+  def paginate_blocks(blocks, max_characters)
+      when is_list(blocks) and is_integer(max_characters) and max_characters > 0 do
+    blocks
+    |> Enum.flat_map(&split_block(&1, max_characters))
+    |> Enum.reduce([], fn block, pages -> append_block_to_pages(pages, block, max_characters) end)
+  end
+
+  def paginate_blocks(_blocks, _max_characters), do: []
+
   @spec readable_text([block()]) :: String.t()
   def readable_text(blocks) when is_list(blocks) do
     blocks
@@ -86,6 +98,55 @@ defmodule GridMediaManager.Promotion.Markdown do
   end
 
   def plain_inline(text), do: text |> to_string() |> plain_inline()
+
+  defp split_block(%{text: text} = block, max_characters) do
+    text
+    |> complete_sentences()
+    |> Enum.reduce([], fn sentence, chunks ->
+      append_sentence(chunks, sentence, max_characters)
+    end)
+    |> Enum.map(&%{block | text: &1})
+  end
+
+  defp split_block(_block, _max_characters), do: []
+
+  defp complete_sentences(text) do
+    Regex.scan(~r/.+?(?:[.!?]+(?=\s|$)|$)/u, text)
+    |> List.flatten()
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> case do
+      [] -> [String.trim(text)]
+      sentences -> sentences
+    end
+  end
+
+  defp append_sentence([], sentence, _max_characters), do: [sentence]
+
+  defp append_sentence(chunks, sentence, max_characters) do
+    current = List.last(chunks)
+    combined = current <> " " <> sentence
+
+    if String.length(combined) <= max_characters do
+      List.replace_at(chunks, length(chunks) - 1, combined)
+    else
+      chunks ++ [sentence]
+    end
+  end
+
+  defp append_block_to_pages([], block, _max_characters), do: [[block]]
+
+  defp append_block_to_pages(pages, block, max_characters) do
+    current_page = List.last(pages)
+    current_size = Enum.reduce(current_page, 0, &(String.length(&1.text) + 24 + &2))
+    block_size = String.length(block.text) + 24
+
+    if current_size + block_size <= max_characters do
+      List.replace_at(pages, length(pages) - 1, current_page ++ [block])
+    else
+      pages ++ [[block]]
+    end
+  end
 
   defp reduce_line(line, {blocks, paragraph}) do
     trimmed = String.trim(line)
