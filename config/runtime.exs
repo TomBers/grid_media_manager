@@ -61,6 +61,7 @@ config :grid_media_manager, :buffer,
   text_channels: %{
     "x" => System.get_env("BUFFER_TEXT_CHANNEL_X"),
     "linkedin" => System.get_env("BUFFER_TEXT_CHANNEL_LINKEDIN"),
+    "facebook" => System.get_env("BUFFER_TEXT_CHANNEL_FACEBOOK"),
     "bluesky" => System.get_env("BUFFER_TEXT_CHANNEL_BLUESKY"),
     "substack" => System.get_env("BUFFER_TEXT_CHANNEL_SUBSTACK")
   },

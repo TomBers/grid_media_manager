@@ -300,6 +300,16 @@ defmodule GridMediaManager.Social.Buffer do
     end
   end
 
+  defp post_metadata(%PostDraft{platform: "facebook"}, opts, _assets) do
+    type = option(opts, :facebook_type) |> string_value() || "post"
+
+    if type in ["post", "story", "reel"] do
+      {:ok, %{"facebook" => %{"type" => type}}}
+    else
+      {:error, "facebook_type must be post, story, or reel"}
+    end
+  end
+
   defp post_metadata(%PostDraft{}, _opts, _assets), do: {:ok, nil}
 
   defp single_video?([%{"video" => %{"url" => _url}}]), do: true
@@ -338,7 +348,7 @@ defmodule GridMediaManager.Social.Buffer do
     |> string_value()
   end
 
-  defp api_key(platform) when platform in ["x", "linkedin", "bluesky", "substack"] do
+  defp api_key(platform) when platform in ["x", "linkedin", "facebook", "bluesky", "substack"] do
     case config_value(:text_api_key) |> string_value() do
       nil -> api_key()
       key -> key
@@ -360,7 +370,7 @@ defmodule GridMediaManager.Social.Buffer do
   end
 
   defp account_channels_key(platform)
-       when platform in ["x", "linkedin", "bluesky", "substack"],
+       when platform in ["x", "linkedin", "facebook", "bluesky", "substack"],
        do: :text_channels
 
   defp account_channels_key(_platform), do: :video_channels

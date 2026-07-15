@@ -13,6 +13,12 @@ defmodule GridMediaManager.Social.Platforms do
       style: "Professional educational framing"
     },
     %{
+      id: "facebook",
+      label: "Facebook",
+      max_chars: 63_206,
+      style: "Readable, conversational context"
+    },
+    %{
       id: "instagram",
       label: "Instagram",
       max_chars: 2_200,

@@ -49,7 +49,11 @@ defmodule GridMediaManager.Social.BufferTest do
       api_key: "video-api-key",
       text_api_key: "text-api-key",
       video_channels: %{"instagram" => "video-instagram"},
-      text_channels: %{"x" => "text-x", "linkedin" => "text-linkedin"}
+      text_channels: %{
+        "x" => "text-x",
+        "linkedin" => "text-linkedin",
+        "facebook" => "text-facebook"
+      }
     )
 
     assert Buffer.account_for("instagram") == %{
@@ -62,6 +66,11 @@ defmodule GridMediaManager.Social.BufferTest do
     assert Buffer.account_for("linkedin") == %{
              api_key: "text-api-key",
              channel_id: "text-linkedin"
+           }
+
+    assert Buffer.account_for("facebook") == %{
+             api_key: "text-api-key",
+             channel_id: "text-facebook"
            }
   end
 
@@ -207,6 +216,26 @@ defmodule GridMediaManager.Social.BufferTest do
                channel_id: "instagram-channel",
                media_url: "https://cdn.example.com/reel.mp4",
                mime_type: "video/mp4"
+             )
+  end
+
+  test "sets Facebook post metadata for image assets" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
+      input = Jason.decode!(raw_body)["variables"]["input"]
+
+      assert input["metadata"] == %{"facebook" => %{"type" => "post"}}
+
+      success_response(conn)
+    end)
+
+    facebook_draft = %{draft() | platform: "facebook"}
+
+    assert {:ok, _post} =
+             Buffer.schedule(facebook_draft,
+               channel_id: "facebook-channel",
+               media_url: "https://cdn.example.com/post.png",
+               mime_type: "image/png"
              )
   end
 

@@ -1304,7 +1304,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   </h3>
                   <p class="mt-1 text-sm leading-6 text-base-content/60">
                     <%= if @content_mode == "text" do %>
-                      Refine each caption, then schedule the X and LinkedIn posts together below.
+                      Refine each caption, then schedule the X, LinkedIn, and Facebook posts together below.
                     <% else %>
                       <%= if @selected_output_asset_id == "all" do %>
                         Showing copy across all visuals. Select one above to focus on a single visual.
@@ -1370,7 +1370,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                       type="datetime-local"
                       label={
                         if(@content_mode == "text",
-                          do: "Publish X and LinkedIn posts at (UTC)",
+                          do: "Publish X, LinkedIn, and Facebook posts at (UTC)",
                           else: "Publish all selected posts at (UTC)"
                         )
                       }
@@ -1378,7 +1378,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     />
                     <p class="mt-1 text-xs text-base-content/50">
                       {if(@content_mode == "text",
-                        do: "X and LinkedIn use the text Buffer account.",
+                        do: "X, LinkedIn, and Facebook use the text Buffer account.",
                         else:
                           "X uses image assets; Instagram and YouTube Shorts use video assets when available."
                       )}
@@ -1900,7 +1900,16 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp restore_asset_filter(_params, _asset_ids), do: "all"
 
   defp maybe_restore_review_drafts(socket, []), do: socket
-  defp maybe_restore_review_drafts(socket, _assets), do: refresh_review_drafts(socket)
+
+  defp maybe_restore_review_drafts(socket, assets) do
+    Campaigns.ensure_post_drafts_for_platforms(
+      socket.assigns.campaign,
+      assets,
+      socket.assigns.selected_platforms
+    )
+
+    refresh_review_drafts(socket)
+  end
 
   defp maybe_patch_review_url(socket) do
     if socket.assigns.step == "review" and socket.assigns.output_asset_count > 0 do
@@ -2074,17 +2083,21 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp suggested_platforms(platforms, _format), do: platforms
 
   defp content_mode_platforms(["instagram", "youtube", "tiktok"], "text"),
-    do: ["x", "linkedin"]
+    do: ["x", "linkedin", "facebook"]
 
   defp content_mode_platforms(platforms, "video")
-       when platforms in [["x", "linkedin"], ["x", "linkedin", "bluesky"]],
+       when platforms in [
+              ["x", "linkedin"],
+              ["x", "linkedin", "facebook"],
+              ["x", "linkedin", "bluesky"]
+            ],
        do: ["instagram", "youtube", "tiktok"]
 
   defp content_mode_platforms(platforms, _mode), do: platforms
 
   defp text_platforms(platforms) do
-    platforms = Enum.filter(platforms, &(&1 in ["x", "linkedin"]))
-    if platforms == [], do: ["x", "linkedin"], else: platforms
+    platforms = Enum.filter(platforms, &(&1 in ["x", "linkedin", "facebook"]))
+    Enum.uniq(platforms ++ ["x", "linkedin", "facebook"])
   end
 
   defp maybe_text_quote_candidates(candidates, "text", all_candidates) do
@@ -2380,6 +2393,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp platform_icon("youtube"), do: "hero-play-circle"
   defp platform_icon("tiktok"), do: "hero-musical-note"
   defp platform_icon("linkedin"), do: "hero-briefcase"
+  defp platform_icon("facebook"), do: "hero-user-group"
   defp platform_icon("bluesky"), do: "hero-cloud"
   defp platform_icon("substack"), do: "hero-envelope"
   defp platform_icon(_platform), do: "hero-globe-alt"

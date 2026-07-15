@@ -155,7 +155,7 @@ bin/dev
 
 `bin/dev` also exports the values in `.env` before running `mix phx.server`, which is useful when starting the app from a shell. The file is ignored by git, and you must restart the server after changing it. Production deployments should continue to provide environment variables through the host or release manager.
 
-The two Buffer accounts are configured with `BUFFER_API_KEY` (or `BUFFER_VIDEO_API_KEY`) plus the video channel IDs, and `BUFFER_TEXT_API_KEY` plus `BUFFER_TEXT_CHANNEL_X` and `BUFFER_TEXT_CHANNEL_LINKEDIN` for text scheduling.
+The two Buffer accounts are configured with `BUFFER_API_KEY` (or `BUFFER_VIDEO_API_KEY`) plus the video channel IDs, and `BUFFER_TEXT_API_KEY` plus `BUFFER_TEXT_CHANNEL_X`, `BUFFER_TEXT_CHANNEL_LINKEDIN`, and `BUFFER_TEXT_CHANNEL_FACEBOOK` for text scheduling.
 
 ## Pexels backgrounds
 
