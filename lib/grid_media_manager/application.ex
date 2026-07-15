@@ -20,6 +20,8 @@ defmodule GridMediaManager.Application do
   @secret_environment_variables [
     "RATIONALGRID_PROMOTION_API_TOKEN",
     "BUFFER_API_KEY",
+    "BUFFER_VIDEO_API_KEY",
+    "BUFFER_TEXT_API_KEY",
     "PEXELS_API_KEY",
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",

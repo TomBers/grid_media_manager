@@ -38,3 +38,4 @@ npm-debug.log
 # Local development secrets.
 /config/dev.secret.exs
 
+.env

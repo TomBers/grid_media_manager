@@ -143,6 +143,20 @@ Question, highlight, and key-node production includes channel-specific layouts:
 
 Generated style and layout variants are persisted as separate media assets. Generated assets can be deleted from the asset gallery, which also removes their associated generated drafts so variants can be regenerated during testing. Titles and quote text are preserved in full and fitted to the available card area. Generated suggestions always stay within their platform limit; when complete source text cannot fit, the template falls back to a compact link invitation instead of truncating the title or quote. X counters exclude hashtags.
 
+## Local environment file
+
+For local development, the runtime loads the ignored `.env` file before the application starts. Copy the template and start the app through the included wrapper:
+
+```sh
+cp .env.example .env
+# edit .env with your keys and Buffer channel IDs
+bin/dev
+```
+
+`bin/dev` also exports the values in `.env` before running `mix phx.server`, which is useful when starting the app from a shell. The file is ignored by git, and you must restart the server after changing it. Production deployments should continue to provide environment variables through the host or release manager.
+
+The two Buffer accounts are configured with `BUFFER_API_KEY` (or `BUFFER_VIDEO_API_KEY`) plus the video channel IDs, and `BUFFER_TEXT_API_KEY` plus `BUFFER_TEXT_CHANNEL_X`, `BUFFER_TEXT_CHANNEL_LINKEDIN`, and `BUFFER_TEXT_CHANNEL_FACEBOOK` for text scheduling.
+
 ## Pexels backgrounds
 
 Set `PEXELS_API_KEY` to enable photo search in the guided studio:
@@ -158,7 +172,7 @@ export PEXELS_API_KEY=your-key
 mix phx.server
 ```
 
-Phoenix does not load `.env` files automatically, and the server must be restarted after changing its environment. For local development, you can instead add the following to the ignored `config/dev.secret.exs` file:
+The server must be restarted after changing its environment. For local development, you can instead add the following to the ignored `config/dev.secret.exs` file:
 
 ```elixir
 import Config

@@ -89,6 +89,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         do: "video",
         else: "text"
 
+    restored_platforms =
+      if restored_content_mode == "text",
+        do: text_platforms(restored_platforms),
+        else: restored_platforms
+
     previous_packages = previous_output_packages(campaign)
     selected_keys = Workflow.default_selection(candidates)
 
@@ -371,15 +376,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     else
       {:noreply, put_flash(socket, :error, "That draft is not part of this package.")}
     end
-  end
-
-  def handle_event(
-        "schedule_selected_drafts",
-        %{"bulk_schedule" => %{"scheduled_for" => _scheduled_for}},
-        %{assigns: %{content_mode: "text"}} = socket
-      ) do
-    {:noreply,
-     put_flash(socket, :info, "Text packages are manual. Copy or download each post instead.")}
   end
 
   def handle_event(
@@ -1308,7 +1304,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   </h3>
                   <p class="mt-1 text-sm leading-6 text-base-content/60">
                     <%= if @content_mode == "text" do %>
-                      Refine each caption, then copy it into the platform where you want to publish.
+                      Refine each caption, then schedule the X, LinkedIn, and Facebook posts together below.
                     <% else %>
                       <%= if @selected_output_asset_id == "all" do %>
                         Showing copy across all visuals. Select one above to focus on a single visual.
@@ -1361,7 +1357,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </div>
 
                 <.form
-                  :if={@content_mode == "video"}
+                  :if={@content_mode in ["video", "text"]}
                   for={@bulk_schedule_form}
                   id="guided-bulk-schedule-form"
                   phx-submit="schedule_selected_drafts"
@@ -1372,17 +1368,26 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                       id="guided-bulk-scheduled-for"
                       field={@bulk_schedule_form[:scheduled_for]}
                       type="datetime-local"
-                      label="Publish all selected posts at (UTC)"
+                      label={
+                        if(@content_mode == "text",
+                          do: "Publish X, LinkedIn, and Facebook posts at (UTC)",
+                          else: "Publish all selected posts at (UTC)"
+                        )
+                      }
                       required
                     />
                     <p class="mt-1 text-xs text-base-content/50">
-                      X uses image assets; Instagram and YouTube Shorts use video assets when available.
+                      {if(@content_mode == "text",
+                        do: "X, LinkedIn, and Facebook use the text Buffer account.",
+                        else:
+                          "X uses image assets; Instagram and YouTube Shorts use video assets when available."
+                      )}
                     </p>
                     <p
-                      :if={not Buffer.configured?()}
+                      :if={not buffer_ready_for_platforms?(@selected_platforms)}
                       class="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-200"
                     >
-                      Configure Buffer to schedule these posts.
+                      Configure the Buffer account and channel IDs before scheduling.
                     </p>
                   </div>
                   <button
@@ -1395,17 +1400,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     Schedule {@review_schedulable_count} posts
                   </button>
                 </.form>
-
-                <div
-                  :if={@content_mode == "text"}
-                  id="manual-publishing-note"
-                  class="mt-4 flex items-start gap-3 rounded-3xl border border-orange-500/25 bg-orange-500/8 p-4 text-sm text-base-content/70"
-                >
-                  <.icon name="hero-pencil-square" class="mt-0.5 size-5 shrink-0 text-orange-500" />
-                  <p>
-                    Text mode is manual. Download the generated images, refine each caption above, and publish them directly to your text-first channels.
-                  </p>
-                </div>
 
                 <div id="guided-review-drafts" phx-update="stream" class="mt-4 space-y-4">
                   <div
@@ -1906,7 +1900,16 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp restore_asset_filter(_params, _asset_ids), do: "all"
 
   defp maybe_restore_review_drafts(socket, []), do: socket
-  defp maybe_restore_review_drafts(socket, _assets), do: refresh_review_drafts(socket)
+
+  defp maybe_restore_review_drafts(socket, assets) do
+    Campaigns.ensure_post_drafts_for_platforms(
+      socket.assigns.campaign,
+      assets,
+      socket.assigns.selected_platforms
+    )
+
+    refresh_review_drafts(socket)
+  end
 
   defp maybe_patch_review_url(socket) do
     if socket.assigns.step == "review" and socket.assigns.output_asset_count > 0 do
@@ -1957,17 +1960,22 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     has_video? = Enum.any?(drafts, &video_asset?(&1.media_asset))
 
     Enum.filter(drafts, fn draft ->
-      case draft.platform do
-        "x" ->
-          not video_asset?(draft.media_asset)
+      Buffer.account_for(draft.platform) != nil and
+        case draft.platform do
+          "x" ->
+            not video_asset?(draft.media_asset)
 
-        platform when platform in ["instagram", "youtube", "tiktok"] ->
-          not has_video? or video_asset?(draft.media_asset)
+          platform when platform in ["instagram", "youtube", "tiktok"] ->
+            not has_video? or video_asset?(draft.media_asset)
 
-        _ ->
-          true
-      end
+          _ ->
+            true
+        end
     end)
+  end
+
+  defp buffer_ready_for_platforms?(platforms) do
+    Enum.all?(platforms, &(Buffer.account_for(&1) != nil))
   end
 
   defp deduplicate_review_drafts(drafts) do
@@ -2026,7 +2034,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       form: to_form(%{"body" => draft.body}, as: :post_draft),
       schedule_form:
         to_form(%{"scheduled_for" => schedule_input_value(draft.scheduled_for)}, as: :schedule),
-      buffer_channel?: Buffer.configured?() and is_binary(Buffer.channel_id(draft.platform)),
+      buffer_channel?: Buffer.account_for(draft.platform) != nil,
       asset_title: draft.media_asset.title,
       character_count: character_count,
       character_limit: character_limit,
@@ -2075,12 +2083,22 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp suggested_platforms(platforms, _format), do: platforms
 
   defp content_mode_platforms(["instagram", "youtube", "tiktok"], "text"),
-    do: ["x", "linkedin", "bluesky"]
+    do: ["x", "linkedin", "facebook"]
 
-  defp content_mode_platforms(["x", "linkedin", "bluesky"], "video"),
-    do: ["instagram", "youtube", "tiktok"]
+  defp content_mode_platforms(platforms, "video")
+       when platforms in [
+              ["x", "linkedin"],
+              ["x", "linkedin", "facebook"],
+              ["x", "linkedin", "bluesky"]
+            ],
+       do: ["instagram", "youtube", "tiktok"]
 
   defp content_mode_platforms(platforms, _mode), do: platforms
+
+  defp text_platforms(platforms) do
+    platforms = Enum.filter(platforms, &(&1 in ["x", "linkedin", "facebook"]))
+    Enum.uniq(platforms ++ ["x", "linkedin", "facebook"])
+  end
 
   defp maybe_text_quote_candidates(candidates, "text", all_candidates) do
     quote_candidates = Enum.filter(candidates, &quote_candidate?/1)
@@ -2375,6 +2393,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp platform_icon("youtube"), do: "hero-play-circle"
   defp platform_icon("tiktok"), do: "hero-musical-note"
   defp platform_icon("linkedin"), do: "hero-briefcase"
+  defp platform_icon("facebook"), do: "hero-user-group"
   defp platform_icon("bluesky"), do: "hero-cloud"
   defp platform_icon("substack"), do: "hero-envelope"
   defp platform_icon(_platform), do: "hero-globe-alt"
