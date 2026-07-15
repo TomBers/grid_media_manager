@@ -67,6 +67,30 @@ defmodule GridMediaManager.Campaigns do
     |> Repo.all()
   end
 
+  def ensure_post_drafts_for_platforms(%Campaign{} = campaign, media_assets, platforms)
+      when is_list(media_assets) and is_list(platforms) do
+    campaign = Repo.get!(Campaign, campaign.id)
+    platforms = Enum.filter(platforms, &(&1 in Platforms.ids()))
+
+    campaign
+    |> Templates.draft_attrs_for_platforms(media_assets, platforms)
+    |> Enum.each(fn attrs ->
+      attrs = Map.put(attrs, :campaign_id, campaign.id)
+
+      case find_existing_draft(attrs) do
+        nil ->
+          %PostDraft{}
+          |> PostDraft.changeset(attrs)
+          |> Repo.insert!()
+
+        %PostDraft{} ->
+          :ok
+      end
+    end)
+
+    :ok
+  end
+
   def get_media_asset!(id), do: Repo.get!(MediaAsset, parse_integer(id))
 
   def get_curated_carousel_asset(%Campaign{id: campaign_id}, token) when is_binary(token) do
@@ -74,6 +98,16 @@ defmodule GridMediaManager.Campaigns do
       campaign_id: campaign_id,
       kind: "curated_carousel",
       source_type: "curated_carousel",
+      source_id: token
+    ) || get_curated_carousel_video_asset(%Campaign{id: campaign_id}, token)
+  end
+
+  def get_curated_carousel_video_asset(%Campaign{id: campaign_id}, token)
+      when is_binary(token) do
+    Repo.get_by(MediaAsset,
+      campaign_id: campaign_id,
+      kind: "curated_carousel_video",
+      source_type: "curated_carousel_video",
       source_id: token
     )
   end

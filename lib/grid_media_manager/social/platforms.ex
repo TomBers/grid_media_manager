@@ -24,6 +24,12 @@ defmodule GridMediaManager.Social.Platforms do
       max_chars: 5_000,
       style: "Searchable title, concise context, and a clear invitation"
     },
+    %{
+      id: "tiktok",
+      label: "TikTok",
+      max_chars: 2_200,
+      style: "Fast hook, clear premise, and a conversational caption"
+    },
     %{id: "substack", label: "Substack", max_chars: nil, style: "Newsletter intro or note"}
   ]
 

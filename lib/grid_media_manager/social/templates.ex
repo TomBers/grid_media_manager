@@ -46,6 +46,24 @@ defmodule GridMediaManager.Social.Templates do
     base_drafts ++ asset_drafts
   end
 
+  def draft_attrs_for_platforms(%Campaign{} = campaign, media_assets, platforms)
+      when is_list(media_assets) and is_list(platforms) do
+    media_assets
+    |> Enum.flat_map(fn asset ->
+      angle = asset_angle(asset)
+
+      Enum.map(platforms, fn platform ->
+        %{
+          media_asset_id: asset.id,
+          platform: platform,
+          angle: angle,
+          body: body(campaign, asset, platform, angle),
+          status: "draft"
+        }
+      end)
+    end)
+  end
+
   def angle_label("question"), do: "Question-first"
   def angle_label("explainer"), do: "Explainer"
   def angle_label("discussion"), do: "Discussion prompt"
@@ -56,6 +74,54 @@ defmodule GridMediaManager.Social.Templates do
 
   def angle_label(angle) when is_binary(angle) do
     angle |> String.replace("_", " ") |> String.capitalize()
+  end
+
+  def body(
+        %Campaign{} = campaign,
+        %MediaAsset{kind: "highlight_video"} = asset,
+        platform,
+        "highlight"
+      ) do
+    link = asset_link(campaign, asset)
+    quote = asset.text |> fallback(campaign.title)
+
+    copy =
+      case platform do
+        "instagram" ->
+          "Watch the six-second version of this idea:\n\n“#{quote}”\n\n#{hashtags(campaign)}"
+
+        "youtube" ->
+          "Can a short clip change how you see #{campaign.title}?\n\n#{quote}\n\nExplore the full map:\n#{link}\n\n#Shorts #RationalGrid"
+
+        _ ->
+          "A six-second idea from #{campaign.title}:\n\n#{quote}\n#{link}"
+      end
+
+    fit_to_platform(copy, platform, link)
+  end
+
+  def body(
+        %Campaign{} = campaign,
+        %MediaAsset{kind: "question_video"} = asset,
+        platform,
+        "question_quote"
+      ) do
+    link = asset_link(campaign, asset)
+    question = asset.text |> fallback(campaign.title)
+
+    copy =
+      case platform do
+        "instagram" ->
+          "Pause on this question, then take a position:\n\n#{question}\n\n#{hashtags(campaign)}"
+
+        "youtube" ->
+          "A six-second question about #{campaign.title}:\n\n#{question}\n\nExplore the argument:\n#{link}\n\n#Shorts #RationalGrid"
+
+        _ ->
+          "A question in six seconds:\n#{question}\n#{link}"
+      end
+
+    fit_to_platform(copy, platform, link)
   end
 
   def body(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "highlight") do

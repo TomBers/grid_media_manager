@@ -11,7 +11,7 @@ defmodule GridMediaManager.Studio.Workflow do
   alias GridMediaManager.Promotion.ShareCard
 
   @max_candidates_per_type 24
-  @formats ~w(landscape linkedin portrait carousel combined_carousel)
+  @formats ~w(landscape linkedin portrait carousel combined_carousel story_video)
 
   def candidates(%Campaign{} = campaign) do
     recommended_question = Campaigns.recommended_question(campaign)
@@ -70,30 +70,35 @@ defmodule GridMediaManager.Studio.Workflow do
     format = normalize_format(Keyword.get(opts, :format, "landscape"))
 
     result =
-      if format == "combined_carousel" do
-        generate_combined_carousel(campaign, candidates, style)
-      else
-        {assets, errors} =
-          Enum.reduce(candidates, {[], []}, fn candidate, {assets, errors} ->
-            case generate_candidate(campaign, candidate, style, format) do
-              {:ok, generated_assets} ->
-                {Enum.reverse(List.wrap(generated_assets), assets), errors}
+      cond do
+        format == "combined_carousel" ->
+          generate_combined_carousel(campaign, candidates, style)
 
-              {:partial, generated_assets, reason} ->
-                {
-                  Enum.reverse(List.wrap(generated_assets), assets),
-                  [%{candidate: candidate, reason: reason} | errors]
-                }
+        format == "story_video" ->
+          generate_story_video(campaign, candidates, style)
 
-              {:error, reason} ->
-                {assets, [%{candidate: candidate, reason: reason} | errors]}
-            end
-          end)
+        true ->
+          {assets, errors} =
+            Enum.reduce(candidates, {[], []}, fn candidate, {assets, errors} ->
+              case generate_candidate(campaign, candidate, style, format) do
+                {:ok, generated_assets} ->
+                  {Enum.reverse(List.wrap(generated_assets), assets), errors}
 
-        %{
-          assets: assets |> Enum.reverse() |> Enum.uniq_by(& &1.id),
-          errors: Enum.reverse(errors)
-        }
+                {:partial, generated_assets, reason} ->
+                  {
+                    Enum.reverse(List.wrap(generated_assets), assets),
+                    [%{candidate: candidate, reason: reason} | errors]
+                  }
+
+                {:error, reason} ->
+                  {assets, [%{candidate: candidate, reason: reason} | errors]}
+              end
+            end)
+
+          %{
+            assets: assets |> Enum.reverse() |> Enum.uniq_by(& &1.id),
+            errors: Enum.reverse(errors)
+          }
       end
 
     assign_generation_batch(result)
@@ -122,6 +127,26 @@ defmodule GridMediaManager.Studio.Workflow do
               assets: [carousel],
               errors: [%{candidate: candidate, reason: {:video, reason}}]
             }
+        end
+
+      {:error, reason} ->
+        candidate = List.first(candidates) || %{title: campaign.title}
+        %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
+    end
+  end
+
+  defp generate_story_video(campaign, candidates, style) do
+    case Campaigns.generate_curated_carousel(campaign, candidates, style) do
+      {:ok, carousel} ->
+        case Campaigns.generate_curated_carousel_video(campaign, carousel) do
+          {:ok, video} ->
+            _ = Campaigns.delete_generated_media_asset(carousel.id)
+            %{assets: [video], errors: []}
+
+          {:error, reason} ->
+            _ = Campaigns.delete_generated_media_asset(carousel.id)
+            candidate = List.first(candidates) || %{title: campaign.title}
+            %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
         end
 
       {:error, reason} ->

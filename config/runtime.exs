@@ -27,7 +27,8 @@ config :grid_media_manager, :buffer,
     "bluesky" => System.get_env("BUFFER_CHANNEL_BLUESKY"),
     "linkedin" => System.get_env("BUFFER_CHANNEL_LINKEDIN"),
     "instagram" => System.get_env("BUFFER_CHANNEL_INSTAGRAM"),
-    "youtube" => System.get_env("BUFFER_CHANNEL_YOUTUBE")
+    "youtube" => System.get_env("BUFFER_CHANNEL_YOUTUBE"),
+    "tiktok" => System.get_env("BUFFER_CHANNEL_TIKTOK")
   }
 
 if config_env() == :prod do

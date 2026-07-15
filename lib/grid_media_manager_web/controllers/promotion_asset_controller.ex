@@ -87,7 +87,11 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
   def curated_carousel_video(conn, %{"id" => id, "token" => token} = params) do
     campaign = Campaigns.get_campaign!(id)
 
-    case Campaigns.get_curated_carousel_asset(campaign, token) do
+    asset =
+      Campaigns.get_curated_carousel_asset(campaign, token) ||
+        Campaigns.get_curated_carousel_video_asset(campaign, token)
+
+    case asset do
       nil ->
         send_resp(conn, 404, "Curated carousel not found")
 

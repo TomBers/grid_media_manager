@@ -66,6 +66,25 @@ defmodule GridMediaManager.Social.TemplatesTest do
     end)
   end
 
+  test "video assets receive distinct copy from their companion image" do
+    campaign = campaign()
+
+    image = %MediaAsset{
+      id: 1,
+      title: "Question quote",
+      kind: "question_quote_card",
+      text: "What should we value?"
+    }
+
+    video = %{image | id: 2, kind: "question_video"}
+
+    image_copy = Templates.body(campaign, image, "instagram", "question_quote")
+    video_copy = Templates.body(campaign, video, "instagram", "question_quote")
+
+    refute image_copy == video_copy
+    assert video_copy =~ "Pause on this question"
+  end
+
   defp campaign do
     %Campaign{
       id: 1,
