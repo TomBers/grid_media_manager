@@ -207,8 +207,9 @@ defmodule GridMediaManager.Campaigns do
     draft = get_post_draft_with_asset!(id)
     campaign = get_campaign!(draft.campaign_id)
 
-    with true <- Buffer.configured?() || {:error, "Buffer is not configured."},
-         channel_id when is_binary(channel_id) <- Buffer.channel_id(draft.platform),
+    with %{api_key: api_key, channel_id: channel_id} <-
+           Buffer.account_for(draft.platform) ||
+             {:error, "Buffer account is not configured for this channel."},
          true <-
            Platforms.within_limit?(draft.body, draft.platform) ||
              {:error, "The draft is over the #{Platforms.label(draft.platform)} character limit."},
@@ -218,6 +219,7 @@ defmodule GridMediaManager.Campaigns do
       scheduled_draft = %{draft | scheduled_for: scheduled_for}
 
       case Buffer.schedule(scheduled_draft,
+             api_key: api_key,
              channel_id: channel_id,
              media: media,
              title: buffer_post_title(campaign, draft.media_asset),

@@ -1,5 +1,34 @@
 import Config
 
+# Load the ignored local .env file for development processes, including the
+# Tidewave server. Production continues to use the host's environment.
+if config_env() == :dev do
+  env_file = Path.expand("../.env", __DIR__)
+
+  if File.exists?(env_file) do
+    env_file
+    |> File.stream!()
+    |> Enum.each(fn line ->
+      line = String.trim(line)
+
+      unless line == "" or String.starts_with?(line, "#") do
+        case String.split(line, "=", parts: 2) do
+          [key, value] ->
+            key = key |> String.trim() |> String.replace_prefix("export ", "")
+            value = value |> String.trim() |> String.trim("\"") |> String.trim("'")
+
+            if key != "" do
+              System.put_env(key, value)
+            end
+
+          _invalid_line ->
+            :ok
+        end
+      end
+    end)
+  end
+end
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
@@ -22,6 +51,19 @@ end
 
 config :grid_media_manager, :buffer,
   api_key: System.get_env("BUFFER_API_KEY"),
+  video_api_key: System.get_env("BUFFER_VIDEO_API_KEY"),
+  text_api_key: System.get_env("BUFFER_TEXT_API_KEY"),
+  video_channels: %{
+    "instagram" => System.get_env("BUFFER_CHANNEL_INSTAGRAM"),
+    "youtube" => System.get_env("BUFFER_CHANNEL_YOUTUBE"),
+    "tiktok" => System.get_env("BUFFER_CHANNEL_TIKTOK")
+  },
+  text_channels: %{
+    "x" => System.get_env("BUFFER_TEXT_CHANNEL_X"),
+    "linkedin" => System.get_env("BUFFER_TEXT_CHANNEL_LINKEDIN"),
+    "bluesky" => System.get_env("BUFFER_TEXT_CHANNEL_BLUESKY"),
+    "substack" => System.get_env("BUFFER_TEXT_CHANNEL_SUBSTACK")
+  },
   channels: %{
     "x" => System.get_env("BUFFER_CHANNEL_X"),
     "bluesky" => System.get_env("BUFFER_CHANNEL_BLUESKY"),

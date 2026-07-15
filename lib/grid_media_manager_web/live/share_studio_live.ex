@@ -1243,7 +1243,7 @@ defmodule GridMediaManagerWeb.ShareStudioLive do
       form: to_form(%{"body" => draft.body}, as: :post_draft),
       schedule_form:
         to_form(%{"scheduled_for" => schedule_input_value(draft.scheduled_for)}, as: :schedule),
-      buffer_channel?: Buffer.configured?() and is_binary(Buffer.channel_id(draft.platform)),
+      buffer_channel?: Buffer.account_for(draft.platform) != nil,
       asset_title: asset_title(draft),
       character_count: character_count,
       character_limit: character_limit,

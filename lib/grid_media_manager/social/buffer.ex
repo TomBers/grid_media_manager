@@ -6,7 +6,12 @@ defmodule GridMediaManager.Social.Buffer do
 
       config :grid_media_manager, :buffer,
         api_key: "...",
+        text_api_key: "...",
+        text_channels: %{"x" => "...", "linkedin" => "..."},
         endpoint: "https://api.buffer.com"
+
+  Video platforms use `api_key`/`video_api_key` and `video_channels`. Text-first
+  platforms use `text_api_key` and `text_channels` when configured.
 
   The endpoint defaults to `https://api.buffer.com`. A `:plug` option may be
   configured for `Req.Test` without allowing test requests onto the network.
@@ -35,22 +40,35 @@ defmodule GridMediaManager.Social.Buffer do
 
   @doc "Returns whether a non-blank Buffer API key is configured."
   def configured? do
-    not is_nil(api_key())
+    not is_nil(api_key()) or not is_nil(api_key("text"))
   end
+
+  @doc "Returns whether the Buffer account for a platform is configured."
+  def configured?(platform) when is_binary(platform), do: not is_nil(account_for(platform))
+  def configured?(_platform), do: configured?()
+
+  @doc "Returns the Buffer account credentials and channel for a platform."
+  def account_for(platform) when is_binary(platform) do
+    case {api_key(platform), channel_id(platform)} do
+      {api_key, channel_id} when is_binary(api_key) and is_binary(channel_id) ->
+        %{api_key: api_key, channel_id: channel_id}
+
+      _missing ->
+        nil
+    end
+  end
+
+  def account_for(_platform), do: nil
 
   @doc "Returns the configured Buffer channel ID for a social platform."
   def channel_id(platform) when is_binary(platform) do
-    case config_value(:channels) do
-      channels when is_map(channels) ->
-        Map.get(channels, platform) || Map.get(channels, String.to_existing_atom(platform))
+    channel = channel_value(account_channels(platform), platform)
 
-      channels when is_list(channels) ->
-        Keyword.get(channels, String.to_existing_atom(platform))
-
-      _other ->
-        nil
+    if is_nil(channel) and is_nil(config_value(account_channels_key(platform))) do
+      channel_value(config_value(:channels), platform)
+    else
+      channel
     end
-    |> string_value()
   rescue
     ArgumentError -> nil
   end
@@ -70,7 +88,7 @@ defmodule GridMediaManager.Social.Buffer do
   `dueAt`.
   """
   def schedule(%PostDraft{} = draft, opts) when is_list(opts) or is_map(opts) do
-    with {:ok, key} <- configured_api_key(),
+    with {:ok, key} <- configured_api_key(option(opts, :api_key)),
          {:ok, channel_id} <- required_string(option(opts, :channel_id), "channel_id is required"),
          {:ok, text} <- required_string(draft.body, "post draft body is required"),
          {:ok, due_at} <- due_at(draft.scheduled_for),
@@ -308,8 +326,8 @@ defmodule GridMediaManager.Social.Buffer do
     {:error, "post draft scheduled_for must be a UTC DateTime"}
   end
 
-  defp configured_api_key do
-    case api_key() do
+  defp configured_api_key(explicit_key) do
+    case string_value(explicit_key) || api_key() do
       nil -> {:error, "Buffer is not configured; set :grid_media_manager, :buffer, :api_key"}
       key -> {:ok, key}
     end
@@ -319,6 +337,50 @@ defmodule GridMediaManager.Social.Buffer do
     config_value(:api_key)
     |> string_value()
   end
+
+  defp api_key(platform) when platform in ["x", "linkedin", "bluesky", "substack"] do
+    case config_value(:text_api_key) |> string_value() do
+      nil -> api_key()
+      key -> key
+    end
+  end
+
+  defp api_key(_platform) do
+    case config_value(:video_api_key) |> string_value() do
+      nil -> api_key()
+      key -> key
+    end
+  end
+
+  defp account_channels(platform) do
+    case config_value(account_channels_key(platform)) do
+      nil -> config_value(:channels)
+      channels -> channels
+    end
+  end
+
+  defp account_channels_key(platform)
+       when platform in ["x", "linkedin", "bluesky", "substack"],
+       do: :text_channels
+
+  defp account_channels_key(_platform), do: :video_channels
+
+  defp channel_value(channels, platform) when is_map(channels) do
+    Map.get(channels, platform) ||
+      Map.get(channels, String.to_existing_atom(platform))
+      |> string_value()
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp channel_value(channels, platform) when is_list(channels) do
+    Keyword.get(channels, String.to_existing_atom(platform))
+    |> string_value()
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp channel_value(_channels, _platform), do: nil
 
   defp endpoint do
     config_value(:endpoint)
