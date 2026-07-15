@@ -11,7 +11,7 @@ defmodule GridMediaManager.Studio.Workflow do
   alias GridMediaManager.Promotion.ShareCard
 
   @max_candidates_per_type 24
-  @formats ~w(landscape linkedin portrait carousel)
+  @formats ~w(landscape linkedin portrait carousel combined_carousel story_video)
 
   def candidates(%Campaign{} = campaign) do
     recommended_question = Campaigns.recommended_question(campaign)
@@ -50,6 +50,15 @@ defmodule GridMediaManager.Studio.Workflow do
     Enum.filter(candidates, &MapSet.member?(selected_keys, &1.key))
   end
 
+  def selected_candidates(candidates, selected_order)
+      when is_list(candidates) and is_list(selected_order) do
+    candidates_by_key = Map.new(candidates, &{&1.key, &1})
+
+    selected_order
+    |> Enum.map(&Map.get(candidates_by_key, &1))
+    |> Enum.reject(&is_nil/1)
+  end
+
   def filter_candidates(candidates, "all") when is_list(candidates), do: candidates
 
   def filter_candidates(candidates, type) when is_list(candidates) and is_binary(type) do
@@ -60,27 +69,90 @@ defmodule GridMediaManager.Studio.Workflow do
     style = opts |> Keyword.get(:style) |> ShareCard.normalize_style()
     format = normalize_format(Keyword.get(opts, :format, "landscape"))
 
-    {assets, errors} =
-      Enum.reduce(candidates, {[], []}, fn candidate, {assets, errors} ->
-        case generate_candidate(campaign, candidate, style, format) do
-          {:ok, generated_assets} ->
-            {Enum.reverse(List.wrap(generated_assets), assets), errors}
+    result =
+      cond do
+        format == "combined_carousel" ->
+          generate_combined_carousel(campaign, candidates, style)
 
-          {:partial, generated_assets, reason} ->
-            {
-              Enum.reverse(List.wrap(generated_assets), assets),
-              [%{candidate: candidate, reason: reason} | errors]
-            }
+        format == "story_video" ->
+          generate_story_video(campaign, candidates, style)
+
+        true ->
+          {assets, errors} =
+            Enum.reduce(candidates, {[], []}, fn candidate, {assets, errors} ->
+              case generate_candidate(campaign, candidate, style, format) do
+                {:ok, generated_assets} ->
+                  {Enum.reverse(List.wrap(generated_assets), assets), errors}
+
+                {:partial, generated_assets, reason} ->
+                  {
+                    Enum.reverse(List.wrap(generated_assets), assets),
+                    [%{candidate: candidate, reason: reason} | errors]
+                  }
+
+                {:error, reason} ->
+                  {assets, [%{candidate: candidate, reason: reason} | errors]}
+              end
+            end)
+
+          %{
+            assets: assets |> Enum.reverse() |> Enum.uniq_by(& &1.id),
+            errors: Enum.reverse(errors)
+          }
+      end
+
+    assign_generation_batch(result)
+  end
+
+  defp assign_generation_batch(%{assets: []} = result), do: result
+
+  defp assign_generation_batch(%{assets: assets} = result) do
+    case Campaigns.assign_generation_batch(assets) do
+      {:ok, updated_assets} -> %{result | assets: updated_assets}
+      {:error, _reason} -> result
+    end
+  end
+
+  defp generate_combined_carousel(campaign, candidates, style) do
+    case Campaigns.generate_curated_carousel(campaign, candidates, style) do
+      {:ok, carousel} ->
+        case Campaigns.generate_curated_carousel_video(campaign, carousel) do
+          {:ok, video} ->
+            %{assets: [carousel, video], errors: []}
 
           {:error, reason} ->
-            {assets, [%{candidate: candidate, reason: reason} | errors]}
-        end
-      end)
+            candidate = List.first(candidates) || %{title: campaign.title}
 
-    %{
-      assets: assets |> Enum.reverse() |> Enum.uniq_by(& &1.id),
-      errors: Enum.reverse(errors)
-    }
+            %{
+              assets: [carousel],
+              errors: [%{candidate: candidate, reason: {:video, reason}}]
+            }
+        end
+
+      {:error, reason} ->
+        candidate = List.first(candidates) || %{title: campaign.title}
+        %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
+    end
+  end
+
+  defp generate_story_video(campaign, candidates, style) do
+    case Campaigns.generate_curated_carousel(campaign, candidates, style) do
+      {:ok, carousel} ->
+        case Campaigns.generate_curated_carousel_video(campaign, carousel) do
+          {:ok, video} ->
+            _ = Campaigns.delete_generated_media_asset(carousel.id)
+            %{assets: [video], errors: []}
+
+          {:error, reason} ->
+            _ = Campaigns.delete_generated_media_asset(carousel.id)
+            candidate = List.first(candidates) || %{title: campaign.title}
+            %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
+        end
+
+      {:error, reason} ->
+        candidate = List.first(candidates) || %{title: campaign.title}
+        %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
+    end
   end
 
   defp generate_candidate(campaign, %{type: "grid"}, style, _format) do

@@ -15,6 +15,7 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
   """
 
   alias GridMediaManager.RationalGrid.Slug
+  alias GridMediaManager.TextNormalizer
 
   def campaign_attrs(payload, source_input) when is_map(payload) do
     metadata = metadata(payload)
@@ -358,6 +359,7 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
   defp question_text?(_question), do: false
 
   defp question_score(question) when is_binary(question) do
+    question = TextNormalizer.normalize_binary(question)
     words = Regex.scan(~r/[[:alpha:]]+/u, question) |> length()
     length_score = min(words, 18)
 
@@ -543,7 +545,7 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
   defp fallback(value, _fallback), do: value
 
   defp string_value(value) when is_binary(value) do
-    value = String.trim(value)
+    value = value |> TextNormalizer.normalize_binary() |> String.trim()
     if value == "", do: nil, else: value
   end
 

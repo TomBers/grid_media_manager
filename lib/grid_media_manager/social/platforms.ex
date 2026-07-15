@@ -24,6 +24,12 @@ defmodule GridMediaManager.Social.Platforms do
       max_chars: 5_000,
       style: "Searchable title, concise context, and a clear invitation"
     },
+    %{
+      id: "tiktok",
+      label: "TikTok",
+      max_chars: 2_200,
+      style: "Fast hook, clear premise, and a conversational caption"
+    },
     %{id: "substack", label: "Substack", max_chars: nil, style: "Newsletter intro or note"}
   ]
 
@@ -44,6 +50,23 @@ defmodule GridMediaManager.Social.Platforms do
     case get(id) do
       %{max_chars: max_chars} -> max_chars
       _ -> nil
+    end
+  end
+
+  @doc "Returns the platform-visible character count for social copy."
+  def character_count(text, "x") when is_binary(text) do
+    text
+    |> String.replace(~r/(^|\s)#[\p{L}\p{N}_]+/u, "\\1")
+    |> String.length()
+  end
+
+  def character_count(text, _platform) when is_binary(text), do: String.length(text)
+  def character_count(_text, _platform), do: 0
+
+  def within_limit?(text, platform) do
+    case max_chars(platform) do
+      limit when is_integer(limit) -> character_count(text, platform) <= limit
+      nil -> true
     end
   end
 end

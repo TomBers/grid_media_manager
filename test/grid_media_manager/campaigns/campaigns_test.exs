@@ -23,6 +23,63 @@ defmodule GridMediaManager.CampaignsTest do
     assert Enum.count(styles, &(&1.category == "Social")) == 7
   end
 
+  test "renders full titles and quotes without top-right format labels" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "full-card-copy")
+
+    long_question =
+      "How should a society preserve freedom when comfort, safety, convenience, and certainty all make surrendering agency feel reasonable?"
+
+    question = %{"question" => long_question, "kind" => "follow_up_question"}
+
+    question_svg =
+      ShareCard.question_platform_image_svg(campaign, question, "minimal_dark", "linkedin")
+
+    assert question_svg =~ "surrendering agency feel reasonable?"
+    refute question_svg =~ "…"
+    refute question_svg =~ "LINKEDIN ·"
+
+    long_title =
+      "A complete node title about freedom, comfort, responsibility, technology, and the difficult work of retaining human agency"
+
+    node = %{"id" => "long-node", "title" => long_title, "content" => "A complete explanation."}
+    node_svg = ShareCard.node_linkedin_image_svg(campaign, node, "minimal_dark")
+
+    assert node_svg =~ "difficult work of retaining"
+    assert node_svg =~ "human agency"
+    refute node_svg =~ "LINKEDIN ·"
+
+    carousel_svg = ShareCard.node_carousel_image_svg(campaign, node, "minimal_dark", 1)
+    refute carousel_svg =~ ">Thesis</text>"
+  end
+
+  test "persists and clears a Pexels background with attribution" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "pexels-background")
+
+    photo = %{
+      id: 42,
+      alt: "A mountain view",
+      photographer: "Ada Example",
+      photographer_url: "https://www.pexels.com/@ada-example",
+      pexels_url: "https://www.pexels.com/photo/42",
+      avg_color: "#334155",
+      landscape_url: "https://images.pexels.com/photos/42/landscape.jpeg",
+      portrait_url: "https://images.pexels.com/photos/42/portrait.jpeg",
+      original_url: "https://images.pexels.com/photos/42/original.jpeg",
+      preview_url: "https://images.pexels.com/photos/42/preview.jpeg"
+    }
+
+    assert {:ok, campaign} = Campaigns.set_pexels_background(campaign, photo)
+    background = Campaigns.pexels_background(campaign)
+
+    assert background["id"] == 42
+    assert background["photographer"] == "Ada Example"
+    assert background["pexels_url"] == "https://www.pexels.com/photo/42"
+    refute Map.has_key?(background, "preview_url")
+
+    assert {:ok, campaign} = Campaigns.clear_pexels_background(campaign)
+    assert Campaigns.pexels_background(campaign) == nil
+  end
+
   test "renders Markdown structure in key-node media" do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "markdown-media")
 
@@ -60,6 +117,23 @@ defmodule GridMediaManager.CampaignsTest do
   end
 
   describe "import_payload/2" do
+    test "repairs invalid Windows-1252 bytes before scoring questions" do
+      malformed_question = "What should we protect" <> <<0x94>> <> "?"
+
+      payload = %{
+        "metadata" => %{
+          "title" => "A malformed legacy grid",
+          "slug" => "malformed-legacy-grid",
+          "url" => "https://rationalgrid.ai/g/malformed-legacy-grid"
+        },
+        "content" => %{"follow_up_questions" => [malformed_question]}
+      }
+
+      assert {:ok, campaign} = Campaigns.import_payload(payload, "malformed-legacy-grid")
+      assert Campaigns.recommended_question(campaign) == "What should we protect”?"
+      assert String.valid?(campaign.raw_payload["content"]["follow_up_questions"] |> List.first())
+    end
+
     test "rejects URL fragments when extracting follow-up questions" do
       payload = %{
         "content" => %{
@@ -403,6 +477,63 @@ defmodule GridMediaManager.CampaignsTest do
       assert length(Enum.filter(assets, &(&1.kind == "key_node_card"))) == 4
     end
 
+    test "combines selected mixed candidates into one story carousel" do
+      assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "combined-carousel")
+
+      candidates =
+        campaign
+        |> Workflow.candidates()
+        |> Enum.filter(&(&1.type in ["question", "highlight", "key_node"]))
+        |> Enum.take(3)
+
+      result =
+        Workflow.generate(campaign, candidates,
+          style: "gradient_poster",
+          format: "combined_carousel"
+        )
+
+      carousel = Enum.find(result.assets, &(&1.kind == "curated_carousel"))
+      assert carousel
+
+      batch_ids =
+        result.assets
+        |> Enum.map(& &1.metadata["generation_batch_id"])
+        |> Enum.uniq()
+
+      assert [batch_id] = batch_ids
+      assert is_binary(batch_id)
+      assert Enum.all?(result.assets, &is_binary(&1.metadata["generated_at"]))
+      assert carousel.metadata["format"] == "curated_carousel"
+      assert carousel.metadata["slide_count"] == length(candidates) + 2
+      assert length(carousel.metadata["slides"]) == length(candidates) + 2
+      assert carousel.recommended_platforms == ["instagram", "linkedin"]
+
+      if CarouselVideo.available?() do
+        assert result.errors == []
+        video = Enum.find(result.assets, &(&1.kind == "curated_carousel_video"))
+        assert video
+        assert video.metadata["slide_count"] == carousel.metadata["slide_count"]
+        assert video.metadata["background_audio"]
+      else
+        assert result.errors != []
+      end
+
+      png =
+        ShareCard.curated_carousel_image_png(
+          campaign,
+          carousel.metadata["slides"],
+          carousel.style,
+          2
+        )
+
+      assert binary_part(png, 0, 8) == <<137, 80, 78, 71, 13, 10, 26, 10>>
+
+      assert Enum.any?(
+               Campaigns.list_post_drafts(campaign, platform: "instagram"),
+               &(&1.media_asset_id == carousel.id)
+             )
+    end
+
     test "generates an ordered carousel of key-node slides" do
       assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "carousel-test")
 
@@ -440,6 +571,8 @@ defmodule GridMediaManager.CampaignsTest do
         assert asset.metadata["width"] == 1080
         assert asset.metadata["height"] == 1920
         assert asset.metadata["duration_seconds"] > 0
+        assert asset.metadata["background_audio"]
+        assert CarouselVideo.background_audio_available?()
         assert "youtube" in asset.recommended_platforms
 
         node = ShareCard.find_key_node(campaign, "1")

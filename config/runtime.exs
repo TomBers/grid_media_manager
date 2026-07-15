@@ -20,6 +20,17 @@ if System.get_env("PHX_SERVER") do
   config :grid_media_manager, GridMediaManagerWeb.Endpoint, server: true
 end
 
+config :grid_media_manager, :buffer,
+  api_key: System.get_env("BUFFER_API_KEY"),
+  channels: %{
+    "x" => System.get_env("BUFFER_CHANNEL_X"),
+    "bluesky" => System.get_env("BUFFER_CHANNEL_BLUESKY"),
+    "linkedin" => System.get_env("BUFFER_CHANNEL_LINKEDIN"),
+    "instagram" => System.get_env("BUFFER_CHANNEL_INSTAGRAM"),
+    "youtube" => System.get_env("BUFFER_CHANNEL_YOUTUBE"),
+    "tiktok" => System.get_env("BUFFER_CHANNEL_TIKTOK")
+  }
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

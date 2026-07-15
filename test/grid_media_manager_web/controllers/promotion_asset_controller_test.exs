@@ -4,6 +4,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.Studio.Workflow
 
   test "serves a generated grid share-card PNG", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "brave-new-world")
@@ -86,7 +87,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     svg = ShareCard.node_linkedin_image_svg(campaign, node, "minimal_light")
     assert svg =~ "width=\"1200\""
     assert svg =~ "height=\"1200\""
-    assert svg =~ "LINKEDIN · answer"
+    refute svg =~ "LINKEDIN · answer"
     assert svg =~ "A dystopian lesson about comfort."
   end
 
@@ -115,7 +116,8 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert svg =~ "width=\"1080\""
     assert svg =~ "height=\"1920\""
     assert svg =~ "font-size=\"90\""
-    assert svg =~ "SHORT · 1/"
+    assert svg =~ ">THESIS</text>"
+    refute svg =~ "SHORT · 1/"
   end
 
   test "renders carousel slide layouts internally", %{} do
@@ -126,6 +128,59 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert svg =~ "width=\"1080\""
     assert svg =~ "1 /"
     assert svg =~ "RationalGrid.ai"
+  end
+
+  test "fits complete long-form copy into video frames without truncation", %{} do
+    assert {:ok, campaign} = Campaigns.import_payload(long_key_node_payload(), "long-video-node")
+    node = ShareCard.find_key_node(campaign, "long-node")
+
+    frames =
+      campaign
+      |> ShareCard.carousel_slides(node)
+      |> Enum.with_index(1)
+      |> Enum.map(fn {_slide, index} ->
+        ShareCard.node_short_video_frame_svg(campaign, node, "editorial_dark", index)
+      end)
+
+    assert Enum.any?(frames, &String.contains?(&1, "sentence 36"))
+    refute Enum.any?(frames, &String.contains?(&1, "…"))
+  end
+
+  test "serves slides from a combined mixed-content carousel", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "combined-route")
+
+    candidates =
+      campaign
+      |> Workflow.candidates()
+      |> Enum.take(3)
+
+    assert {:ok, asset} =
+             Campaigns.generate_curated_carousel(campaign, candidates, "gradient_poster")
+
+    path =
+      ShareCard.curated_carousel_image_path(
+        campaign,
+        asset.source_id,
+        2,
+        asset.style
+      )
+
+    conn = get(conn, path)
+    assert_png_response(conn)
+
+    video_conn =
+      get(
+        recycle(conn),
+        CarouselVideo.curated_video_path(campaign, asset.source_id, asset.style)
+      )
+
+    if CarouselVideo.available?() do
+      video = response(video_conn, 200)
+      assert binary_part(video, 4, 4) == "ftyp"
+      assert video =~ "soun"
+    else
+      assert response(video_conn, 503) == "Video rendering requires FFmpeg"
+    end
   end
 
   test "serves rasterized PNG carousel slides for social publishing", %{conn: conn} do
@@ -153,7 +208,10 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     if CarouselVideo.available?() do
       assert get_resp_header(conn, "content-type") |> List.first() =~ "video/mp4"
-      assert response(conn, 200) |> binary_part(4, 4) == "ftyp"
+      video = response(conn, 200)
+      assert binary_part(video, 4, 4) == "ftyp"
+      assert video =~ "soun"
+      assert video =~ "mp4a"
       assert get_resp_header(conn, "content-disposition") |> List.first() =~ ".mp4"
     else
       assert response(conn, 503) == "Video rendering requires FFmpeg"
@@ -207,7 +265,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     assert question_svg =~ "width=\"1200\""
     assert question_svg =~ "height=\"1200\""
-    assert question_svg =~ "LINKEDIN · FOLLOW UP QUESTION"
+    refute question_svg =~ "LINKEDIN · FOLLOW UP QUESTION"
 
     highlight_conn =
       get(
@@ -223,7 +281,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     assert highlight_svg =~ "width=\"1080\""
     assert highlight_svg =~ "height=\"1350\""
-    assert highlight_svg =~ "INSTAGRAM · HIGHLIGHT"
+    refute highlight_svg =~ "INSTAGRAM · HIGHLIGHT"
   end
 
   test "serves an uploadable question Short", %{conn: conn} do
@@ -241,7 +299,10 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     if CarouselVideo.available?() do
       assert get_resp_header(conn, "content-type") |> List.first() =~ "video/mp4"
-      assert response(conn, 200) |> binary_part(4, 4) == "ftyp"
+      video = response(conn, 200)
+      assert binary_part(video, 4, 4) == "ftyp"
+      assert video =~ "soun"
+      assert video =~ "mp4a"
     else
       assert response(conn, 503) == "Video rendering requires FFmpeg"
     end

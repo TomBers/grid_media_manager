@@ -11,8 +11,10 @@ Internal RationalGrid Share Studio for turning RationalGrid media payloads into 
 - Renders carousel slides as PNGs and stitches them into vertical MP4s for Reels and Shorts
 - Generates simple template-based drafts for X, Bluesky, LinkedIn, Instagram, YouTube Shorts, and Substack
 - Copies draft text and asset URLs for manual publishing
+- Searches Pexels for optional attributed photo backdrops
+- Schedules approved or edited drafts through Buffer
 
-No authentication, LLM support, scheduling, or direct posting is included yet.
+No authentication or LLM support is included yet.
 
 ## RationalGrid endpoint configuration
 
@@ -137,8 +139,73 @@ Question, highlight, and key-node production includes channel-specific layouts:
 - `linkedin` — 1200×1200 square explainer with denser body copy
 - `portrait` — 1080×1350 Instagram reading card
 - `carousel` — key nodes become 1080×1350 Instagram slides plus a multi-frame Short; questions and highlights become a portrait plus a six-second 1080×1920 MP4
+- `combined_carousel` — two to six selected questions, highlights, key nodes, or overview cards become one curated carousel package with a cover and closing invitation, plus a companion 1080×1920 Short with theme audio
 
-Generated style and layout variants are persisted as separate media assets. Generated assets can be deleted from the asset gallery, which also removes their associated generated drafts so variants can be regenerated during testing. Extracted question text is preserved in full; generated question drafts may exceed platform character limits and will show the normal character-count warning.
+Generated style and layout variants are persisted as separate media assets. Generated assets can be deleted from the asset gallery, which also removes their associated generated drafts so variants can be regenerated during testing. Titles and quote text are preserved in full and fitted to the available card area. Generated suggestions always stay within their platform limit; when complete source text cannot fit, the template falls back to a compact link invitation instead of truncating the title or quote. X counters exclude hashtags.
+
+## Pexels backgrounds
+
+Set `PEXELS_API_KEY` to enable photo search in the guided studio:
+
+```sh
+PEXELS_API_KEY=your-key mix phx.server
+```
+
+Alternatively, export the variable before starting the server:
+
+```sh
+export PEXELS_API_KEY=your-key
+mix phx.server
+```
+
+Phoenix does not load `.env` files automatically, and the server must be restarted after changing its environment. For local development, you can instead add the following to the ignored `config/dev.secret.exs` file:
+
+```elixir
+import Config
+config :grid_media_manager, :pexels, api_key: "your-key"
+```
+
+The selected photo is stored with its photographer and Pexels attribution and is embedded behind the active card theme. Only HTTPS images returned from `images.pexels.com` are fetched by the renderer. If the image is unavailable, cards fall back to the selected built-in theme.
+
+## S3 media publishing
+
+Generated local media can be rendered and uploaded to S3 automatically before Buffer scheduling:
+
+```sh
+S3_BUCKET=your-media-bucket \
+AWS_REGION=eu-west-2 \
+AWS_ACCESS_KEY_ID=your-access-key \
+AWS_SECRET_ACCESS_KEY=your-secret-key \
+S3_PUBLIC_BASE_URL=https://media.example.com \
+mix phx.server
+```
+
+The IAM identity needs `s3:PutObject` for the `campaigns/*` prefix. `S3_PUBLIC_BASE_URL` should point to a public HTTPS bucket endpoint or CloudFront distribution where Buffer can retrieve objects without authentication. If it is omitted, the standard virtual-hosted S3 URL is used, which still requires an appropriate public-read bucket policy. `S3_ENDPOINT` can override the upload endpoint when needed.
+
+Assets use content-hashed object keys. The durable `published_url`, S3 key, and SHA-256 digest are stored in media asset metadata while the original local generation route remains unchanged. The first Buffer schedule uploads the asset; subsequent schedules reuse the persisted S3 URL.
+
+## Buffer scheduling
+
+Buffer scheduling uses Buffer's GraphQL API and requires a personal API key plus a channel ID for each platform you want to schedule:
+
+```sh
+PUBLIC_BASE_URL=https://your-public-studio.example.com \
+S3_BUCKET=your-media-bucket \
+AWS_REGION=eu-west-2 \
+AWS_ACCESS_KEY_ID=your-access-key \
+AWS_SECRET_ACCESS_KEY=your-secret-key \
+S3_PUBLIC_BASE_URL=https://media.example.com \
+BUFFER_API_KEY=your-key \
+BUFFER_CHANNEL_X=channel-id \
+BUFFER_CHANNEL_BLUESKY=channel-id \
+BUFFER_CHANNEL_LINKEDIN=channel-id \
+BUFFER_CHANNEL_INSTAGRAM=channel-id \
+BUFFER_CHANNEL_YOUTUBE=channel-id \
+BUFFER_YOUTUBE_CATEGORY_ID=27 \
+mix phx.server
+```
+
+Schedules are entered in UTC. Buffer requires media to be available from a public HTTPS URL through the scheduled publication time. `PUBLIC_BASE_URL` is used to turn generated card paths into URLs Buffer can fetch. In local development, expose the Phoenix server with a service such as ngrok or Cloudflare Tunnel and set `PUBLIC_BASE_URL` to that HTTPS tunnel URL. The scheduler rejects local/private URLs before calling Buffer and stores Buffer's post ID or API failure on the draft for review.
 
 ## Short-form video rendering
 
@@ -148,7 +215,7 @@ Carousel video exports require FFmpeg at runtime. By default the app finds `ffmp
 config :grid_media_manager, :ffmpeg_path, "/path/to/ffmpeg"
 ```
 
-The generated MP4 is 1080×1920 H.264/yuv420p with approximately three seconds per slide and gentle transitions. Video frames use a dedicated full-screen layout with larger hook typography rather than padding the Instagram carousel images. Videos are cached in the system temporary directory using a content-derived key. If FFmpeg is unavailable, carousel PNGs still generate and the guided studio shows a video-encoding warning.
+The generated MP4 is 1080×1920 H.264/yuv420p with approximately three seconds per slide and gentle transitions. Both carousel videos and six-second static Shorts include `priv/static/sounds/rationalgrid_theme.mp4` as a softly mixed AAC background track, looped or trimmed to the exact video duration with short audio fades. A different source can be configured with `config :grid_media_manager, :video_background_audio_path, "/path/to/audio.mp4"`. Video frames use a dedicated full-screen layout with larger hook typography rather than padding the Instagram carousel images. Videos are cached in the system temporary directory using a content-derived key that includes the audio file metadata. If FFmpeg is unavailable, carousel PNGs still generate and the guided studio shows a video-encoding warning.
 
 Generated carousel routes:
 

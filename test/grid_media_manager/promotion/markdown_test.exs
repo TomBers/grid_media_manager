@@ -39,6 +39,18 @@ defmodule GridMediaManager.Promotion.MarkdownTest do
            ] = Markdown.blocks(markdown)
   end
 
+  test "paginates long blocks only at complete sentence boundaries" do
+    text =
+      "First complete thought. Second complete thought. Third complete thought. Fourth complete thought."
+
+    pages = Markdown.paginate_blocks([%{type: :paragraph, text: text}], 55)
+    page_texts = Enum.map(pages, &Markdown.readable_text/1)
+
+    assert length(page_texts) > 1
+    assert Enum.all?(page_texts, &String.ends_with?(&1, "."))
+    assert Enum.join(page_texts, " ") == text
+  end
+
   test "groups Markdown into carousel-ready sections" do
     sections =
       Markdown.sections("""
