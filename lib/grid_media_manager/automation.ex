@@ -1,23 +1,20 @@
 defmodule GridMediaManager.Automation do
   @moduledoc """
-  One-click content automation for a randomly selected promotion grid.
+  One-click content automation for a selected promotion grid.
   """
 
   alias GridMediaManager.Campaigns
-  alias GridMediaManager.RationalGrid.Client
   alias GridMediaManager.Social.Buffer
   alias GridMediaManager.Studio.Workflow
 
   @video_platforms ["instagram", "youtube", "tiktok"]
   @text_platforms ["x", "linkedin", "facebook"]
 
-  def schedule_random_grid(opts \\ []) do
+  def schedule_grid(source, opts \\ []) when is_binary(source) do
     scheduled_for = Keyword.get(opts, :scheduled_for, next_morning())
 
     with :ok <- ensure_buffer_accounts(),
-         {:ok, grids} <- Client.fetch_grid_index(),
-         {:ok, grid} <- random_grid(grids),
-         {:ok, campaign} <- Campaigns.import_grid(grid.source),
+         {:ok, campaign} <- Campaigns.import_grid(source),
          {:ok, candidates} <- selected_candidates(campaign),
          {:ok, video_assets} <- generate_video(campaign, candidates),
          {:ok, text_assets} <- generate_text(campaign, candidates) do
@@ -38,7 +35,7 @@ defmodule GridMediaManager.Automation do
       {:ok,
        %{
          campaign: campaign,
-         grid: grid,
+         grid: %{source: source, title: campaign.title},
          candidates: candidates,
          assets: assets,
          scheduled_for: scheduled_for,
@@ -53,13 +50,6 @@ defmodule GridMediaManager.Automation do
       :ok
     else
       {:error, :buffer_accounts_not_configured}
-    end
-  end
-
-  defp random_grid(grids) when is_list(grids) do
-    case Enum.filter(grids, &is_map/1) do
-      [] -> {:error, :no_grids_available}
-      available -> {:ok, Enum.random(available)}
     end
   end
 

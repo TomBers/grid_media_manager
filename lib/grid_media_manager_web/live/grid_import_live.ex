@@ -13,7 +13,6 @@ defmodule GridMediaManagerWeb.GridImportLive do
       |> assign(:form, to_form(%{"source" => ""}, as: :import))
       |> assign(:remote_grids_loaded?, false)
       |> assign(:remote_grids_error, nil)
-      |> assign(:automation_running?, false)
       |> stream_configure(:remote_grids, dom_id: &"remote-grid-#{&1.id}")
       |> stream(:remote_grids, [])
       |> stream(:campaigns, Campaigns.list_campaigns())
@@ -48,18 +47,10 @@ defmodule GridMediaManagerWeb.GridImportLive do
     end
   end
 
-  def handle_event("schedule_random_grid", _params, socket) do
-    case Automation.schedule_random_grid() do
-      {:ok, %{grid: grid, scheduled: scheduled, failed: failed, scheduled_for: scheduled_for}} ->
-        message =
-          "#{grid.title} scheduled #{length(scheduled)} posts for #{Calendar.strftime(scheduled_for, "%d %b %H:%M UTC")}."
-
-        message =
-          if failed == [],
-            do: message,
-            else: message <> " #{length(failed)} posts need attention."
-
-        {:noreply, put_flash(socket, :info, message)}
+  def handle_event("schedule_grid", %{"source" => source}, socket) do
+    case Automation.schedule_grid(source) do
+      {:ok, result} ->
+        automation_flash(socket, result)
 
       {:error, :buffer_accounts_not_configured} ->
         {:noreply,
@@ -69,12 +60,24 @@ defmodule GridMediaManagerWeb.GridImportLive do
            "Connect all three video and all three text Buffer channels first."
          )}
 
-      {:error, :no_grids_available} ->
-        {:noreply, put_flash(socket, :error, "No grids are available to automate right now.")}
-
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Automation stopped: #{inspect(reason)}")}
     end
+  end
+
+  defp automation_flash(socket, %{
+         grid: grid,
+         scheduled: scheduled,
+         failed: failed,
+         scheduled_for: scheduled_for
+       }) do
+    message =
+      "#{grid.title} scheduled #{length(scheduled)} posts for #{Calendar.strftime(scheduled_for, "%d %b %H:%M UTC")}."
+
+    message =
+      if failed == [], do: message, else: message <> " #{length(failed)} posts need attention."
+
+    {:noreply, put_flash(socket, :info, message)}
   end
 
   @impl true
@@ -132,7 +135,7 @@ defmodule GridMediaManagerWeb.GridImportLive do
                 <div>
                   <h2 class="text-lg font-semibold text-base-content">Browse RationalGrid</h2>
                   <p class="mt-1 text-sm leading-6 text-base-content/60">
-                    Fetch the promotion grid index and click a grid to import its materials into Share Studio.
+                    Fetch the promotion grid index, then choose whether to import or schedule a specific grid.
                   </p>
                 </div>
                 <button
@@ -144,25 +147,6 @@ defmodule GridMediaManagerWeb.GridImportLive do
                   Load grids
                   <.icon name="hero-arrow-path" class="ml-2 size-4 phx-click-loading:animate-spin" />
                 </button>
-
-                <div class="mt-4 rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4">
-                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p class="text-sm font-semibold text-base-content">Automate the next package</p>
-                      <p class="mt-1 text-xs leading-5 text-base-content/60">
-                        Pick a random grid, create a combined video and quote images, then schedule all six channels for tomorrow at 09:00 UTC.
-                      </p>
-                    </div>
-                    <button
-                      id="schedule-random-grid-button"
-                      type="button"
-                      phx-click="schedule_random_grid"
-                      class="inline-flex shrink-0 items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-950/15 transition hover:-translate-y-0.5 hover:bg-sky-500 phx-click-loading:cursor-wait phx-click-loading:opacity-60"
-                    >
-                      <.icon name="hero-sparkles" class="mr-2 size-4" /> Schedule random grid
-                    </button>
-                  </div>
-                </div>
               </div>
 
               <p
@@ -208,15 +192,26 @@ defmodule GridMediaManagerWeb.GridImportLive do
                       <p class="mt-1 text-xs text-base-content/50">/{grid.slug}</p>
                     </button>
 
-                    <a
-                      :if={grid.url}
-                      href={grid.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="inline-flex shrink-0 items-center rounded-full bg-base-200 px-3 py-1.5 text-xs font-semibold text-base-content/65 transition hover:bg-base-content hover:text-base-100"
-                    >
-                      Open source <.icon name="hero-arrow-up-right" class="ml-1 size-3" />
-                    </a>
+                    <div class="flex shrink-0 items-center gap-2">
+                      <a
+                        :if={grid.url}
+                        href={grid.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center rounded-full bg-base-200 px-3 py-1.5 text-xs font-semibold text-base-content/65 transition hover:bg-base-content hover:text-base-100"
+                      >
+                        Open source <.icon name="hero-arrow-up-right" class="ml-1 size-3" />
+                      </a>
+                      <button
+                        id={"schedule-grid-#{grid.id}"}
+                        type="button"
+                        phx-click="schedule_grid"
+                        phx-value-source={grid.source}
+                        class="inline-flex items-center rounded-full bg-sky-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-500 phx-click-loading:cursor-wait phx-click-loading:opacity-60"
+                      >
+                        <.icon name="hero-sparkles" class="mr-1.5 size-3.5" /> Schedule package
+                      </button>
+                    </div>
                   </div>
 
                   <div class="mt-3 flex flex-wrap gap-2">
