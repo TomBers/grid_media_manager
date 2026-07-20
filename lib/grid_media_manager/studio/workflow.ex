@@ -136,6 +136,22 @@ defmodule GridMediaManager.Studio.Workflow do
   end
 
   defp generate_story_video(campaign, candidates, style) do
+    case candidates do
+      [%{type: "key_node", source_id: source_id} = candidate] ->
+        case Campaigns.generate_key_node_video(campaign, source_id, style) do
+          {:ok, video} ->
+            %{assets: [video], errors: []}
+
+          {:error, reason} ->
+            %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
+        end
+
+      _ ->
+        generate_story_video_from_carousel(campaign, candidates, style)
+    end
+  end
+
+  defp generate_story_video_from_carousel(campaign, candidates, style) do
     case Campaigns.generate_curated_carousel(campaign, candidates, style) do
       {:ok, carousel} ->
         case Campaigns.generate_curated_carousel_video(campaign, carousel) do
