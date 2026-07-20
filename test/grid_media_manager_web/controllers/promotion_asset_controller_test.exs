@@ -136,21 +136,26 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     assert {:ok, campaign} = Campaigns.import_payload(long_key_node_payload(), "long-video-node")
     node = ShareCard.find_key_node(campaign, "long-node")
 
+    slides = ShareCard.carousel_slides(campaign, node)
+    video_slides = ShareCard.node_short_video_slides(campaign, node)
+    durations = ShareCard.node_short_video_durations(campaign, node)
+
     frames =
-      campaign
-      |> ShareCard.carousel_slides(node)
+      video_slides
       |> Enum.with_index(1)
       |> Enum.map(fn {_slide, index} ->
         ShareCard.node_short_video_frame_svg(campaign, node, "editorial_dark", index)
       end)
 
-    slides = ShareCard.carousel_slides(campaign, node)
-    video_slides = ShareCard.node_short_video_slides(campaign, node)
     assert length(slides) >= 8
+    assert length(video_slides) == length(durations)
+    assert Enum.all?(durations, &(&1 >= 4.5))
+    assert Enum.any?(durations, &(&1 > 10.0))
     assert hd(video_slides).title == node["title"]
     assert Enum.at(video_slides, 1).title == ""
     assert Enum.at(video_slides, 1).label == ""
     assert Enum.count(video_slides, &(&1.label == "Learn more")) == 1
+    assert Enum.at(frames, 1) =~ ~s(font-size="58")
     assert List.last(video_slides).title =~ "RationalGrid.ai"
     refute Enum.at(frames, 1) =~ "Learn more at rationalgrid.ai"
     refute Enum.at(frames, 1) =~ ">RationalGrid.ai</text>"

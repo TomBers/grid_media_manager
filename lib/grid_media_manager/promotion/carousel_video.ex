@@ -15,7 +15,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   @width 1080
   @height 1920
-  @slide_seconds 3.0
   @static_seconds 6.0
   @fade_seconds 0.25
   @audio_fade_seconds 0.5
@@ -23,7 +22,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @audio_bitrate "160k"
   @frame_rate 30
   @render_timeout 90_000
-  @cache_version 13
+  @cache_version 14
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -32,7 +31,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     style = ShareCard.normalize_style(style)
     node_id = node |> value("id") |> to_string()
     node_title = node |> value("title") |> present_string() |> fallback("Key node")
-    slide_count = campaign |> ShareCard.node_short_video_slides(node) |> length()
+    durations = ShareCard.node_short_video_durations(campaign, node)
+    slide_count = length(durations)
 
     %{
       title: "#{node_title} · Short video",
@@ -51,7 +51,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
         "width" => @width,
         "height" => @height,
         "slide_count" => slide_count,
-        "duration_seconds" => duration_seconds(slide_count),
+        "duration_seconds" => duration_seconds(durations),
         "background_audio" => background_audio_available?()
       }
     }
@@ -60,6 +60,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   def curated_asset_attr(%Campaign{} = campaign, token, slides, style) when is_list(slides) do
     style = ShareCard.normalize_style(style)
     slide_count = length(slides)
+    durations = ShareCard.curated_carousel_short_video_durations(slides)
 
     %{
       title: "#{campaign.title} · Story Short",
@@ -78,7 +79,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
         "width" => @width,
         "height" => @height,
         "slide_count" => slide_count,
-        "duration_seconds" => duration_seconds(slide_count),
+        "duration_seconds" => duration_seconds(durations),
         "background_audio" => background_audio_available?(),
         "slides" => slides
       }
@@ -140,9 +141,11 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       if not force? and valid_video_file?(output_path) do
         {:ok, output_path}
       else
+        durations = ShareCard.curated_carousel_short_video_durations(slides)
+
         render_frame_video(
           ffmpeg,
-          length(slides),
+          durations,
           cache_dir,
           output_path,
           fn index ->
@@ -185,8 +188,12 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     end
   end
 
+  def duration_seconds(durations) when is_list(durations) and durations != [] do
+    durations |> Enum.sum() |> Float.round(2)
+  end
+
   def duration_seconds(slide_count) when is_integer(slide_count) and slide_count > 0 do
-    Float.round(slide_count * @slide_seconds, 2)
+    Float.round(slide_count * 3.0, 2)
   end
 
   def duration_seconds(_slide_count), do: 0.0
@@ -194,22 +201,22 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   def background_audio_available?, do: is_binary(background_audio_path())
 
   defp render_video(ffmpeg, campaign, node, style, cache_dir, output_path) do
-    slide_count = campaign |> ShareCard.node_short_video_slides(node) |> length()
+    durations = ShareCard.node_short_video_durations(campaign, node)
 
-    render_frame_video(ffmpeg, slide_count, cache_dir, output_path, fn index ->
+    render_frame_video(ffmpeg, durations, cache_dir, output_path, fn index ->
       ShareCard.node_short_video_frame_png(campaign, node, style, index)
     end)
   end
 
-  defp render_frame_video(ffmpeg, frame_count, cache_dir, output_path, frame_fun) do
+  defp render_frame_video(ffmpeg, durations, cache_dir, output_path, frame_fun) do
     work_dir =
       Path.join(cache_dir, "work-#{System.unique_integer([:positive, :monotonic])}")
 
     with :ok <- File.mkdir_p(work_dir) do
       try do
-        slide_paths = write_frames!(frame_count, frame_fun, work_dir)
+        slide_paths = write_frames!(length(durations), frame_fun, work_dir)
         temporary_output = Path.join(work_dir, "carousel.mp4")
-        args = ffmpeg_args(slide_paths, background_audio_path(), temporary_output)
+        args = ffmpeg_args(slide_paths, background_audio_path(), temporary_output, durations)
 
         case run_ffmpeg(ffmpeg, args) do
           {:ok, _output} ->
@@ -283,16 +290,17 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     end)
   end
 
-  defp ffmpeg_args(slide_paths, audio_path, output_path) do
+  defp ffmpeg_args(slide_paths, audio_path, output_path, durations) do
     input_args =
-      Enum.flat_map(slide_paths, fn path ->
+      Enum.zip(slide_paths, durations)
+      |> Enum.flat_map(fn {path, duration} ->
         [
           "-loop",
           "1",
           "-framerate",
           Integer.to_string(@frame_rate),
           "-t",
-          decimal(@slide_seconds),
+          decimal(duration),
           "-i",
           path
         ]
@@ -305,7 +313,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       audio_input_args(audio_path) ++
       [
         "-filter_complex",
-        filter_complex(length(slide_paths), audio?),
+        filter_complex(durations, audio?),
         "-map",
         "[outv]"
       ] ++
@@ -322,7 +330,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
         "-r",
         Integer.to_string(@frame_rate),
         "-t",
-        decimal(duration_seconds(length(slide_paths))),
+        decimal(duration_seconds(durations)),
         "-movflags",
         "+faststart",
         "-f",
@@ -401,17 +409,20 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       "afade=t=out:st=#{decimal(fade_out_start)}:d=#{decimal(@audio_fade_seconds)}"
   end
 
-  defp filter_complex(slide_count, audio?) do
+  defp filter_complex(durations, audio?) do
+    slide_count = length(durations)
+
     slide_filters =
-      0..(slide_count - 1)
-      |> Enum.map(&slide_filter/1)
+      durations
+      |> Enum.with_index()
+      |> Enum.map(fn {duration, index} -> slide_filter(index, duration) end)
 
     inputs = Enum.map_join(0..(slide_count - 1), "", &"[v#{&1}]")
     concat_filter = "#{inputs}concat=n=#{slide_count}:v=1:a=0[outv]"
 
     filters =
       if audio? do
-        duration = duration_seconds(slide_count)
+        duration = duration_seconds(durations)
         slide_filters ++ [concat_filter, "[#{slide_count}:a]#{audio_filter(duration)}[outa]"]
       else
         slide_filters ++ [concat_filter]
@@ -420,13 +431,15 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     Enum.join(filters, ";")
   end
 
-  defp slide_filter(index) do
+  defp slide_filter(index, duration) do
+    fade_out_start = max(duration - @fade_seconds, 0.0)
+
     "[#{index}:v]scale=#{@width}:#{@height}:force_original_aspect_ratio=decrease," <>
       "pad=#{@width}:#{@height}:(ow-iw)/2:(oh-ih)/2," <>
-      "setsar=1,format=yuv420p,fps=#{@frame_rate},trim=duration=#{decimal(@slide_seconds)}," <>
+      "setsar=1,format=yuv420p,fps=#{@frame_rate},trim=duration=#{decimal(duration)}," <>
       "settb=AVTB,setpts=N/(#{@frame_rate}*TB)," <>
       "fade=t=in:st=0:d=#{decimal(@fade_seconds)}," <>
-      "fade=t=out:st=#{decimal(@slide_seconds - @fade_seconds)}:" <>
+      "fade=t=out:st=#{decimal(fade_out_start)}:" <>
       "d=#{decimal(@fade_seconds)}[v#{index}]"
   end
 
@@ -464,7 +477,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   defp cache_filename(campaign, node, style) do
     digest =
-      {@cache_version, campaign.id, campaign.title, node, style, @slide_seconds, @fade_seconds,
+      {@cache_version, campaign.id, campaign.title, node, style, @fade_seconds,
        background_audio_signature()}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))
@@ -475,8 +488,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   defp curated_cache_filename(campaign, token, slides, style) do
     digest =
-      {@cache_version, :curated, campaign.id, campaign.title, token, slides, style,
-       @slide_seconds, @fade_seconds, background_audio_signature()}
+      {@cache_version, :curated, campaign.id, campaign.title, token, slides, style, @fade_seconds,
+       background_audio_signature()}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))
       |> Base.url_encode64(padding: false)

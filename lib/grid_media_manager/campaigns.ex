@@ -640,7 +640,6 @@ defmodule GridMediaManager.Campaigns do
 
   defp upsert_generated_asset_with_drafts(%Campaign{} = campaign, attrs) do
     Repo.transaction(fn ->
-      delete_stale_generated_assets(campaign, attrs)
       asset = upsert_media_asset(campaign, attrs)
       ensure_post_drafts(campaign, [asset], refresh: true)
       asset
@@ -660,41 +659,6 @@ defmodule GridMediaManager.Campaigns do
     else
       :ok
     end
-  end
-
-  defp delete_stale_generated_assets(%Campaign{} = campaign, attrs) do
-    format = get_in(attrs, [:metadata, "format"])
-
-    stale_assets =
-      MediaAsset
-      |> where([a], a.campaign_id == ^campaign.id)
-      |> where([a], a.kind == ^attrs.kind)
-      |> where([a], a.source_type == ^attrs.source_type)
-      |> where([a], a.style == ^attrs.style)
-      |> maybe_match_generated_source(attrs)
-      |> where([a], a.url != ^attrs.url)
-      |> Repo.all()
-      |> Enum.filter(&generated_asset_variant?(&1, format))
-
-    Enum.each(stale_assets, fn asset ->
-      PostDraft
-      |> where([d], d.media_asset_id == ^asset.id)
-      |> Repo.delete_all()
-
-      Repo.delete!(asset)
-    end)
-  end
-
-  defp generated_asset_variant?(%MediaAsset{metadata: metadata}, format) do
-    Map.get(metadata || %{}, "format") == format
-  end
-
-  defp maybe_match_generated_source(query, %{source_type: source_type})
-       when source_type in ["curated_carousel", "curated_carousel_video"],
-       do: query
-
-  defp maybe_match_generated_source(query, %{source_id: source_id}) do
-    where(query, [a], a.source_id == ^source_id)
   end
 
   defp upsert_media_asset(%Campaign{} = campaign, attrs) do

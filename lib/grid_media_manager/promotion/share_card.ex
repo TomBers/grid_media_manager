@@ -21,6 +21,16 @@ defmodule GridMediaManager.Promotion.ShareCard do
   @square_size 1200
   @short_width 1080
   @short_height 1920
+  @short_body_x 110
+  @short_body_width 860
+  @short_body_area_top 260
+  @short_body_area_bottom 1_690
+  @short_body_max_y 1_650
+  @short_body_font_size 58
+  @short_body_max_lines 9
+  @short_min_duration 4.5
+  @short_words_per_second 3.0
+  @short_pause_duration 1.5
 
   @quote_area_left 112
   @quote_area_top 146
@@ -671,15 +681,128 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   def node_short_video_slides(%Campaign{} = campaign, node) when is_map(node) do
-    [opening | remaining] = carousel_slides(campaign, node)
+    node_title = node |> get("title") |> sanitize_text(320) |> fallback("Key node")
 
     content_slides =
-      remaining
-      |> Enum.reject(&(&1.label == "Learn more"))
-      |> Enum.map(fn slide -> %{label: "", title: "", body: slide.body} end)
+      node_content(campaign, node)
+      |> Markdown.sections()
+      |> Enum.flat_map(fn section ->
+        section.blocks
+        |> paginate_short_video_blocks()
+        |> Enum.map(fn blocks ->
+          %{
+            label: "",
+            title: "",
+            body: Markdown.readable_text(blocks),
+            blocks: blocks
+          }
+        end)
+      end)
 
-    closing = List.last(remaining)
-    [%{opening | body: ""}] ++ content_slides ++ [closing]
+    opening = %{label: "", title: node_title, body: ""}
+    closing = %{label: "Learn more", title: "Continue on RationalGrid.ai", body: ""}
+
+    [opening] ++ content_slides ++ [closing]
+  end
+
+  def node_short_video_durations(%Campaign{} = campaign, node) when is_map(node) do
+    campaign
+    |> node_short_video_slides(node)
+    |> short_video_slide_durations()
+  end
+
+  def curated_carousel_short_video_durations(slides) when is_list(slides) do
+    short_video_slide_durations(slides)
+  end
+
+  defp short_video_slide_durations(slides) do
+    Enum.map(slides, &short_video_slide_duration/1)
+  end
+
+  defp short_video_slide_duration(slide) do
+    label = slide |> get("label") |> to_string()
+    title = slide |> get("title") |> sanitize_text(nil)
+    body = slide |> get("body") |> sanitize_text(nil)
+
+    cond do
+      label == "Learn more" -> @short_min_duration
+      title != "" and body == "" -> readable_duration(title)
+      true -> readable_duration(Enum.join([title, body], " "))
+    end
+  end
+
+  defp readable_duration(text) do
+    word_count = text |> String.split(~r/\s+/, trim: true) |> length()
+
+    max(
+      @short_min_duration,
+      Float.round(word_count / @short_words_per_second + @short_pause_duration, 2)
+    )
+  end
+
+  defp paginate_short_video_blocks(blocks) do
+    blocks
+    |> Enum.flat_map(&short_video_block_chunks/1)
+    |> Enum.reduce([], &append_short_video_block(&2, &1))
+  end
+
+  defp short_video_block_chunks(block) do
+    lines = short_video_block_lines(block)
+
+    lines
+    |> Enum.chunk_every(@short_body_max_lines)
+    |> Enum.map(fn chunk -> %{block | text: Enum.join(chunk, " ")} end)
+  end
+
+  defp short_video_block_lines(block) do
+    style =
+      markdown_block_style(block, %{
+        font_size: @short_body_font_size,
+        palette: %{text: "", secondary_text: ""}
+      })
+
+    max_units = (@short_body_width - style.indent) / style.font_size * 0.9
+    wrap_all_lines_by_width(block.text, max_units)
+  end
+
+  defp short_video_body_start_y(content) do
+    blocks = if is_list(content), do: content, else: Markdown.blocks(content)
+
+    {last_y, last_line_gap, rendered?} =
+      Enum.reduce(blocks, {0, @short_body_font_size, false}, fn block,
+                                                                {last_y, _last_line_gap,
+                                                                 rendered?} ->
+        style =
+          markdown_block_style(block, %{
+            font_size: @short_body_font_size,
+            palette: %{text: "", secondary_text: ""}
+          })
+
+        lines = short_video_block_lines(block)
+        first_y = if rendered?, do: last_y + style.line_gap + style.gap, else: 0
+        block_last_y = first_y + max(length(lines) - 1, 0) * style.line_gap
+        {block_last_y, style.line_gap, true}
+      end)
+
+    content_height = if rendered?, do: last_y + last_line_gap, else: 0
+    available_height = @short_body_area_bottom - @short_body_area_top
+    centered_offset = div(max(available_height - content_height, 0), 2)
+
+    @short_body_area_top + centered_offset + @short_body_font_size
+  end
+
+  defp append_short_video_block([], block), do: [[block]]
+
+  defp append_short_video_block(pages, block) do
+    current_page = List.last(pages)
+    current_lines = Enum.reduce(current_page, 0, &(length(short_video_block_lines(&1)) + &2))
+    block_lines = length(short_video_block_lines(block))
+
+    if current_lines + block_lines <= @short_body_max_lines do
+      List.replace_at(pages, length(pages) - 1, current_page ++ [block])
+    else
+      pages ++ [[block]]
+    end
   end
 
   defp node_content(%Campaign{} = campaign, node) do
@@ -934,17 +1057,26 @@ defmodule GridMediaManager.Promotion.ShareCard do
     body_start_y =
       cond do
         cta? or cover? -> 610
-        text_only? -> 360
+        text_only? -> short_video_body_start_y(Map.get(slide, :blocks, slide.body))
         true -> max(title_last_y + 92, 610)
       end
 
-    body_font_size = if cover?, do: 48, else: 46
+    body_font_size =
+      cond do
+        text_only? -> @short_body_font_size
+        cover? -> 48
+        true -> 46
+      end
 
     body_font_sizes =
-      Enum.filter(
-        [body_font_size, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20],
-        &(&1 <= body_font_size)
-      )
+      if text_only? do
+        [@short_body_font_size]
+      else
+        Enum.filter(
+          [body_font_size, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20],
+          &(&1 <= body_font_size)
+        )
+      end
 
     title_markup =
       title_lines
@@ -961,10 +1093,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
           Map.get(slide, :blocks, slide.body),
           nil,
           %{
-            x: 130,
+            x: if(text_only?, do: @short_body_x, else: 130),
             start_y: body_start_y,
-            max_y: 1_620,
-            width: 820,
+            max_y: if(text_only?, do: @short_body_max_y, else: 1_620),
+            width: if(text_only?, do: @short_body_width, else: 820),
             font_size: body_font_size,
             palette: palette
           },

@@ -23,6 +23,56 @@ defmodule GridMediaManager.CampaignsTest do
     assert Enum.count(styles, &(&1.category == "Social")) == 7
   end
 
+  test "returns a generation error instead of crashing for a deleted campaign" do
+    campaign = %GridMediaManager.Campaigns.Campaign{id: -1}
+    candidate = %{title: "A stale selection"}
+
+    assert %{assets: [], errors: [%{candidate: ^candidate, reason: :campaign_not_found}]} =
+             Workflow.generate(campaign, [candidate], format: "story_video")
+  end
+
+  test "keeps the source carousel when generating a story video" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "kept-story-carousel")
+
+    candidates =
+      campaign
+      |> Workflow.candidates()
+      |> Enum.filter(&(&1.type in ["question", "highlight", "key_node"]))
+      |> Enum.take(2)
+
+    _result = Workflow.generate(campaign, candidates, format: "story_video")
+
+    assert Enum.any?(Campaigns.list_media_assets(campaign), &(&1.kind == "curated_carousel"))
+  end
+
+  test "keeps previous generated carousel variants" do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "kept-carousel-variants")
+
+    candidates =
+      campaign
+      |> Workflow.candidates()
+      |> Enum.filter(&(&1.type in ["question", "highlight", "key_node"]))
+      |> Enum.take(2)
+
+    assert {:ok, first} =
+             Campaigns.generate_curated_carousel(campaign, candidates, "editorial_dark")
+
+    assert {:ok, second} =
+             Campaigns.generate_curated_carousel(
+               campaign,
+               Enum.reverse(candidates),
+               "editorial_dark"
+             )
+
+    assert first.id != second.id
+
+    assert Enum.all?(
+             [first.id, second.id],
+             &Enum.any?(Campaigns.list_media_assets(campaign), fn asset -> asset.id == &1 end)
+           )
+  end
+
   test "renders full titles and quotes without top-right format labels" do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "full-card-copy")
 

@@ -147,6 +147,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:bulk_schedule_form, to_form(%{"scheduled_for" => ""}, as: :bulk_schedule))
       |> assign(:previous_package_count, length(previous_packages))
       |> assign(:generation_error, nil)
+      |> assign(:generation_in_progress?, false)
       |> assign(:pexels_configured?, Pexels.configured?())
       |> assign(:pexels_search_form, to_form(%{"query" => campaign.title}, as: :pexels))
       |> assign(:pexels_search_error, nil)
@@ -171,6 +172,22 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   @impl true
   def handle_params(_params, _uri, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_async(:generate_package, {:ok, result}, socket) do
+    socket
+    |> assign(:generation_in_progress?, false)
+    |> complete_generation(result)
+  end
+
+  @impl true
+  def handle_async(:generate_package, {:exit, _reason}, socket) do
+    {:noreply,
+     socket
+     |> assign(:generation_in_progress?, false)
+     |> assign(:generation_error, "Video generation failed before a package could be created.")
+     |> put_flash(:error, "Video generation failed. Try again or adjust the selection.")}
+  end
 
   @impl true
   def handle_event("filter_candidates", %{"filter" => filter}, socket) do
@@ -291,6 +308,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     end
   end
 
+  def handle_event(
+        "generate_package",
+        _params,
+        %{assigns: %{generation_in_progress?: true}} = socket
+      ) do
+    {:noreply, socket}
+  end
+
   def handle_event("generate_package", _params, socket) do
     selected_candidates =
       socket.assigns.all_candidates
@@ -302,13 +327,18 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         do: "portrait",
         else: socket.assigns.selected_format
 
-    result =
-      Workflow.generate(socket.assigns.campaign, selected_candidates,
-        style: socket.assigns.selected_style,
-        format: format
-      )
+    campaign = socket.assigns.campaign
+    style = socket.assigns.selected_style
 
-    complete_generation(socket, result)
+    socket =
+      socket
+      |> assign(:generation_in_progress?, true)
+      |> assign(:generation_error, nil)
+      |> start_async(:generate_package, fn ->
+        Workflow.generate(campaign, selected_candidates, style: style, format: format)
+      end)
+
+    {:noreply, socket}
   end
 
   def handle_event("toggle_platform", %{"platform" => platform}, socket) do
@@ -1220,6 +1250,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 {@generation_error}
               </p>
 
+              <p
+                :if={@generation_in_progress?}
+                id="generation-progress"
+                class="mt-5 rounded-2xl border border-orange-500/20 bg-orange-500/10 px-4 py-3 text-sm text-orange-800 dark:text-orange-100"
+              >
+                Generating the video in the background. This can take a few minutes for longer nodes; you can keep this page open.
+              </p>
+
               <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
                 <button
                   id="back-to-design"
@@ -1234,13 +1272,15 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   id="generate-story-package"
                   type="button"
                   phx-click="generate_package"
+                  disabled={@generation_in_progress?}
                   class="inline-flex items-center justify-center rounded-2xl bg-orange-500 px-7 py-3.5 text-sm font-bold text-white shadow-xl shadow-orange-950/20 transition hover:-translate-y-0.5 hover:bg-orange-400 phx-click-loading:cursor-wait phx-click-loading:opacity-60"
                 >
                   <.icon name="hero-bolt" class="mr-2 size-5" />
-                  {if(@content_mode == "video",
-                    do: "Generate video package",
-                    else: "Generate text image set"
-                  )}
+                  {cond do
+                    @generation_in_progress? -> "Generating package…"
+                    @content_mode == "video" -> "Generate video package"
+                    true -> "Generate text image set"
+                  end}
                 </button>
               </div>
             </div>
@@ -2237,11 +2277,16 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp generation_error([]), do: nil
 
   defp generation_error(errors) do
-    if Enum.any?(errors, &match?({:video, _reason}, &1.reason)) do
-      "The carousel slides were created, but the short video could not be encoded. Check that FFmpeg is available and try again."
-    else
-      titles = errors |> Enum.map(& &1.candidate.title) |> Enum.take(3) |> Enum.join(", ")
-      "Some selections could not be generated: #{titles}."
+    cond do
+      Enum.any?(errors, &(&1.reason == :campaign_not_found)) ->
+        "This campaign is no longer available. Return to Import and choose an active campaign."
+
+      Enum.any?(errors, &match?({:video, _reason}, &1.reason)) ->
+        "The carousel slides were created, but the short video could not be encoded. Check that FFmpeg is available and try again."
+
+      true ->
+        titles = errors |> Enum.map(& &1.candidate.title) |> Enum.take(3) |> Enum.join(", ")
+        "Some selections could not be generated: #{titles}."
     end
   end
 

@@ -139,8 +139,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
              campaign.title,
              "If a drug like soma existed today...",
              "Perfect comfort can become a cage.",
-             "What can a brave new world teach us?",
-             "Where do you stand?"
+             "",
+             "Continue on RationalGrid.ai"
            ]
 
     assert has_element?(view, "#curated-carousel-slide-#{carousel.id}-1")

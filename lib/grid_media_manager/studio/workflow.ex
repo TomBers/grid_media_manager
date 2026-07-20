@@ -66,6 +66,16 @@ defmodule GridMediaManager.Studio.Workflow do
   end
 
   def generate(%Campaign{} = campaign, candidates, opts \\ []) when is_list(candidates) do
+    case Campaigns.get_campaign(campaign.id) do
+      nil ->
+        %{assets: [], errors: [%{candidate: List.first(candidates), reason: :campaign_not_found}]}
+
+      %Campaign{} = campaign ->
+        generate_for_campaign(campaign, candidates, opts)
+    end
+  end
+
+  defp generate_for_campaign(campaign, candidates, opts) do
     style = opts |> Keyword.get(:style) |> ShareCard.normalize_style()
     format = normalize_format(Keyword.get(opts, :format, "landscape"))
 
@@ -156,11 +166,9 @@ defmodule GridMediaManager.Studio.Workflow do
       {:ok, carousel} ->
         case Campaigns.generate_curated_carousel_video(campaign, carousel) do
           {:ok, video} ->
-            _ = Campaigns.delete_generated_media_asset(carousel.id)
             %{assets: [video], errors: []}
 
           {:error, reason} ->
-            _ = Campaigns.delete_generated_media_asset(carousel.id)
             candidate = List.first(candidates) || %{title: campaign.title}
             %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
         end
