@@ -83,8 +83,8 @@ defmodule GridMediaManager.Social.Buffer do
   list of items containing `url` and `mime_type`, or normalized Buffer asset maps.
   It takes precedence over the single-asset `:media_url` and `:mime_type` options.
   Legacy media defaults to an image; a MIME type of `video/mp4` creates a video
-  asset. Instagram images and multi-asset posts default to `post`, while a single
-  video defaults to `reel`. The draft's `scheduled_for` value is sent as Buffer's
+  asset. Multiple Instagram images default to `carousel`, while a single video
+  defaults to `reel`. The draft's `scheduled_for` value is sent as Buffer's
   `dueAt`.
   """
   def schedule(%PostDraft{} = draft, opts) when is_list(opts) or is_map(opts) do
@@ -269,9 +269,16 @@ defmodule GridMediaManager.Social.Buffer do
 
   defp post_metadata(%PostDraft{platform: "instagram"}, opts, assets) do
     requested_type = option(opts, :instagram_type) |> string_value()
-    type = requested_type || if(single_video?(assets), do: "reel", else: "post")
 
-    if type in ["post", "story", "reel"] do
+    type =
+      requested_type ||
+        cond do
+          multiple_images?(assets) -> "carousel"
+          single_video?(assets) -> "reel"
+          true -> "post"
+        end
+
+    if type in ["post", "story", "reel", "carousel"] do
       instagram_metadata = %{
         "type" => type,
         "shouldShareToFeed" => type != "story"
@@ -279,7 +286,7 @@ defmodule GridMediaManager.Social.Buffer do
 
       {:ok, %{"instagram" => instagram_metadata}}
     else
-      {:error, "instagram_type must be post, story, or reel"}
+      {:error, "instagram_type must be post, story, reel, or carousel"}
     end
   end
 
@@ -314,6 +321,12 @@ defmodule GridMediaManager.Social.Buffer do
 
   defp single_video?([%{"video" => %{"url" => _url}}]), do: true
   defp single_video?(_assets), do: false
+
+  defp multiple_images?(assets) when is_list(assets) do
+    length(assets) > 1 and Enum.all?(assets, &match?(%{"image" => %{"url" => _}}, &1))
+  end
+
+  defp multiple_images?(_assets), do: false
 
   defp fallback_youtube_category_id(nil) do
     System.get_env("BUFFER_YOUTUBE_CATEGORY_ID")

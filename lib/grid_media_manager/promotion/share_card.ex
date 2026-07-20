@@ -27,10 +27,11 @@ defmodule GridMediaManager.Promotion.ShareCard do
   @short_body_area_bottom 1_690
   @short_body_max_y 1_650
   @short_body_font_size 58
-  @short_body_max_lines 9
   @short_min_duration 4.5
   @short_words_per_second 3.0
   @short_pause_duration 1.5
+  @max_curated_carousel_images 3
+  @carousel_reading_max_characters 360
 
   @quote_area_left 112
   @quote_area_top 146
@@ -681,6 +682,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   def node_short_video_slides(%Campaign{} = campaign, node) when is_map(node) do
+    node_reading_slides(campaign, node)
+  end
+
+  def node_reading_slides(%Campaign{} = campaign, node) when is_map(node) do
     node_title = node |> get("title") |> sanitize_text(320) |> fallback("Key node")
 
     content_slides =
@@ -688,9 +693,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
       |> Markdown.sections()
       |> Enum.flat_map(fn section ->
         section.blocks
-        |> paginate_short_video_blocks()
+        |> Markdown.paginate_blocks(@carousel_reading_max_characters)
         |> Enum.map(fn blocks ->
           %{
+            kind: "node_text",
             label: "",
             title: "",
             body: Markdown.readable_text(blocks),
@@ -699,8 +705,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
         end)
       end)
 
-    opening = %{label: "", title: node_title, body: ""}
-    closing = %{label: "Learn more", title: "Continue on RationalGrid.ai", body: ""}
+    opening = %{kind: "node_title", label: "", title: node_title, body: ""}
+    closing = %{kind: "cta", label: "Learn more", title: "Continue on RationalGrid.ai", body: ""}
 
     [opening] ++ content_slides ++ [closing]
   end
@@ -740,20 +746,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
     )
   end
 
-  defp paginate_short_video_blocks(blocks) do
-    blocks
-    |> Enum.flat_map(&short_video_block_chunks/1)
-    |> Enum.reduce([], &append_short_video_block(&2, &1))
-  end
-
-  defp short_video_block_chunks(block) do
-    lines = short_video_block_lines(block)
-
-    lines
-    |> Enum.chunk_every(@short_body_max_lines)
-    |> Enum.map(fn chunk -> %{block | text: Enum.join(chunk, " ")} end)
-  end
-
   defp short_video_block_lines(block) do
     style =
       markdown_block_style(block, %{
@@ -789,20 +781,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
     centered_offset = div(max(available_height - content_height, 0), 2)
 
     @short_body_area_top + centered_offset + @short_body_font_size
-  end
-
-  defp append_short_video_block([], block), do: [[block]]
-
-  defp append_short_video_block(pages, block) do
-    current_page = List.last(pages)
-    current_lines = Enum.reduce(current_page, 0, &(length(short_video_block_lines(&1)) + &2))
-    block_lines = length(short_video_block_lines(block))
-
-    if current_lines + block_lines <= @short_body_max_lines do
-      List.replace_at(pages, length(pages) - 1, current_page ++ [block])
-    else
-      pages ++ [[block]]
-    end
   end
 
   defp node_content(%Campaign{} = campaign, node) do
@@ -877,8 +855,71 @@ defmodule GridMediaManager.Promotion.ShareCard do
     slides = Enum.map(slides, &normalize_curated_slide/1)
     selected_slide = Enum.at(slides, slide_index - 1) || List.first(slides)
 
-    carousel_slide_image_svg(campaign, selected_slide, style, slide_index, length(slides))
+    if selected_slide.kind in ["quote", "highlight"] do
+      platform_quote_image_svg(
+        campaign,
+        selected_slide.title,
+        selected_slide.body,
+        selected_slide.kind,
+        style,
+        "portrait"
+      )
+    else
+      carousel_slide_image_svg(campaign, selected_slide, style, slide_index, length(slides))
+    end
   end
+
+  def curated_carousel_max_images, do: @max_curated_carousel_images
+
+  def curated_carousel_selected_slide_indexes(slides, selection \\ nil) when is_list(slides) do
+    slide_count = length(slides)
+    content_count = max(slide_count - 1, 0)
+
+    content_indexes =
+      case selection do
+        nil -> default_curated_carousel_content_indexes(content_count)
+        selection when is_list(selection) -> selection
+        _selection -> []
+      end
+      |> Enum.map(&curated_slide_index/1)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> Enum.filter(&valid_curated_content_index?(&1, content_count))
+      |> Enum.take(@max_curated_carousel_images - 1)
+
+    if slide_count == 0, do: [], else: content_indexes ++ [slide_count]
+  end
+
+  def curated_carousel_selected_slides(slides, selection \\ nil) when is_list(slides) do
+    slides
+    |> curated_carousel_selected_slide_indexes(selection)
+    |> Enum.map(&Enum.at(slides, &1 - 1))
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp default_curated_carousel_content_indexes(content_count) do
+    if content_count == 0 do
+      []
+    else
+      Enum.to_list(1..content_count)
+    end
+  end
+
+  defp valid_curated_content_index?(index, content_count) when content_count > 0,
+    do: index in 1..content_count
+
+  defp valid_curated_content_index?(_index, _content_count), do: false
+
+  defp curated_slide_index(index) when is_integer(index), do: index
+
+  defp curated_slide_index(index) when is_binary(index) do
+    case Integer.parse(index) do
+      {value, ""} -> value
+      _result -> nil
+    end
+  end
+
+  defp curated_slide_index(_index), do: nil
 
   def curated_carousel_image_png(campaign, slides, style, slide) when is_list(slides) do
     campaign
@@ -889,24 +930,66 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp carousel_slide_image_svg(campaign, slide, style, slide_index, slide_count) do
     palette = quote_palette(style)
-    body_start_y = 480
-    title_image_data_uri = carousel_title_image_data_uri(slide.title, palette.text)
+    cta? = slide.label == "Learn more"
+    titled? = is_binary(slide.title) and String.trim(slide.title) != ""
+    body_start_y = if titled?, do: 480, else: 240
+
+    title_image_markup =
+      if cta? or not titled?, do: "", else: carousel_title_image_markup(slide.title, palette.text)
+
+    brand_header =
+      if(cta?,
+        do: "",
+        else:
+          ~s(<text x="130" y="142" fill="#{palette.label}" fill-opacity="0.92" font-size="20" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0.4">RationalGrid.ai</text>)
+      )
+
+    top_rule =
+      if(cta?,
+        do: "",
+        else:
+          ~s(<line x1="130" y1="176" x2="950" y2="176" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />)
+      )
+
     footer = "#{slide_index} / #{slide_count} · Learn more at rationalgrid.ai"
     footer_font_size = single_line_font_size(footer, 820, 18, 8)
 
     body_markup =
-      fitted_markdown_body_markup(
-        Map.get(slide, :blocks, slide.body),
-        nil,
-        %{
-          x: 130,
-          start_y: body_start_y,
-          max_y: 1_160,
-          width: 820,
-          font_size: 31,
-          palette: palette
-        },
-        [31, 28, 26, 24, 22, 20, 18, 16, 14, 12]
+      if cta? do
+        ""
+      else
+        fitted_markdown_body_markup(
+          slide_content(slide),
+          nil,
+          %{
+            x: 130,
+            start_y: body_start_y,
+            max_y: 1_160,
+            width: 820,
+            font_size: if(titled?, do: 31, else: 96),
+            palette: palette
+          },
+          if(titled?,
+            do: [31, 28, 26, 24, 22, 20, 18, 16, 14, 12],
+            else: [96, 92, 88, 84, 80, 76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32]
+          )
+        )
+      end
+
+    cta_markup = if(cta?, do: carousel_cta_markup(palette), else: "")
+
+    accent_markup =
+      if(cta? or not titled?,
+        do: "",
+        else:
+          ~s|<rect x="130" y="430" width="210" height="7" rx="3.5" fill="url(#carouselAccent)" opacity="0.96" />|
+      )
+
+    footer_markup =
+      if(cta?,
+        do: "",
+        else:
+          ~s(<line x1="130" y1="1210" x2="950" y2="1210" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" /><text x="130" y="1248" fill="#{palette.muted}" font-size="#{footer_font_size}" font-weight="700" font-family="#{@ui_font_family}">#{escape_xml(footer)}</text>)
       )
 
     """
@@ -945,15 +1028,28 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect x="54.5" y="54.5" width="971" height="1241" rx="43.5" fill="none" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
       <rect x="82" y="82" width="916" height="1186" rx="32" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
 
-      <text x="130" y="142" fill="#{palette.label}" fill-opacity="0.92" font-size="20" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="0.4">RationalGrid.ai</text>
-
-      <line x1="130" y1="176" x2="950" y2="176" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
-      <image x="130" y="205" width="820" height="190" href="#{title_image_data_uri}" preserveAspectRatio="none" />
-      <rect x="130" y="430" width="210" height="7" rx="3.5" fill="url(#carouselAccent)" opacity="0.96" />
+      #{brand_header}
+      #{top_rule}
+      #{title_image_markup}
+      #{cta_markup}
+      #{accent_markup}
       #{body_markup}
-      <line x1="130" y1="1210" x2="950" y2="1210" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
-      <text x="130" y="1248" fill="#{palette.muted}" font-size="#{footer_font_size}" font-weight="700" font-family="#{@ui_font_family}">#{escape_xml(footer)}</text>
+      #{footer_markup}
     </svg>
+    """
+  end
+
+  defp carousel_title_image_markup(title, text_color) do
+    data_uri = carousel_title_image_data_uri(title, text_color)
+
+    ~s(<image x="130" y="205" width="820" height="190" href="#{data_uri}" preserveAspectRatio="none" />)
+  end
+
+  defp carousel_cta_markup(palette) do
+    """
+    #{rg_logo_markup(420, 360, 240, 240)}
+    <text x="540" y="760" text-anchor="middle" fill="#{palette.text}" font-size="48" font-weight="900" font-family="#{@ui_font_family}">Continue on</text>
+    <text x="540" y="830" text-anchor="middle" fill="#{palette.text}" font-size="54" font-weight="900" font-family="#{@ui_font_family}">RationalGrid.ai</text>
     """
   end
 
@@ -1057,7 +1153,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
     body_start_y =
       cond do
         cta? or cover? -> 610
-        text_only? -> short_video_body_start_y(Map.get(slide, :blocks, slide.body))
+        text_only? -> short_video_body_start_y(slide_content(slide))
         true -> max(title_last_y + 92, 610)
       end
 
@@ -1090,7 +1186,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         ""
       else
         fitted_markdown_body_markup(
-          Map.get(slide, :blocks, slide.body),
+          slide_content(slide),
           nil,
           %{
             x: if(text_only?, do: @short_body_x, else: 130),
@@ -1174,6 +1270,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   defp rg_logo_markup do
+    rg_logo_markup(420, 520, 240, 240)
+  end
+
+  defp rg_logo_markup(x, y, width, height) do
     path = Path.join(to_string(:code.priv_dir(:grid_media_manager)), "static/images/rg_logo.webp")
 
     case File.read(path) do
@@ -1181,7 +1281,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         png = logo |> Image.from_binary!() |> Image.write!(:memory, suffix: ".png")
         encoded = Base.encode64(png)
 
-        ~s(<image x="420" y="520" width="240" height="240" href="data:image/png;base64,#{encoded}" preserveAspectRatio="xMidYMid meet" />)
+        ~s(<image x="#{x}" y="#{y}" width="#{width}" height="#{height}" href="data:image/png;base64,#{encoded}" preserveAspectRatio="xMidYMid meet" />)
 
       _ ->
         ""
@@ -2258,11 +2358,42 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   defp normalize_curated_slide(slide) when is_map(slide) do
+    blocks = normalize_curated_blocks(get(slide, "blocks"))
+
     %{
+      kind: slide |> get("kind") |> sanitize_text(nil) |> fallback("node_text"),
       label: slide |> get("label") |> sanitize_text(nil) |> fallback(""),
       title: slide |> get("title") |> sanitize_text(nil) |> fallback(""),
-      body: slide |> get("body") |> sanitize_text(nil)
+      body: slide |> get("body") |> sanitize_text(nil),
+      blocks: blocks
     }
+  end
+
+  defp normalize_curated_blocks(blocks) when is_list(blocks) do
+    blocks
+    |> Enum.map(fn block ->
+      %{
+        type: normalize_curated_block_type(get(block, "type")),
+        text: block |> get("text") |> sanitize_text(nil),
+        level: integer_value(get(block, "level")),
+        marker: block |> get("marker") |> sanitize_text(nil)
+      }
+    end)
+    |> Enum.reject(&is_nil(&1.text))
+  end
+
+  defp normalize_curated_blocks(_blocks), do: []
+
+  defp normalize_curated_block_type("heading"), do: :heading
+  defp normalize_curated_block_type("blockquote"), do: :blockquote
+  defp normalize_curated_block_type("list_item"), do: :list_item
+  defp normalize_curated_block_type(_type), do: :paragraph
+
+  defp slide_content(slide) do
+    case Map.get(slide, :blocks) do
+      blocks when is_list(blocks) and blocks != [] -> blocks
+      _blocks -> Map.get(slide, :body, "")
+    end
   end
 
   defp normalize_slide_index(slide) when is_integer(slide), do: max(slide, 1)

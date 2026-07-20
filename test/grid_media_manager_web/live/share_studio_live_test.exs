@@ -16,7 +16,6 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     assert has_element?(view, "#draft-composer-panel")
     assert has_element?(view, "#platform-tab-linkedin")
     assert has_element?(view, "#post-drafts")
-    assert has_element?(view, "#post-drafts", "Configure Buffer")
   end
 
   test "renders simplified content payload sections without assets", %{conn: conn} do

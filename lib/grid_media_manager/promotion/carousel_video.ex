@@ -22,7 +22,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @audio_bitrate "160k"
   @frame_rate 30
   @render_timeout 90_000
-  @cache_version 14
+  @cache_version 15
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -130,11 +130,12 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       when is_list(slides) and is_list(opts) do
     style = ShareCard.normalize_style(style)
     force? = Keyword.get(opts, :force, false)
+    frame_paths = Keyword.get(opts, :frame_paths, %{})
 
     with ffmpeg when is_binary(ffmpeg) <- ffmpeg_path(),
          {:ok, cache_dir} <- ensure_cache_dir() do
       output_path =
-        Path.join(cache_dir, curated_cache_filename(campaign, token, slides, style))
+        Path.join(cache_dir, curated_cache_filename(campaign, token, slides, style, frame_paths))
 
       if force?, do: File.rm(output_path)
 
@@ -149,12 +150,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
           cache_dir,
           output_path,
           fn index ->
-            ShareCard.curated_carousel_short_video_frame_png(
-              campaign,
-              slides,
-              style,
-              index
-            )
+            browser_frame_or_render(campaign, slides, style, index, frame_paths)
           end
         )
       end
@@ -206,6 +202,15 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     render_frame_video(ffmpeg, durations, cache_dir, output_path, fn index ->
       ShareCard.node_short_video_frame_png(campaign, node, style, index)
     end)
+  end
+
+  defp browser_frame_or_render(campaign, slides, style, index, frame_paths) do
+    path = Map.get(frame_paths, to_string(index))
+
+    case path && File.read(path) do
+      {:ok, body} -> body
+      _error -> ShareCard.curated_carousel_short_video_frame_png(campaign, slides, style, index)
+    end
   end
 
   defp render_frame_video(ffmpeg, durations, cache_dir, output_path, frame_fun) do
@@ -486,10 +491,10 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     "#{digest}.mp4"
   end
 
-  defp curated_cache_filename(campaign, token, slides, style) do
+  defp curated_cache_filename(campaign, token, slides, style, frame_paths) do
     digest =
       {@cache_version, :curated, campaign.id, campaign.title, token, slides, style, @fade_seconds,
-       background_audio_signature()}
+       frame_paths, background_audio_signature()}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))
       |> Base.url_encode64(padding: false)

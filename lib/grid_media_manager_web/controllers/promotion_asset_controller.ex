@@ -98,10 +98,47 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
       asset ->
         slides = Map.get(asset.metadata || %{}, "slides", [])
         style = Map.get(params, "style") || asset.style
+        frame_paths = Map.get(asset.metadata || %{}, "browser_frame_paths", %{})
 
-        CarouselVideo.render_curated(campaign, token, slides, style)
+        CarouselVideo.render_curated(campaign, token, slides, style, frame_paths: frame_paths)
         |> send_short_video(conn, "rationalgrid-story-#{token}.mp4")
     end
+  end
+
+  def browser_frame(
+        conn,
+        %{"id" => id, "token" => token, "slide" => slide, "frame" => %Plug.Upload{} = upload}
+      ) do
+    case Campaigns.get_campaign(id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "Campaign not found"})
+
+      campaign ->
+        with {:ok, body} <- File.read(upload.path),
+             true <- upload.content_type == "image/png",
+             true <- png_body?(body),
+             true <- byte_size(body) <= 12_000_000,
+             {:ok, _asset} <-
+               Campaigns.store_curated_carousel_browser_frame(campaign, token, slide, body) do
+          json(conn, %{saved: true, slide: slide})
+        else
+          false ->
+            conn |> put_status(:unprocessable_entity) |> json(%{error: "Invalid PNG frame"})
+
+          {:error, :not_found} ->
+            conn |> put_status(:not_found) |> json(%{error: "Carousel not found"})
+
+          {:error, :invalid_slide} ->
+            conn |> put_status(:unprocessable_entity) |> json(%{error: "Invalid slide"})
+
+          {:error, _reason} ->
+            conn |> put_status(:unprocessable_entity) |> json(%{error: "Could not save frame"})
+        end
+    end
+  end
+
+  def browser_frame(conn, _params) do
+    conn |> put_status(:bad_request) |> json(%{error: "A PNG frame is required"})
   end
 
   def node_carousel_video(conn, %{"id" => id, "node_id" => node_id} = params) do
@@ -223,6 +260,9 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
 
   defp send_short_video({:error, _reason}, conn, _filename),
     do: send_resp(conn, 500, "Could not render short video")
+
+  defp png_body?(<<137, 80, 78, 71, _rest::binary>>), do: true
+  defp png_body?(_body), do: false
 
   defp put_png_cache_headers(conn) do
     conn

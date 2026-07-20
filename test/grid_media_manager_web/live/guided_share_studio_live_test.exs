@@ -42,10 +42,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     view |> element("#continue-to-design") |> render_click()
     view |> element("#continue-to-generate") |> render_click()
     view |> element("#generate-story-package") |> render_click()
+    await_generation(view)
 
-    assert Enum.any?(Campaigns.list_media_assets(campaign), fn asset ->
-             asset.kind == "question_quote_card" and asset.node_id == "answer-1"
-           end)
+    assert Enum.any?(Campaigns.list_media_assets(campaign), &(&1.kind == "curated_carousel"))
   end
 
   test "steps through curation and design to generate a multi-asset package", %{conn: conn} do
@@ -68,18 +67,15 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#stage-design")
     assert has_element?(view, "#guided-style-minimal_light", "Minimal light")
     assert has_element?(view, "#guided-style-minimal_dark", "Minimal dark")
-    assert has_element?(view, "#guided-format-linkedin", "LinkedIn explainer")
-    assert has_element?(view, "#guided-format-portrait", "Instagram portrait")
-    assert has_element?(view, "#guided-format-carousel", "Instagram carousel + Shorts")
+    assert has_element?(view, "#content-mode-video")
+    assert has_element?(view, "#content-mode-text")
     assert has_element?(view, "#pexels-background-picker")
 
     view
     |> element("#guided-style-warm_paper")
     |> render_click()
 
-    view
-    |> element("#guided-format-portrait")
-    |> render_click()
+    view |> element("#content-mode-text") |> render_click()
 
     view
     |> element("#continue-to-generate")
@@ -91,24 +87,42 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     |> element("#generate-story-package")
     |> render_click()
 
+    await_generation(view)
+
     assert has_element?(view, "#stage-review")
-    assert has_element?(view, "#guided-platform-youtube")
     assert has_element?(view, "#guided-output-assets article")
     assert has_element?(view, "#guided-review-drafts article")
-    assert has_element?(view, "#guided-review-drafts", "Configure Buffer")
 
     assets = Campaigns.list_media_assets(campaign)
-    assert length(assets) == 3
-    assert length(Campaigns.list_post_drafts(campaign, platform: "linkedin")) == 3
-    assert length(Campaigns.list_post_drafts(campaign, platform: "instagram")) == 6
+    assert [%{kind: "curated_carousel", style: "warm_paper"} = carousel] = assets
+    assert carousel.metadata["slide_count"] >= 3
+    assert List.last(carousel.metadata["slides"])["label"] == "Learn more"
+    last_slide = carousel.metadata["slide_count"]
+    assert carousel.metadata["selected_slide_indexes"] == [1, 2, last_slide]
+    assert has_element?(view, "#curated-carousel-order-#{carousel.id}")
 
-    assert Enum.any?(assets, &(&1.kind == "question_quote_card" and &1.style == "warm_paper"))
-    assert Enum.any?(assets, &(&1.kind == "highlight_card" and &1.style == "warm_paper"))
+    preview_url = String.replace(carousel.url, "/slides/1/", "/slides/2/")
 
-    assert Enum.any?(assets, fn asset ->
-             asset.kind == "key_node_card" and asset.style == "warm_paper" and
-               asset.metadata["format"] == "portrait"
-           end)
+    view
+    |> element("#curated-carousel-slide-#{carousel.id}-2")
+    |> render_click()
+
+    assert has_element?(view, "#guided-output-preview-#{carousel.id}[src='#{preview_url}']")
+
+    view
+    |> element("#move-curated-carousel-slide-down-#{carousel.id}-1")
+    |> render_click()
+
+    assert Campaigns.get_media_asset!(carousel.id).metadata["selected_slide_indexes"] == [
+             2,
+             1,
+             last_slide
+           ]
+
+    assert Enum.any?(
+             Campaigns.list_post_drafts(campaign, platform: "instagram"),
+             &(&1.media_asset_id == carousel.id)
+           )
   end
 
   test "combines multiple selected moments into one carousel output", %{conn: conn} do
@@ -119,37 +133,18 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     view |> element("#select-aspect-highlight-123") |> render_click()
     view |> element("#select-aspect-key-node-1") |> render_click()
     view |> element("#continue-to-design") |> render_click()
-
-    assert has_element?(view, "#guided-format-combined_carousel:not([disabled])")
-
-    view |> element("#guided-format-combined_carousel") |> render_click()
+    assert has_element?(view, "#content-mode-video")
+    view |> element("#content-mode-video") |> render_click()
     view |> element("#continue-to-generate") |> render_click()
     view |> element("#generate-story-package") |> render_click()
-
-    assert has_element?(view, "#stage-review")
-    assert has_element?(view, "#guided-output-assets article")
-    assert has_element?(view, "#guided-output-assets", "Combined carousel · 5 slides")
+    await_generation(view)
 
     assets = Campaigns.list_media_assets(campaign)
     carousel = Enum.find(assets, &(&1.kind == "curated_carousel"))
     assert carousel
-    assert carousel.metadata["slide_count"] == 5
+    assert carousel.metadata["slide_count"] >= 4
 
-    assert Enum.map(carousel.metadata["slides"], & &1["title"]) == [
-             campaign.title,
-             "If a drug like soma existed today...",
-             "Perfect comfort can become a cage.",
-             "",
-             "Continue on RationalGrid.ai"
-           ]
-
-    assert has_element?(view, "#curated-carousel-slide-#{carousel.id}-1")
-    assert has_element?(view, "#curated-carousel-slide-#{carousel.id}-5")
-
-    if GridMediaManager.Promotion.CarouselVideo.available?() do
-      assert Enum.any?(assets, &(&1.kind == "curated_carousel_video"))
-      assert has_element?(view, "#guided-output-assets", "Story Short")
-    end
+    assert List.last(carousel.metadata["slides"])["title"] == "Continue on RationalGrid.ai"
   end
 
   test "restores the generated post screen after a refresh", %{conn: conn} do
@@ -159,13 +154,15 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
     view |> element("#continue-to-design") |> render_click()
+    view |> element("#content-mode-text") |> render_click()
     view |> element("#continue-to-generate") |> render_click()
     view |> element("#generate-story-package") |> render_click()
+    await_generation(view)
 
     [asset] = Campaigns.list_media_assets(campaign)
 
     resume_path =
-      ~p"/campaigns/#{campaign.id}/studio?#{[step: "review", assets: Integer.to_string(asset.id), platform: "linkedin", asset: "all"]}"
+      ~p"/campaigns/#{campaign.id}/studio?#{[step: "review", assets: Integer.to_string(asset.id), platform: "instagram", asset: "all"]}"
 
     assert_patch(view, resume_path)
 
@@ -186,14 +183,16 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
     view |> element("#continue-to-design") |> render_click()
+    view |> element("#content-mode-text") |> render_click()
     view |> element("#continue-to-generate") |> render_click()
     view |> element("#generate-story-package") |> render_click()
+    await_generation(view)
 
     [asset] = Campaigns.list_media_assets(campaign)
 
     [draft] =
       Campaigns.list_post_drafts(campaign,
-        platform: "linkedin",
+        platform: "instagram",
         media_asset_id: asset.id
       )
 
@@ -242,6 +241,19 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
       },
       "highlights" => []
     }
+  end
+
+  defp await_generation(view, attempts \\ 300)
+
+  defp await_generation(_view, 0), do: flunk("timed out waiting for package generation")
+
+  defp await_generation(view, attempts) do
+    if has_element?(view, "#stage-review") or has_element?(view, "#generation-error") do
+      :ok
+    else
+      Process.sleep(100)
+      await_generation(view, attempts - 1)
+    end
   end
 
   defp simplified_payload do

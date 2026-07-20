@@ -139,6 +139,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       )
       |> assign(:selected_platforms, restored_platforms)
       |> assign(:selected_output_asset_id, restored_asset_filter)
+      |> assign(:carousel_preview_slides, %{})
       |> assign(:output_asset_ids, restored_asset_ids)
       |> assign(:output_asset_count, length(restored_assets))
       |> assign(:output_video_only?, restored_video_only?)
@@ -379,6 +380,109 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
      |> refresh_review_drafts()
      |> maybe_patch_review_url()}
   end
+
+  def handle_event(
+        "preview_carousel_slide",
+        %{"asset-id" => asset_id, "slide-index" => slide_index},
+        socket
+      ) do
+    with {:ok, asset} <- review_carousel_asset(socket, asset_id),
+         {:ok, slide_index} <- positive_integer(slide_index),
+         true <- carousel_slide_index?(asset, slide_index) do
+      socket = update(socket, :carousel_preview_slides, &Map.put(&1, asset.id, slide_index))
+      {:noreply, stream_insert(socket, :output_assets, asset)}
+    else
+      {:error, :not_in_package} -> {:noreply, socket}
+      {:error, :invalid_index} -> {:noreply, socket}
+      false -> {:noreply, socket}
+    end
+  end
+
+  def handle_event(
+        "toggle_carousel_slide",
+        %{"asset-id" => asset_id, "slide-index" => slide_index},
+        socket
+      ) do
+    with {:ok, asset} <- review_carousel_asset(socket, asset_id),
+         {:ok, slide_index} <- positive_integer(slide_index),
+         true <- carousel_content_slide?(asset, slide_index) do
+      selected_indexes = carousel_selected_slide_indexes(asset)
+      content_indexes = Enum.reject(selected_indexes, &carousel_slide_cta?(asset, &1))
+
+      next_indexes =
+        cond do
+          slide_index in content_indexes and length(content_indexes) == 1 ->
+            :keep_one_content_slide
+
+          slide_index in content_indexes ->
+            List.delete(content_indexes, slide_index)
+
+          length(content_indexes) >= ShareCard.curated_carousel_max_images() - 1 ->
+            :at_limit
+
+          true ->
+            content_indexes ++ [slide_index]
+        end
+
+      case next_indexes do
+        :keep_one_content_slide ->
+          {:noreply, put_flash(socket, :error, "Keep at least one content image before the CTA.")}
+
+        :at_limit ->
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "Choose up to #{ShareCard.curated_carousel_max_images() - 1} content images; the CTA is added last."
+           )}
+
+        next_indexes ->
+          persist_carousel_selection(socket, asset, next_indexes)
+      end
+    else
+      {:error, :not_in_package} -> {:noreply, socket}
+      {:error, :invalid_index} -> {:noreply, socket}
+      false -> {:noreply, socket}
+    end
+  end
+
+  def handle_event(
+        "move_carousel_slide",
+        %{
+          "asset-id" => asset_id,
+          "slide-index" => slide_index,
+          "direction" => direction
+        },
+        socket
+      )
+      when direction in ["up", "down"] do
+    with {:ok, asset} <- review_carousel_asset(socket, asset_id),
+         {:ok, slide_index} <- positive_integer(slide_index),
+         true <- carousel_content_slide?(asset, slide_index) do
+      content_indexes =
+        asset
+        |> carousel_selected_slide_indexes()
+        |> Enum.reject(&carousel_slide_cta?(asset, &1))
+
+      case Enum.find_index(content_indexes, &(&1 == slide_index)) do
+        nil ->
+          {:noreply, socket}
+
+        position ->
+          persist_carousel_selection(
+            socket,
+            asset,
+            move_carousel_index(content_indexes, position, direction)
+          )
+      end
+    else
+      {:error, :not_in_package} -> {:noreply, socket}
+      {:error, :invalid_index} -> {:noreply, socket}
+      false -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("move_carousel_slide", _params, socket), do: {:noreply, socket}
 
   def handle_event("save_draft", %{"id" => id, "post_draft" => %{"body" => body}}, socket) do
     draft = Campaigns.get_post_draft!(id)
@@ -995,7 +1099,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                       How should we make this package?
                     </h2>
                     <p class="mt-1 max-w-2xl text-sm leading-6 text-base-content/60">
-                      Video is automatic. Text creates one image per selected moment for manual publishing.
+                      Video is automatic. Text creates one ordered image carousel with the RationalGrid CTA last.
                     </p>
                   </div>
                   <span class="rounded-full bg-base-200 px-3 py-1 text-xs font-medium text-base-content/55">
@@ -1051,10 +1155,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     </span>
                     <span class="mt-4 block text-base font-bold text-base-content">Text</span>
                     <span class="mt-1 block text-sm font-semibold text-base-content/70">
-                      One image per selected moment
+                      Ordered multi-image carousel
                     </span>
                     <span class="mt-2 block text-xs leading-5 text-base-content/55">
-                      Download the image set, then write and publish each post manually.
+                      Buffer-ready Instagram carousel with the RationalGrid CTA as the final image.
                     </span>
                   </button>
                 </div>
@@ -1185,14 +1289,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     {style_label(@card_styles, @selected_style)}
                   </p>
                   <p class="mt-1 text-xs text-white/55">
-                    {if(@content_mode == "video", do: "Combined story video", else: "Text image set")}
+                    {if(@content_mode == "video",
+                      do: "Combined story video",
+                      else: "Ordered image carousel"
+                    )}
                   </p>
                   <div class="mt-5 space-y-2 text-xs text-white/60">
                     <p class="flex items-center gap-2">
                       <.icon name="hero-check" class="size-4 text-emerald-400" />
                       {if(@content_mode == "video",
                         do: "Generate one combined vertical video",
-                        else: "Generate one image per selected moment"
+                        else: "Generate one ordered image carousel"
                       )}
                     </p>
                     <p class="flex items-center gap-2">
@@ -1255,7 +1362,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 id="generation-progress"
                 class="mt-5 rounded-2xl border border-orange-500/20 bg-orange-500/10 px-4 py-3 text-sm text-orange-800 dark:text-orange-100"
               >
-                Generating the video in the background. This can take a few minutes for longer nodes; you can keep this page open.
+                Generating the package in the background. This can take a few minutes for longer nodes; you can keep this page open.
               </p>
 
               <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
@@ -1279,7 +1386,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   {cond do
                     @generation_in_progress? -> "Generating package…"
                     @content_mode == "video" -> "Generate video package"
-                    true -> "Generate text image set"
+                    true -> "Generate image carousel"
                   end}
                 </button>
               </div>
@@ -1299,7 +1406,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   <h2 class="mt-1 text-xl font-semibold text-base-content">
                     {cond do
                       @output_video_only? -> "Review the combined video and its copy."
-                      @content_mode == "text" -> "Review the image set and edit its copy."
+                      @content_mode == "text" -> "Review the image carousel and edit its copy."
                       true -> "Review the visuals and their copy together."
                     end}
                   </h2>
@@ -1365,6 +1472,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     id={id}
                     asset={asset}
                     selected={@selected_output_asset_id == Integer.to_string(asset.id)}
+                    preview_slide={Map.get(@carousel_preview_slides, asset.id, 1)}
                   />
                 </div>
               </div>
@@ -1563,6 +1671,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   attr :id, :string, required: true
   attr :asset, MediaAsset, required: true
   attr :selected, :boolean, required: true
+  attr :preview_slide, :integer, default: 1
 
   defp output_asset_card(assigns) do
     ~H"""
@@ -1579,7 +1688,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       </video>
       <img
         :if={not video_asset?(@asset)}
-        src={@asset.url}
+        id={"guided-output-preview-#{@asset.id}"}
+        src={output_asset_preview_url(@asset, @preview_slide)}
         alt={@asset.title}
         loading="lazy"
         class={asset_image_class(@asset)}
@@ -1587,26 +1697,154 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       <div
         :if={@asset.kind == "curated_carousel"}
         id={"curated-carousel-slides-#{@asset.id}"}
-        class="mt-3 grid grid-cols-4 gap-2"
+        phx-hook="CanvasSlideRenderer"
+        data-slides={Jason.encode!(Map.get(@asset.metadata || %{}, "slides", []))}
+        data-selected-indexes={Jason.encode!(carousel_selected_slide_indexes(@asset))}
+        data-style={@asset.style}
+        data-logo-src="/images/rg_logo.webp"
+        data-upload-url={"/api/campaigns/#{@asset.campaign_id}/curated-carousels/#{@asset.source_id}/browser-frames"}
+        class="mt-4 space-y-4 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-3"
       >
-        <a
-          :for={{url, index} <- curated_carousel_slide_urls(@asset)}
-          id={"curated-carousel-slide-#{@asset.id}-#{index}"}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="group relative overflow-hidden rounded-lg border border-base-content/10 bg-base-200"
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-orange-700 dark:text-orange-200">
+              Choose the publishable images
+            </p>
+            <p class="mt-1 text-xs leading-5 text-base-content/60">
+              Select up to 3 images total. Click in the order you want, then refine it below. The RationalGrid CTA is always last.
+            </p>
+            <p
+              data-browser-render-status
+              class="mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-200"
+            >
+              Preparing browser-rendered preview…
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <span class="rounded-full bg-base-100 px-2.5 py-1 text-[0.65rem] font-bold text-base-content/60">
+              {carousel_selection_summary(@asset)}
+            </span>
+            <button
+              type="button"
+              data-browser-render-upload
+              class="rounded-lg bg-orange-500 px-2.5 py-1.5 text-[0.65rem] font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Save browser-rendered frames
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div :for={{url, index} <- curated_carousel_slide_urls(@asset)} class="min-w-0">
+            <button
+              id={"curated-carousel-slide-#{@asset.id}-#{index}"}
+              type="button"
+              phx-click="preview_carousel_slide"
+              phx-value-asset-id={@asset.id}
+              phx-value-slide-index={index}
+              data-carousel-preview
+              data-preview-target={"guided-output-preview-#{@asset.id}"}
+              data-preview-url={url}
+              aria-label={"Preview carousel slide #{index}"}
+              class={[
+                carousel_slide_link_class(@asset, index),
+                @preview_slide == index && "ring-2 ring-sky-400/80"
+              ]}
+            >
+              <canvas
+                id={"canvas-curated-carousel-slide-#{@asset.id}-#{index}"}
+                width="1080"
+                height="1350"
+                data-canvas-slide
+                data-slide-index={index}
+                phx-update="ignore"
+                aria-label={"Browser-rendered carousel slide #{index}"}
+                class="hidden aspect-[4/5] w-full object-cover"
+              >
+              </canvas>
+              <img
+                src={url}
+                alt={"Carousel slide #{index}"}
+                loading="lazy"
+                class="aspect-[4/5] w-full object-cover transition group-hover:scale-105"
+              />
+              <span class="absolute bottom-1 right-1 rounded-full bg-black/65 px-1.5 py-0.5 text-[0.6rem] font-bold text-white">
+                {index}
+              </span>
+            </button>
+            <div class="mt-1 flex items-center justify-between gap-1">
+              <button
+                id={"toggle-curated-carousel-slide-#{@asset.id}-#{index}"}
+                type="button"
+                phx-click="toggle_carousel_slide"
+                phx-value-asset-id={@asset.id}
+                phx-value-slide-index={index}
+                disabled={carousel_slide_cta?(@asset, index)}
+                aria-pressed={carousel_slide_selected?(@asset, index)}
+                class={carousel_slide_button_class(@asset, index)}
+              >
+                {carousel_slide_action_label(@asset, index)}
+              </button>
+              <span
+                :if={carousel_slide_position(@asset, index)}
+                class="shrink-0 text-[0.65rem] font-bold text-orange-700 dark:text-orange-200"
+              >
+                #{carousel_slide_position(@asset, index)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div
+          id={"curated-carousel-order-#{@asset.id}"}
+          class="rounded-xl border border-base-content/10 bg-base-100/70 p-3"
         >
-          <img
-            src={url}
-            alt={"Carousel slide #{index}"}
-            loading="lazy"
-            class="aspect-[4/5] w-full object-cover transition group-hover:scale-105"
-          />
-          <span class="absolute bottom-1 right-1 rounded-full bg-black/65 px-1.5 py-0.5 text-[0.6rem] font-bold text-white">
-            {index}
-          </span>
-        </a>
+          <p class="text-xs font-bold uppercase tracking-wide text-base-content/55">Publish order</p>
+          <div class="mt-2 space-y-1.5">
+            <div
+              :for={{index, position} <- carousel_selected_slide_positions(@asset)}
+              class="flex items-center justify-between gap-2 rounded-lg bg-base-200/70 px-2.5 py-2"
+            >
+              <span class="min-w-0 truncate text-xs font-semibold text-base-content/75">
+                {position}. {carousel_slide_summary(@asset, index)}
+              </span>
+              <div :if={not carousel_slide_cta?(@asset, index)} class="flex shrink-0 gap-1">
+                <button
+                  id={"move-curated-carousel-slide-up-#{@asset.id}-#{index}"}
+                  type="button"
+                  phx-click="move_carousel_slide"
+                  phx-value-asset-id={@asset.id}
+                  phx-value-slide-index={index}
+                  phx-value-direction="up"
+                  disabled={position == 1}
+                  aria-label="Move slide earlier"
+                  class="rounded-md border border-base-content/10 p-1 text-base-content/55 transition hover:bg-base-300 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <.icon name="hero-chevron-up-mini" class="size-3.5" />
+                </button>
+                <button
+                  id={"move-curated-carousel-slide-down-#{@asset.id}-#{index}"}
+                  type="button"
+                  phx-click="move_carousel_slide"
+                  phx-value-asset-id={@asset.id}
+                  phx-value-slide-index={index}
+                  phx-value-direction="down"
+                  disabled={position == carousel_content_selection_count(@asset)}
+                  aria-label="Move slide later"
+                  class="rounded-md border border-base-content/10 p-1 text-base-content/55 transition hover:bg-base-300 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <.icon name="hero-chevron-down-mini" class="size-3.5" />
+                </button>
+              </div>
+              <span
+                :if={carousel_slide_cta?(@asset, index)}
+                class="shrink-0 text-[0.65rem] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-200"
+              >
+                Final CTA
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
       <button
         id={"filter-output-asset-#{@asset.id}"}
@@ -2225,8 +2463,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp suggested_platforms(["linkedin"], "combined_carousel"), do: ["instagram", "youtube"]
   defp suggested_platforms(platforms, _format), do: platforms
 
-  defp content_mode_platforms(["instagram", "youtube", "tiktok"], "text"),
-    do: ["x", "linkedin", "facebook"]
+  defp content_mode_platforms(["instagram", "youtube", "tiktok"], "text"), do: ["instagram"]
 
   defp content_mode_platforms(platforms, "video")
        when platforms in [
@@ -2238,10 +2475,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp content_mode_platforms(platforms, _mode), do: platforms
 
-  defp text_platforms(platforms) do
-    platforms = Enum.filter(platforms, &(&1 in ["x", "linkedin", "facebook"]))
-    Enum.uniq(platforms ++ ["x", "linkedin", "facebook"])
-  end
+  defp text_platforms(_platforms), do: ["instagram"]
 
   defp maybe_text_quote_candidates(candidates, "text", all_candidates) do
     quote_candidates = Enum.filter(candidates, &quote_candidate?/1)
@@ -2272,6 +2506,168 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       {parsed_id, ""} -> if MapSet.member?(output_asset_ids, parsed_id), do: asset_id, else: "all"
       _ -> "all"
     end
+  end
+
+  defp review_carousel_asset(socket, asset_id) do
+    case parse_asset_id(asset_id) do
+      id when is_integer(id) ->
+        if MapSet.member?(socket.assigns.output_asset_ids, id) do
+          asset = Campaigns.get_media_asset!(id)
+
+          if asset.campaign_id == socket.assigns.campaign.id and asset.kind == "curated_carousel" do
+            {:ok, asset}
+          else
+            {:error, :not_in_package}
+          end
+        else
+          {:error, :not_in_package}
+        end
+
+      _id ->
+        {:error, :not_in_package}
+    end
+  end
+
+  defp persist_carousel_selection(socket, asset, selection) do
+    case Campaigns.update_curated_carousel_selection(asset, selection) do
+      {:ok, updated_asset} ->
+        {:noreply, stream_insert(socket, :output_assets, updated_asset)}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not save the carousel selection.")}
+    end
+  end
+
+  defp positive_integer(value) when is_integer(value) and value > 0, do: {:ok, value}
+
+  defp positive_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} when integer > 0 -> {:ok, integer}
+      _result -> {:error, :invalid_index}
+    end
+  end
+
+  defp positive_integer(_value), do: {:error, :invalid_index}
+
+  defp carousel_selected_slide_indexes(%MediaAsset{metadata: metadata}) do
+    metadata = metadata || %{}
+    slides = Map.get(metadata, "slides", [])
+
+    ShareCard.curated_carousel_selected_slide_indexes(
+      slides,
+      Map.get(metadata, "selected_slide_indexes")
+    )
+  end
+
+  defp carousel_content_slide?(asset, slide_index) do
+    slide_index < carousel_slide_count(asset)
+  end
+
+  defp carousel_slide_index?(asset, slide_index) do
+    slide_index in 1..carousel_slide_count(asset)
+  end
+
+  defp carousel_slide_cta?(asset, slide_index) do
+    slide_index == carousel_slide_count(asset)
+  end
+
+  defp carousel_slide_count(%MediaAsset{metadata: metadata}) do
+    metadata = metadata || %{}
+    metadata |> Map.get("slides", []) |> length()
+  end
+
+  defp carousel_selected_slide_positions(asset) do
+    asset
+    |> carousel_selected_slide_indexes()
+    |> Enum.with_index(1)
+  end
+
+  defp carousel_content_selection_count(asset) do
+    asset
+    |> carousel_selected_slide_indexes()
+    |> Enum.reject(&carousel_slide_cta?(asset, &1))
+    |> length()
+  end
+
+  defp carousel_slide_selected?(asset, slide_index),
+    do: slide_index in carousel_selected_slide_indexes(asset)
+
+  defp carousel_slide_position(asset, slide_index) do
+    asset
+    |> carousel_selected_slide_positions()
+    |> Enum.find_value(fn {index, position} -> if(index == slide_index, do: position) end)
+  end
+
+  defp carousel_slide_summary(%MediaAsset{metadata: metadata}, slide_index) do
+    slides = Map.get(metadata || %{}, "slides", [])
+    slide = Enum.at(slides, slide_index - 1) || %{}
+    title = slide |> Map.get("title", "") |> to_string() |> String.trim()
+
+    body =
+      slide |> Map.get("body", "") |> to_string() |> String.replace(~r/\s+/, " ") |> String.trim()
+
+    cond do
+      title != "" -> title
+      body != "" -> String.slice(body, 0, 72)
+      true -> "Slide #{slide_index}"
+    end
+  end
+
+  defp carousel_selection_summary(asset) do
+    "#{length(carousel_selected_slide_indexes(asset))} / #{ShareCard.curated_carousel_max_images()} images"
+  end
+
+  defp carousel_slide_action_label(asset, slide_index) do
+    cond do
+      carousel_slide_cta?(asset, slide_index) -> "Final CTA"
+      carousel_slide_selected?(asset, slide_index) -> "Remove"
+      true -> "Use"
+    end
+  end
+
+  defp carousel_slide_link_class(asset, slide_index) do
+    [
+      "group relative block overflow-hidden rounded-lg border bg-base-200",
+      if(carousel_slide_selected?(asset, slide_index),
+        do: "border-orange-500 ring-2 ring-orange-500/35",
+        else: "border-base-content/10"
+      )
+    ]
+  end
+
+  defp carousel_slide_button_class(asset, slide_index) do
+    [
+      "min-w-0 flex-1 truncate rounded-md px-2 py-1 text-[0.65rem] font-bold transition",
+      cond do
+        carousel_slide_cta?(asset, slide_index) ->
+          "cursor-default bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
+
+        carousel_slide_selected?(asset, slide_index) ->
+          "bg-orange-500 text-white hover:bg-orange-600"
+
+        true ->
+          "border border-base-content/15 text-base-content/60 hover:bg-base-200"
+      end
+    ]
+  end
+
+  defp move_carousel_index(indexes, position, "up") when position > 0 do
+    swap_carousel_indexes(indexes, position, position - 1)
+  end
+
+  defp move_carousel_index(indexes, position, "down") when position < length(indexes) - 1 do
+    swap_carousel_indexes(indexes, position, position + 1)
+  end
+
+  defp move_carousel_index(indexes, _position, _direction), do: indexes
+
+  defp swap_carousel_indexes(indexes, first, second) do
+    first_value = Enum.at(indexes, first)
+    second_value = Enum.at(indexes, second)
+
+    indexes
+    |> List.replace_at(first, second_value)
+    |> List.replace_at(second, first_value)
   end
 
   defp generation_error([]), do: nil
@@ -2464,6 +2860,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     end)
   end
 
+  defp output_asset_preview_url(%MediaAsset{kind: "curated_carousel"} = asset, slide) do
+    curated_carousel_slide_urls(asset)
+    |> Enum.find_value(fn {url, index} -> if(index == slide, do: url) end)
+    |> Kernel.||(asset.url)
+  end
+
+  defp output_asset_preview_url(%MediaAsset{url: url}, _slide), do: url
+
   defp asset_image_class(%MediaAsset{kind: "curated_carousel"}),
     do: "aspect-[4/5] w-full rounded-2xl border border-base-content/10 bg-base-200 object-contain"
 
@@ -2478,8 +2882,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     do:
       "aspect-[1.91/1] w-full rounded-2xl border border-base-content/10 bg-base-200 object-contain"
 
-  defp asset_kind_label(%MediaAsset{kind: "curated_carousel", metadata: metadata}),
-    do: "Combined carousel · #{Map.get(metadata, "slide_count")} slides"
+  defp asset_kind_label(%MediaAsset{kind: "curated_carousel", metadata: metadata}) do
+    slides = Map.get(metadata || %{}, "slides", [])
+
+    selected =
+      ShareCard.curated_carousel_selected_slide_indexes(
+        slides,
+        Map.get(metadata || %{}, "selected_slide_indexes")
+      )
+
+    "Carousel · #{length(selected)} images · CTA final"
+  end
 
   defp asset_kind_label(%MediaAsset{kind: "curated_carousel_video", metadata: metadata}),
     do: "Story Short · #{Map.get(metadata, "duration_seconds")}s · 1080 × 1920"

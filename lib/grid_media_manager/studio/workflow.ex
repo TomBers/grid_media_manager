@@ -87,6 +87,9 @@ defmodule GridMediaManager.Studio.Workflow do
         format == "story_video" ->
           generate_story_video(campaign, candidates, style)
 
+        format == "portrait" ->
+          generate_text_carousel(campaign, candidates, style)
+
         true ->
           {assets, errors} =
             Enum.reduce(candidates, {[], []}, fn candidate, {assets, errors} ->
@@ -112,6 +115,17 @@ defmodule GridMediaManager.Studio.Workflow do
       end
 
     assign_generation_batch(result)
+  end
+
+  defp generate_text_carousel(campaign, candidates, style) do
+    case Campaigns.generate_curated_carousel(campaign, candidates, style) do
+      {:ok, carousel} ->
+        %{assets: [carousel], errors: []}
+
+      {:error, reason} ->
+        candidate = List.first(candidates) || %{title: campaign.title}
+        %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
+    end
   end
 
   defp assign_generation_batch(%{assets: []} = result), do: result

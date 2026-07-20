@@ -54,6 +54,14 @@ defmodule GridMediaManagerWeb.Router do
     live "/campaigns/:id", ShareStudioLive, :show
   end
 
+  scope "/api", GridMediaManagerWeb do
+    pipe_through :api
+
+    post "/campaigns/:id/curated-carousels/:token/browser-frames",
+         PromotionAssetController,
+         :browser_frame
+  end
+
   # Other scopes may use custom stacks.
   # scope "/api", GridMediaManagerWeb do
   #   pipe_through :api

@@ -4,6 +4,7 @@ defmodule GridMediaManager.CampaignsTest do
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.Promotion.SlideSequence
   alias GridMediaManager.RationalGrid.MediaPayload
   alias GridMediaManager.Studio.Workflow
 
@@ -71,6 +72,125 @@ defmodule GridMediaManager.CampaignsTest do
              [first.id, second.id],
              &Enum.any?(Campaigns.list_media_assets(campaign), fn asset -> asset.id == &1 end)
            )
+  end
+
+  test "generates text mode as an ordered carousel with a final CTA" do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "text-carousel-package")
+
+    candidate =
+      campaign
+      |> Workflow.candidates()
+      |> Enum.find(&(&1.type == "key_node"))
+
+    result =
+      Workflow.generate(campaign, [candidate],
+        style: "editorial_dark",
+        format: "portrait"
+      )
+
+    assert result.errors == []
+    assert [%{kind: "curated_carousel"} = carousel] = result.assets
+    assert carousel.metadata["slide_count"] >= 3
+
+    assert List.last(carousel.metadata["slides"]) == %{
+             "body" => "",
+             "kind" => "cta",
+             "label" => "Learn more",
+             "title" => "Continue on RationalGrid.ai"
+           }
+
+    text_slide = %{"body" => "Readable body copy", "label" => "", "title" => ""}
+    text_svg = ShareCard.curated_carousel_image_svg(campaign, [text_slide], "editorial_dark", 1)
+
+    assert text_svg =~ ">Readable body</text>"
+    assert text_svg =~ ">copy</text>"
+    refute text_svg =~ "data:image/png;base64"
+  end
+
+  test "scales node text to the available reading area" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "adaptive-node-text")
+
+    short_slide = %{"kind" => "node_text", "title" => "", "body" => "A short, clear explanation."}
+
+    long_slide = %{
+      "kind" => "node_text",
+      "title" => "",
+      "body" =>
+        String.duplicate(
+          "A meaningful sentence explains the claim clearly and gives the reader useful context. ",
+          8
+        )
+    }
+
+    short_svg =
+      ShareCard.curated_carousel_image_svg(campaign, [short_slide], "editorial_dark", 1)
+
+    long_svg =
+      ShareCard.curated_carousel_image_svg(campaign, [long_slide], "editorial_dark", 1)
+
+    assert short_svg =~ ~s(font-size="96")
+    refute long_svg =~ ~s(font-size="96")
+  end
+
+  test "limits carousel publishing to three ordered images with the CTA last" do
+    slides = [
+      %{"title" => "Opening", "body" => ""},
+      %{"title" => "Second", "body" => ""},
+      %{"title" => "Third", "body" => ""},
+      %{"title" => "Fourth", "body" => ""},
+      %{"label" => "Learn more", "title" => "Continue on RationalGrid.ai", "body" => ""}
+    ]
+
+    assert ShareCard.curated_carousel_selected_slide_indexes(slides) == [1, 2, 5]
+    assert ShareCard.curated_carousel_selected_slide_indexes(slides, [4, 2, 1, 5]) == [4, 2, 5]
+
+    assert ShareCard.curated_carousel_selected_slides(slides, [3, 1, 5]) ==
+             [Enum.at(slides, 2), Enum.at(slides, 0), Enum.at(slides, 4)]
+  end
+
+  test "stores browser-rendered carousel frames for the selected slide" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "browser-frame-store")
+
+    candidates = Workflow.candidates(campaign) |> Enum.take(1)
+
+    assert {:ok, asset} =
+             Campaigns.generate_curated_carousel(campaign, candidates, "editorial_dark")
+
+    png = <<137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0>>
+
+    assert {:ok, _updated_asset} =
+             Campaigns.store_curated_carousel_browser_frame(
+               campaign,
+               asset.source_id,
+               2,
+               png
+             )
+
+    stored_asset = Campaigns.get_media_asset!(asset.id)
+    path = get_in(stored_asset.metadata, ["browser_frame_paths", "2"])
+
+    assert is_binary(path)
+    assert File.read!(path) == png
+    on_exit(fn -> File.rm(path) end)
+  end
+
+  test "builds one typed sequence for highlights and full nodes" do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "typed-slide-sequence")
+
+    candidates =
+      Workflow.candidates(campaign)
+      |> Enum.filter(&(&1.type in ["highlight", "key_node"]))
+      |> Enum.take(2)
+
+    slides = SlideSequence.build(campaign, candidates)
+
+    assert hd(slides)["kind"] == "cover"
+    assert List.last(slides)["kind"] == "cta"
+    assert Enum.any?(slides, &(&1["kind"] == "highlight"))
+    assert Enum.any?(slides, &(&1["kind"] == "node_text"))
+    assert Enum.all?(slides, &is_binary(&1["body"]))
   end
 
   test "renders full titles and quotes without top-right format labels" do
