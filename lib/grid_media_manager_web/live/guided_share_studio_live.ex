@@ -140,13 +140,13 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:pexels_search_error, nil)
       |> assign(:pexels_by_id, %{})
       |> assign(:selected_pexels_background, Campaigns.pexels_background(campaign))
-      |> stream_configure(:candidates, dom_id: &"candidate-#{&1.dom_id}")
+      |> stream_configure(:candidate_groups, dom_id: &"candidate-group-#{&1.dom_id}")
       |> stream_configure(:selected_aspects, dom_id: &"selected-#{&1.dom_id}")
       |> stream_configure(:output_assets, dom_id: &"guided-output-#{&1.id}")
       |> stream_configure(:review_drafts, dom_id: &"guided-draft-#{&1.id}")
       |> stream_configure(:pexels_photos, dom_id: &"pexels-photo-#{&1.id}")
       |> stream_configure(:previous_packages, dom_id: &"previous-package-#{&1.dom_id}")
-      |> stream(:candidates, candidate_items(candidates, selected_keys))
+      |> stream(:candidate_groups, candidate_groups(candidates, selected_keys, candidates))
       |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_order))
       |> stream(:output_assets, restored_assets)
       |> stream(:review_drafts, [])
@@ -169,7 +169,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     {:noreply,
      socket
      |> assign(:candidate_filter, filter)
-     |> stream(:candidates, candidate_items(candidates, socket.assigns.selected_keys),
+     |> stream(
+       :candidate_groups,
+       candidate_groups(candidates, socket.assigns.selected_keys, socket.assigns.all_candidates),
        reset: true
      )}
   end
@@ -649,18 +651,42 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </button>
               </div>
 
-              <div id="content-candidates" phx-update="stream" class="mt-5 grid gap-3 md:grid-cols-2">
+              <div id="content-candidates" phx-update="stream" class="mt-5 space-y-5">
                 <div
                   id="empty-content-candidates"
-                  class="hidden rounded-3xl border border-dashed border-base-content/20 bg-base-200/40 p-8 text-center text-sm text-base-content/55 only:block md:col-span-2"
+                  class="hidden rounded-3xl border border-dashed border-base-content/20 bg-base-200/40 p-8 text-center text-sm text-base-content/55 only:block"
                 >
                   No moments of this type were found in the imported grid payload.
                 </div>
-                <.candidate_card
-                  :for={{id, candidate} <- @streams.candidates}
+                <section
+                  :for={{id, group} <- @streams.candidate_groups}
                   id={id}
-                  candidate={candidate}
-                />
+                  class="rounded-3xl border border-base-content/10 bg-base-200/45 p-3 md:p-4"
+                >
+                  <div class="flex items-center justify-between gap-3 px-2 pb-3">
+                    <div class="min-w-0">
+                      <p class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-orange-600 dark:text-orange-300">
+                        {group.label}
+                      </p>
+                      <h3 class="mt-1 truncate text-base font-semibold text-base-content">
+                        {group.title}
+                      </h3>
+                    </div>
+                    <span class="shrink-0 rounded-full bg-base-100 px-2.5 py-1 text-xs font-semibold text-base-content/55">
+                      {length(group.candidates)} {if(length(group.candidates) == 1,
+                        do: "option",
+                        else: "options"
+                      )}
+                    </span>
+                  </div>
+                  <div class="grid gap-3 md:grid-cols-2">
+                    <.candidate_card
+                      :for={candidate <- group.candidates}
+                      id={"candidate-#{candidate.dom_id}"}
+                      candidate={candidate}
+                    />
+                  </div>
+                </section>
               </div>
             </div>
 
@@ -1695,16 +1721,18 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     end
   end
 
-  defp update_selection(socket, selected_keys, selected_order, candidate) do
+  defp update_selection(socket, selected_keys, selected_order, _candidate) do
     candidates = socket.assigns.all_candidates
+    visible_candidates = Workflow.filter_candidates(candidates, socket.assigns.candidate_filter)
 
     socket
     |> assign(:selected_keys, selected_keys)
     |> assign(:selected_order, selected_order)
     |> assign(:selected_count, MapSet.size(selected_keys))
-    |> stream_insert(
-      :candidates,
-      Map.put(candidate, :selected?, MapSet.member?(selected_keys, candidate.key))
+    |> stream(
+      :candidate_groups,
+      candidate_groups(visible_candidates, selected_keys, candidates),
+      reset: true
     )
     |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_order),
       reset: true
@@ -2054,6 +2082,69 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp candidate_items(candidates, selected_keys) do
     Enum.map(candidates, &Map.put(&1, :selected?, MapSet.member?(selected_keys, &1.key)))
   end
+
+  defp candidate_groups(candidates, selected_keys, all_candidates) do
+    candidates = candidate_items(candidates, selected_keys)
+    node_titles = Map.new(all_candidates, &{&1.source_id, &1.title})
+
+    group_keys =
+      all_candidates
+      |> Enum.filter(&(&1.type == "key_node"))
+      |> Enum.map(&candidate_group_key/1)
+      |> Enum.filter(fn group_key ->
+        Enum.any?(candidates, fn candidate -> candidate_group_key(candidate) == group_key end)
+      end)
+
+    group_keys =
+      group_keys ++
+        (candidates
+         |> Enum.map(&candidate_group_key/1)
+         |> Enum.uniq()
+         |> Enum.reject(&(&1 in group_keys)))
+
+    Enum.map(group_keys, fn group_key ->
+      group_candidates = Enum.filter(candidates, &(candidate_group_key(&1) == group_key))
+      node_candidate = Enum.find(group_candidates, &(&1.type == "key_node"))
+      node_id = group_node_id(group_key)
+
+      ordered_candidates =
+        case node_candidate do
+          nil -> group_candidates
+          node -> [node | Enum.reject(group_candidates, &(&1.key == node.key))]
+        end
+
+      %{
+        dom_id: candidate_group_dom_id(group_key),
+        label: if(node_id, do: "Node package", else: "Other moments"),
+        title: node_candidate_title(node_candidate, node_id, node_titles),
+        candidates: ordered_candidates
+      }
+    end)
+  end
+
+  defp candidate_group_key(%{node_id: node_id}) when is_binary(node_id) and node_id != "",
+    do: "node:#{node_id}"
+
+  defp candidate_group_key(%{type: "grid"}), do: "grid"
+  defp candidate_group_key(_candidate), do: "other"
+
+  defp group_node_id("node:" <> node_id), do: node_id
+  defp group_node_id(_group_key), do: nil
+
+  defp candidate_group_dom_id(group_key) do
+    group_key
+    |> String.replace(~r/[^A-Za-z0-9_-]+/, "-")
+    |> then(&String.trim(&1, "-"))
+    |> then(&if(&1 == "", do: "other", else: &1))
+  end
+
+  defp node_candidate_title(%{title: title}, _node_id, _node_titles), do: title
+
+  defp node_candidate_title(nil, node_id, node_titles) when is_binary(node_id) do
+    Map.get(node_titles, node_id, "Node #{node_id}")
+  end
+
+  defp node_candidate_title(nil, _node_id, _node_titles), do: "Other moments"
 
   defp pexels_orientation("linkedin"), do: "square"
 

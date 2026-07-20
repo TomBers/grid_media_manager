@@ -115,7 +115,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     assert svg =~ "width=\"1080\""
     assert svg =~ "height=\"1920\""
-    assert svg =~ "font-size=\"90\""
+    assert svg =~ "font-size=\"68\""
     assert svg =~ ">THESIS</text>"
     refute svg =~ "SHORT · 1/"
   end
@@ -142,6 +142,11 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
         ShareCard.node_short_video_frame_svg(campaign, node, "editorial_dark", index)
       end)
 
+    slides = ShareCard.carousel_slides(campaign, node)
+    assert length(slides) >= 8
+    assert List.last(slides).title =~ "RationalGrid.ai"
+    assert List.last(frames) =~ "Continue on RationalGrid.ai"
+    assert List.last(frames) =~ "data:image/png;base64"
     assert Enum.any?(frames, &String.contains?(&1, "sentence 36"))
     refute Enum.any?(frames, &String.contains?(&1, "…"))
   end

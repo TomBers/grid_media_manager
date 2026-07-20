@@ -232,6 +232,7 @@ defmodule GridMediaManager.Studio.Workflow do
       dom_id: dom_id("question", source_id),
       type: "question",
       source_id: source_id,
+      node_id: present_string(map_value(question, "node_id")),
       title: text,
       excerpt: question_context(question, kind, recommended?),
       label: question_label(kind),
@@ -254,6 +255,7 @@ defmodule GridMediaManager.Studio.Workflow do
           dom_id: dom_id("highlight", source_id),
           type: "highlight",
           source_id: to_string(source_id),
+          node_id: present_string(map_value(highlight, "node_id")),
           title: text,
           excerpt:
             present_string(note) || "A passage a person chose to preserve from the conversation.",
@@ -270,6 +272,13 @@ defmodule GridMediaManager.Studio.Workflow do
   defp key_node_candidates(campaign) do
     campaign
     |> Campaigns.key_nodes()
+    |> Enum.reject(fn node ->
+      node
+      |> map_value("id")
+      |> to_string()
+      |> String.downcase()
+      |> then(&(&1 in ["main"]))
+    end)
     |> Enum.map(fn node ->
       source_id = map_value(node, "id")
       title = map_value(node, "title")
@@ -282,6 +291,7 @@ defmodule GridMediaManager.Studio.Workflow do
           dom_id: dom_id("key-node", source_id),
           type: "key_node",
           source_id: to_string(source_id),
+          node_id: to_string(source_id),
           title: title,
           excerpt: present_string(map_value(node, "excerpt")),
           label: "Key node",
@@ -387,6 +397,8 @@ defmodule GridMediaManager.Studio.Workflow do
       value -> value
     end
   end
+
+  defp present_string(value) when is_integer(value), do: Integer.to_string(value)
 
   defp present_string(_value), do: nil
 

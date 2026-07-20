@@ -227,6 +227,22 @@ defmodule GridMediaManager.Promotion.ShareCard do
     campaign.raw_payload
     |> MediaPayload.key_nodes()
     |> Enum.find(fn node -> to_string(get(node, "id")) == to_string(node_id) end)
+    |> enrich_key_node_content(campaign)
+  end
+
+  defp enrich_key_node_content(nil, _campaign), do: nil
+
+  defp enrich_key_node_content(node, %Campaign{} = campaign) do
+    content_map = Map.get(campaign.raw_payload, "content")
+    first_answer = if is_map(content_map), do: Map.get(content_map, "first_answer"), else: nil
+
+    case {Map.get(node, "class"), Map.get(node, "content"), first_answer} do
+      {"origin", nil, %{"content" => content}} when is_binary(content) and content != "" ->
+        Map.put(node, "content", content)
+
+      _ ->
+        node
+    end
   end
 
   def find_highlight(%Campaign{} = campaign, highlight_id) do
@@ -608,12 +624,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def carousel_slides(%Campaign{} = campaign, node) when is_map(node) do
     node_title = node |> get("title") |> sanitize_text(320) |> fallback("Key node")
 
-    content =
-      node
-      |> get("content")
-      |> fallback(get(node, "excerpt"))
-      |> fallback("")
-      |> to_string()
+    content = node_content(campaign, node)
 
     content_slides =
       content
@@ -625,7 +636,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
             else: section.title
 
         section.blocks
-        |> Markdown.paginate_blocks()
+        |> Markdown.paginate_blocks(420)
         |> Enum.with_index()
         |> Enum.map(fn {blocks, page_index} ->
           title = if page_index == 0, do: base_title, else: "#{base_title} · continued"
@@ -638,13 +649,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
           }
         end)
       end)
-      |> Enum.take(8)
-
-    question =
-      campaign.raw_payload
-      |> MediaPayload.follow_up_questions()
-      |> List.first()
-      |> fallback("What does this node make you question?")
 
     slides =
       [
@@ -655,10 +659,40 @@ defmodule GridMediaManager.Promotion.ShareCard do
         }
       ] ++
         content_slides ++
-        [%{label: "Question", title: "Where do you stand?", body: question}]
+        [
+          %{
+            label: "Learn more",
+            title: "Continue on RationalGrid.ai",
+            body: ""
+          }
+        ]
 
-    Enum.take(slides, 10)
+    slides
   end
+
+  defp node_content(%Campaign{} = campaign, node) do
+    direct_content = get(node, "content") || get(node, "body") || get(node, "text")
+
+    content =
+      if direct_content || get(node, "class") != "origin" do
+        direct_content
+      else
+        first_answer_content(campaign.raw_payload)
+      end
+
+    content |> fallback(get(node, "excerpt")) |> fallback("") |> to_string()
+  end
+
+  defp first_answer_content(payload) when is_map(payload) do
+    with content_map when is_map(content_map) <- Map.get(payload, "content"),
+         first_answer when is_map(first_answer) <- Map.get(content_map, "first_answer") do
+      Map.get(first_answer, "content")
+    else
+      _ -> nil
+    end
+  end
+
+  defp first_answer_content(_payload), do: nil
 
   def key_node_carousel_asset_attrs(%Campaign{} = campaign, node, style \\ @default_style) do
     style = normalize_style(style)
@@ -722,7 +756,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
     palette = quote_palette(style)
     body_start_y = 480
     title_image_data_uri = carousel_title_image_data_uri(slide.title, palette.text)
-    footer = "#{slide_index} / #{slide_count} · #{sanitize_text(campaign.title, nil)}"
+    footer = "#{slide_index} / #{slide_count} · Learn more at rationalgrid.ai"
     footer_font_size = single_line_font_size(footer, 820, 18, 8)
 
     body_markup =
@@ -832,6 +866,30 @@ defmodule GridMediaManager.Promotion.ShareCard do
   defp short_video_frame_svg(campaign, slide, style, slide_index, slide_count) do
     palette = quote_palette(style)
     cover? = slide_index == 1
+    cta? = slide.label in ["Explore", "Learn more"]
+    logo_markup = if cta?, do: rg_logo_markup(), else: ""
+
+    brand_header =
+      if cta? do
+        ""
+      else
+        ~s(<text x="130" y="170" fill="#{palette.label}" font-size="23" font-weight="800" font-family="#{@ui_font_family}">RationalGrid.ai</text>)
+      end
+
+    footer_markup =
+      if cta? do
+        ""
+      else
+        ~s(<line x1="130" y1="1738" x2="950" y2="1738" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />) <>
+          ~s(<text x="130" y="1790" fill="#{palette.muted}" font-size="22" font-weight="700" font-family="#{@ui_font_family}">Learn more at rationalgrid.ai</text>)
+      end
+
+    top_rule =
+      if cta? do
+        ""
+      else
+        ~s(<line x1="130" y1="210" x2="950" y2="210" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />)
+      end
 
     title_layout =
       bounded_text_layout(
@@ -839,22 +897,24 @@ defmodule GridMediaManager.Promotion.ShareCard do
         820,
         390,
         if(cover?,
-          do: [90, 84, 78, 72, 66, 60, 54, 48, 42, 36, 30, 24, 20, 18],
-          else: [74, 68, 62, 56, 50, 44, 38, 32, 28, 24, 20, 18]
+          do: [68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 18],
+          else: [56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 18]
         )
       )
 
     title_font_size = title_layout.font_size
     title_line_gap = title_layout.line_gap
     title_lines = title_layout.lines
-    title_start_y = 410
+    title_start_y = if cta?, do: 930, else: 350
+    title_x = if cta?, do: 540, else: 130
+    title_anchor = if cta?, do: "middle", else: "start"
     title_last_y = title_start_y + (length(title_lines) - 1) * title_line_gap
-    body_start_y = max(title_last_y + 128, 790)
-    body_font_size = if cover?, do: 44, else: 40
+    body_start_y = max(title_last_y + 92, 610)
+    body_font_size = if cover?, do: 48, else: 46
 
     body_font_sizes =
       Enum.filter(
-        [body_font_size, 40, 36, 32, 28, 24, 22, 20, 18, 16, 14, 12],
+        [body_font_size, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20],
         &(&1 <= body_font_size)
       )
 
@@ -862,23 +922,34 @@ defmodule GridMediaManager.Promotion.ShareCard do
       title_lines
       |> Enum.with_index()
       |> Enum.map_join("", fn {line, index} ->
-        ~s(<tspan x="130" y="#{title_start_y + index * title_line_gap}">#{escape_xml(line)}</tspan>)
+        ~s(<tspan x="#{title_x}" y="#{title_start_y + index * title_line_gap}">#{escape_xml(line)}</tspan>)
       end)
 
     body_markup =
-      fitted_markdown_body_markup(
-        Map.get(slide, :blocks, slide.body),
-        nil,
-        %{
-          x: 130,
-          start_y: body_start_y,
-          max_y: 1_650,
-          width: 820,
-          font_size: body_font_size,
-          palette: palette
-        },
-        body_font_sizes
-      )
+      if cta? do
+        ""
+      else
+        fitted_markdown_body_markup(
+          Map.get(slide, :blocks, slide.body),
+          nil,
+          %{
+            x: 130,
+            start_y: body_start_y,
+            max_y: 1_620,
+            width: 820,
+            font_size: body_font_size,
+            palette: palette
+          },
+          body_font_sizes
+        )
+      end
+
+    accent_markup =
+      if cta? do
+        ""
+      else
+        ~s|<rect x="130" y="#{body_start_y - 72}" width="260" height="9" rx="4.5" fill="url(#shortAccent)" opacity="0.98" />|
+      end
 
     """
     <svg xmlns="http://www.w3.org/2000/svg" width="#{@short_width}" height="#{@short_height}" viewBox="0 0 #{@short_width} #{@short_height}" role="img" aria-labelledby="title desc">
@@ -919,19 +990,18 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect x="54.5" y="64.5" width="971" height="1791" rx="47.5" fill="none" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
       <rect x="82" y="92" width="916" height="1736" rx="34" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
 
-      <text x="130" y="170" fill="#{palette.label}" font-size="23" font-weight="800" font-family="#{@ui_font_family}">RationalGrid.ai</text>
+      #{brand_header}
 
-      <line x1="130" y1="210" x2="950" y2="210" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
-      <text x="130" y="302" fill="#{palette.kicker}" font-size="22" font-weight="800" font-family="#{@ui_font_family}" letter-spacing="2.4">#{escape_xml(String.upcase(slide.label))}</text>
+      #{top_rule}
+      #{logo_markup}
 
-      <text fill="#{palette.text}" font-size="#{title_font_size}" font-weight="900" font-family="#{@ui_font_family}" letter-spacing="-1.2" paint-order="stroke" stroke="#{palette.text_stroke}" stroke-width="2.4" stroke-opacity="#{palette.text_stroke_opacity}">
+      <text x="#{title_x}" text-anchor="#{title_anchor}" fill="#{palette.text}" font-size="#{title_font_size}" font-weight="900" font-family="#{@ui_font_family}" letter-spacing="-1.2" paint-order="stroke" stroke="#{palette.text_stroke}" stroke-width="2.4" stroke-opacity="#{palette.text_stroke_opacity}">
         #{title_markup}
       </text>
-      <rect x="130" y="#{body_start_y - 72}" width="260" height="9" rx="4.5" fill="url(#shortAccent)" opacity="0.98" />
+      #{accent_markup}
       #{body_markup}
 
-      <line x1="130" y1="1738" x2="950" y2="1738" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
-      <text x="130" y="1790" fill="#{palette.muted}" font-size="22" font-weight="700" font-family="#{@ui_font_family}">Explore the full conversation on RationalGrid</text>
+      #{footer_markup}
     </svg>
     """
   end
@@ -941,6 +1011,21 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> node_short_video_frame_svg(node, style, slide)
     |> Image.from_svg!()
     |> Image.write!(:memory, suffix: ".png")
+  end
+
+  defp rg_logo_markup do
+    path = Path.join(to_string(:code.priv_dir(:grid_media_manager)), "static/images/rg_logo.webp")
+
+    case File.read(path) do
+      {:ok, logo} ->
+        png = logo |> Image.from_binary!() |> Image.write!(:memory, suffix: ".png")
+        encoded = Base.encode64(png)
+
+        ~s(<image x="420" y="520" width="240" height="240" href="data:image/png;base64,#{encoded}" preserveAspectRatio="xMidYMid meet" />)
+
+      _ ->
+        ""
+    end
   end
 
   defp carousel_title_image_data_uri(title, text_color) do
