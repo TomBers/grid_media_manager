@@ -103,8 +103,8 @@ defmodule GridMediaManager.CampaignsTest do
     text_slide = %{"body" => "Readable body copy", "label" => "", "title" => ""}
     text_svg = ShareCard.curated_carousel_image_svg(campaign, [text_slide], "editorial_dark", 1)
 
-    assert text_svg =~ ">Readable body</text>"
-    assert text_svg =~ ">copy</text>"
+    assert text_svg =~ "Readable"
+    assert text_svg =~ "body copy"
     refute text_svg =~ "data:image/png;base64"
   end
 
@@ -129,8 +129,8 @@ defmodule GridMediaManager.CampaignsTest do
     long_svg =
       ShareCard.curated_carousel_image_svg(campaign, [long_slide], "editorial_dark", 1)
 
-    assert short_svg =~ ~s(font-size="96")
-    refute long_svg =~ ~s(font-size="96")
+    assert short_svg =~ ~s(font-size="136")
+    refute long_svg =~ ~s(font-size="136")
   end
 
   test "limits carousel publishing to three ordered images with the CTA last" do

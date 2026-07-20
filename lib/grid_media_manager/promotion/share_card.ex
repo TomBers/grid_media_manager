@@ -966,12 +966,13 @@ defmodule GridMediaManager.Promotion.ShareCard do
             start_y: body_start_y,
             max_y: 1_160,
             width: 820,
-            font_size: if(titled?, do: 31, else: 96),
+            center: not titled?,
+            font_size: if(titled?, do: 31, else: 136),
             palette: palette
           },
           if(titled?,
             do: [31, 28, 26, 24, 22, 20, 18, 16, 14, 12],
-            else: [96, 92, 88, 84, 80, 76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32]
+            else: [136, 128, 120, 112, 104, 96, 88, 80, 72, 64, 56, 52, 48, 44, 40, 36, 32]
           )
         )
       end
@@ -2413,8 +2414,23 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp fitted_markdown_body_markup(content, title, opts, font_sizes) do
     Enum.find_value(font_sizes, fn font_size ->
-      result = render_markdown_body(content, title, %{opts | font_size: font_size})
-      if result.truncated?, do: nil, else: result.markup
+      render_opts = opts |> Map.put(:font_size, font_size) |> Map.delete(:center)
+      result = render_markdown_body(content, title, render_opts)
+
+      if result.truncated? do
+        nil
+      else
+        body_markup =
+          if Map.get(opts, :center, false) do
+            offset = div(max(opts.max_y - opts.start_y - result.height, 0), 2)
+
+            render_markdown_body(content, title, %{render_opts | start_y: opts.start_y + offset}).markup
+          else
+            result.markup
+          end
+
+        body_markup
+      end
     end) || complete_body_fallback_markup(opts)
   end
 
@@ -2426,7 +2442,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end
       |> Markdown.drop_leading_title(title)
 
-    {markup, _last_y, _rendered?, truncated?} =
+    {markup, last_y, rendered?, truncated?} =
       Enum.reduce_while(blocks, {[], opts.start_y, false, false}, fn block,
                                                                      {markup, last_y, rendered?,
                                                                       _truncated?} ->
@@ -2453,7 +2469,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
         end
       end)
 
-    %{markup: Enum.join(markup, ""), truncated?: truncated?}
+    height = if rendered?, do: max(last_y - opts.start_y + opts.font_size, 0), else: 0
+    %{markup: Enum.join(markup, ""), truncated?: truncated?, height: height}
   end
 
   defp complete_body_fallback_markup(opts) do

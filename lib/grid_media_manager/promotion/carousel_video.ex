@@ -21,7 +21,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @audio_volume 0.18
   @audio_bitrate "160k"
   @frame_rate 30
-  @render_timeout 90_000
+  @render_timeout 300_000
   @cache_version 15
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 

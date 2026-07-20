@@ -1465,7 +1465,13 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 <div
                   id="guided-output-assets"
                   phx-update="stream"
-                  class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                  class={[
+                    "mt-5 grid gap-4",
+                    if(@output_asset_count == 1,
+                      do: "lg:grid-cols-1",
+                      else: "sm:grid-cols-2 lg:grid-cols-3"
+                    )
+                  ]}
                 >
                   <.output_asset_card
                     :for={{id, asset} <- @streams.output_assets}
@@ -1473,6 +1479,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     asset={asset}
                     selected={@selected_output_asset_id == Integer.to_string(asset.id)}
                     preview_slide={Map.get(@carousel_preview_slides, asset.id, 1)}
+                    wide={@output_asset_count == 1}
                   />
                 </div>
               </div>
@@ -1672,10 +1679,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   attr :asset, MediaAsset, required: true
   attr :selected, :boolean, required: true
   attr :preview_slide, :integer, default: 1
+  attr :wide, :boolean, default: false
 
   defp output_asset_card(assigns) do
     ~H"""
-    <article id={@id} class={output_asset_card_class(@selected)}>
+    <article id={@id} class={output_asset_card_class(@selected, @wide, @asset)}>
       <video
         :if={video_asset?(@asset)}
         id={"guided-video-preview-#{@asset.id}"}
@@ -1683,7 +1691,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         controls
         playsinline
         preload="metadata"
-        class="aspect-[9/16] max-h-[34rem] w-full rounded-2xl border border-base-content/10 bg-slate-950 object-contain"
+        class={[
+          "aspect-[9/16] max-h-[34rem] w-full rounded-2xl border border-base-content/10 bg-slate-950 object-contain",
+          @wide && "lg:col-start-1 lg:row-start-1"
+        ]}
       >
       </video>
       <img
@@ -1692,26 +1703,56 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         src={output_asset_preview_url(@asset, @preview_slide)}
         alt={@asset.title}
         loading="lazy"
-        class={asset_image_class(@asset)}
+        class={[asset_image_class(@asset), @wide && "lg:col-start-1 lg:row-start-1"]}
       />
       <div
-        :if={@asset.kind == "curated_carousel"}
+        :if={@asset.kind in ["curated_carousel", "curated_carousel_video"]}
         id={"curated-carousel-slides-#{@asset.id}"}
-        phx-hook="CanvasSlideRenderer"
         data-slides={Jason.encode!(Map.get(@asset.metadata || %{}, "slides", []))}
         data-selected-indexes={Jason.encode!(carousel_selected_slide_indexes(@asset))}
+        data-preview-slide={@preview_slide}
+        data-main-preview-id={"guided-output-preview-#{@asset.id}"}
+        data-video-preview-id={
+          if(@asset.kind == "curated_carousel_video",
+            do: "guided-video-preview-#{@asset.id}",
+            else: ""
+          )
+        }
         data-style={@asset.style}
         data-logo-src="/images/rg_logo.webp"
         data-upload-url={"/api/campaigns/#{@asset.campaign_id}/curated-carousels/#{@asset.source_id}/browser-frames"}
-        class="mt-4 space-y-4 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-3"
+        class={[
+          "mt-4 space-y-4 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-3",
+          @wide && "lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:mt-0"
+        ]}
       >
+        <div
+          id={"curated-carousel-renderer-#{@asset.id}"}
+          phx-hook="CanvasSlideRenderer"
+          phx-update="ignore"
+          data-root-id={"curated-carousel-slides-#{@asset.id}"}
+          class="hidden"
+        >
+        </div>
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p class="text-xs font-bold uppercase tracking-[0.16em] text-orange-700 dark:text-orange-200">
-              Choose the publishable images
+              {if(@asset.kind == "curated_carousel",
+                do: "Choose the publishable images",
+                else: "Preview the video frames"
+              )}
             </p>
-            <p class="mt-1 text-xs leading-5 text-base-content/60">
+            <p
+              :if={@asset.kind == "curated_carousel"}
+              class="mt-1 text-xs leading-5 text-base-content/60"
+            >
               Select up to 3 images total. Click in the order you want, then refine it below. The RationalGrid CTA is always last.
+            </p>
+            <p
+              :if={@asset.kind == "curated_carousel_video"}
+              class="mt-1 text-xs leading-5 text-base-content/60"
+            >
+              These are the ordered Canvas frames used to rebuild the video. Save them after reviewing the text.
             </p>
             <p
               data-browser-render-status
@@ -1721,7 +1762,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
             </p>
           </div>
           <div class="flex flex-wrap items-center justify-end gap-2">
-            <span class="rounded-full bg-base-100 px-2.5 py-1 text-[0.65rem] font-bold text-base-content/60">
+            <span
+              :if={@asset.kind == "curated_carousel"}
+              class="rounded-full bg-base-100 px-2.5 py-1 text-[0.65rem] font-bold text-base-content/60"
+            >
               {carousel_selection_summary(@asset)}
             </span>
             <button
@@ -1744,6 +1788,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               phx-value-slide-index={index}
               data-carousel-preview
               data-preview-target={"guided-output-preview-#{@asset.id}"}
+              data-preview-canvas={"canvas-curated-carousel-slide-#{@asset.id}-#{index}"}
               data-preview-url={url}
               aria-label={"Preview carousel slide #{index}"}
               class={[
@@ -1772,7 +1817,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 {index}
               </span>
             </button>
-            <div class="mt-1 flex items-center justify-between gap-1">
+            <div
+              :if={@asset.kind == "curated_carousel"}
+              class="mt-1 flex items-center justify-between gap-1"
+            >
               <button
                 id={"toggle-curated-carousel-slide-#{@asset.id}-#{index}"}
                 type="button"
@@ -1796,6 +1844,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         </div>
 
         <div
+          :if={@asset.kind == "curated_carousel"}
           id={"curated-carousel-order-#{@asset.id}"}
           class="rounded-xl border border-base-content/10 bg-base-100/70 p-3"
         >
@@ -1852,7 +1901,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         phx-click="select_output_asset"
         phx-value-id={@asset.id}
         aria-pressed={@selected}
-        class="mt-3 block w-full text-left"
+        class={[
+          "mt-3 block w-full text-left",
+          @wide && "lg:col-start-1 lg:row-start-2"
+        ]}
       >
         <span class="flex items-start justify-between gap-3">
           <span class="min-w-0">
@@ -1873,7 +1925,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
           </span>
         </span>
       </button>
-      <div class="mt-3 flex gap-2">
+      <div class={["mt-3 flex gap-2", @wide && "lg:col-start-1 lg:row-start-3"]}>
         <a
           href={@asset.url}
           target="_blank"
@@ -2514,7 +2566,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         if MapSet.member?(socket.assigns.output_asset_ids, id) do
           asset = Campaigns.get_media_asset!(id)
 
-          if asset.campaign_id == socket.assigns.campaign.id and asset.kind == "curated_carousel" do
+          if asset.campaign_id == socket.assigns.campaign.id and
+               asset.kind in ["curated_carousel", "curated_carousel_video"] do
             {:ok, asset}
           else
             {:error, :not_in_package}
@@ -2627,7 +2680,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp carousel_slide_link_class(asset, slide_index) do
     [
-      "group relative block overflow-hidden rounded-lg border bg-base-200",
+      "group relative block w-full appearance-none overflow-hidden rounded-lg border bg-base-200 text-left",
       if(carousel_slide_selected?(asset, slide_index),
         do: "border-orange-500 ring-2 ring-orange-500/35",
         else: "border-base-content/10"
@@ -2842,9 +2895,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp style_swatch_class(_style), do: "bg-base-300"
 
-  defp output_asset_card_class(selected?) do
+  defp output_asset_card_class(selected?, wide?, asset) do
     [
       "rounded-3xl border p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl",
+      (wide? and asset.kind in ["curated_carousel", "curated_carousel_video"]) &&
+        "grid gap-4 lg:grid-cols-[minmax(18rem,28rem)_minmax(0,1fr)] lg:items-start",
       if(selected?,
         do: "border-orange-500/50 bg-orange-500/8 shadow-lg",
         else: "border-base-content/10 bg-base-100"
@@ -2852,11 +2907,26 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     ]
   end
 
-  defp curated_carousel_slide_urls(%MediaAsset{url: url, metadata: metadata}) do
+  defp curated_carousel_slide_urls(%MediaAsset{
+         kind: "curated_carousel",
+         url: url,
+         metadata: metadata
+       }) do
     count = Map.get(metadata || %{}, "slide_count", 1)
 
     Enum.map(1..count, fn index ->
       {String.replace(url, "/slides/1/", "/slides/#{index}/"), index}
+    end)
+  end
+
+  defp curated_carousel_slide_urls(%MediaAsset{kind: "curated_carousel_video"} = asset) do
+    count = Map.get(asset.metadata || %{}, "slide_count", 1)
+    token = URI.encode(to_string(asset.source_id), &URI.char_unreserved?/1)
+    query = URI.encode_query(%{style: asset.style})
+
+    Enum.map(1..count, fn index ->
+      {"/campaigns/#{asset.campaign_id}/curated-carousels/#{token}/slides/#{index}/image.png?#{query}",
+       index}
     end)
   end
 
