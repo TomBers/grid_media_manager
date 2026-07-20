@@ -8,6 +8,7 @@ defmodule GridMediaManager.Social.Templates do
 
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
+  alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.RationalGrid.MediaPayload
   alias GridMediaManager.Social.Platforms
 
@@ -88,13 +89,13 @@ defmodule GridMediaManager.Social.Templates do
     copy =
       case platform do
         "instagram" ->
-          "Watch the six-second version of this idea:\n\n“#{quote}”\n\n#{hashtags(campaign)}"
+          "A moment worth sitting with:\n\n“#{quote}”\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "youtube" ->
-          "Can a short clip change how you see #{campaign.title}?\n\n#{quote}\n\nExplore the full map:\n#{link}\n\n#Shorts #RationalGrid"
+          "Can this idea change how you see #{campaign.title}?\n\n“#{quote}”\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
 
         _ ->
-          "A six-second idea from #{campaign.title}:\n\n#{quote}\n#{link}"
+          "#{quote}\n\n#{cta_line(link)}"
       end
 
     fit_to_platform(copy, platform, link)
@@ -112,13 +113,13 @@ defmodule GridMediaManager.Social.Templates do
     copy =
       case platform do
         "instagram" ->
-          "Pause on this question, then take a position:\n\n#{question}\n\n#{hashtags(campaign)}"
+          "Pause on this question, then take a position:\n\n#{question}\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "youtube" ->
-          "A six-second question about #{campaign.title}:\n\n#{question}\n\nExplore the argument:\n#{link}\n\n#Shorts #RationalGrid"
+          "A question about #{campaign.title}:\n\n#{question}\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
 
         _ ->
-          "A question in six seconds:\n#{question}\n#{link}"
+          "#{question}\n\n#{cta_line(link)}"
       end
 
     fit_to_platform(copy, platform, link)
@@ -131,16 +132,16 @@ defmodule GridMediaManager.Social.Templates do
     copy =
       case platform do
         "linkedin" ->
-          "“#{quote}”\n\nThis highlight comes from a RationalGrid exploring #{campaign.title}. The map gives the quote more context by connecting it to related explanations, questions, and critiques.\n\nExplore the grid:\n#{link}"
+          "“#{quote}”\n\nThis idea sits inside a larger question about #{campaign.title}.\n\n#{cta_line(link)}"
 
         "instagram" ->
-          "“#{quote}”\n\nA shareable RationalGrid highlight from: #{campaign.title}\n\nExplore the full argument map through the link.\n\n#{hashtags(campaign)}"
+          "“#{quote}”\n\nA highlight from #{campaign.title}.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "substack" ->
-          "A useful excerpt from #{campaign.title}:\n\n“#{quote}”\n\nThe full RationalGrid maps the surrounding argument, related questions, and context.\n\n#{link}"
+          "A useful excerpt from #{campaign.title}:\n\n“#{quote}”\n\n#{cta_line(link)}"
 
         _ ->
-          "“#{quote}”\n\nA RationalGrid highlight from #{campaign.title}.\n#{link}"
+          "“#{quote}”\n\n#{cta_line(link)}"
       end
 
     fit_to_platform(copy, platform, link)
@@ -153,16 +154,16 @@ defmodule GridMediaManager.Social.Templates do
     copy =
       case platform do
         "linkedin" ->
-          "#{question}\n\nA question surfaced from the RationalGrid: #{campaign.title}\n\nExplore the full map:\n#{link}"
+          "#{question}\n\nA question worth exploring in #{campaign.title}.\n\n#{cta_line(link)}"
 
         "instagram" ->
-          "#{question}\n\nFrom the RationalGrid: #{campaign.title}\n\n#{hashtags(campaign)}"
+          "#{question}\n\nA question worth exploring in #{campaign.title}.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "substack" ->
-          "A question worth exploring from #{campaign.title}:\n\n#{question}\n\nThe full grid shows the surrounding argument and related paths.\n\n#{link}"
+          "A question worth exploring from #{campaign.title}:\n\n#{question}\n\n#{cta_line(link)}"
 
         _ ->
-          "#{question}\n\n#{link}"
+          "#{question}\n\n#{cta_line(link)}"
       end
 
     fit_to_platform(copy, platform, link)
@@ -171,24 +172,24 @@ defmodule GridMediaManager.Social.Templates do
   def body(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "key_node") do
     link = asset_link(campaign, asset)
     node_title = asset.title |> fallback("Key node")
-    excerpt = asset.text |> fallback(campaign.title)
+    node_text = full_node_text(campaign, asset)
 
     copy =
       case platform do
         "linkedin" ->
-          "Key node from #{campaign.title}: #{node_title}\n\n#{excerpt}\n\nExplore the full RationalGrid map:\n#{link}"
+          "#{node_title}\n\n#{node_text}\n\n#{cta_line(link)}"
 
         "instagram" ->
-          "Key node: #{node_title}\n\n#{excerpt}\n\nFrom the RationalGrid: #{campaign.title}\n\n#{hashtags(campaign)}"
+          "#{node_title}\n\n#{node_text}\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "youtube" ->
-          "#{node_title}\n\n#{excerpt}\n\nExplore the complete argument and contribute your perspective on RationalGrid:\n#{link}\n\n#Shorts #RationalGrid"
+          "#{node_title}\n\n#{node_text}\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
 
         "substack" ->
-          "A key node from #{campaign.title}:\n\n#{node_title}\n\n#{excerpt}\n\nThe full grid shows how this node connects to the surrounding argument.\n\n#{link}"
+          "#{node_title}\n\n#{node_text}\n\n#{cta_line(link)}"
 
         _ ->
-          "Key node from #{campaign.title}:\n#{node_title}\n\n#{link}"
+          "#{node_title}\n\n#{node_text}\n\n#{cta_line(link)}"
       end
 
     fit_to_platform(copy, platform, link)
@@ -200,16 +201,16 @@ defmodule GridMediaManager.Social.Templates do
     copy =
       case platform do
         "linkedin" ->
-          "New RationalGrid share card: #{campaign.title}\n\nThe grid maps an argument as a learning object, with key claims, explanations, and follow-up paths in one place.\n\nExplore the map:\n#{link}"
+          "#{campaign.title}\n\nA visual entry point into a connected learning path.\n\n#{cta_line(link)}"
 
         "instagram" ->
-          "New RationalGrid map: #{campaign.title}\n\nA visual entry point into the argument and the questions around it.\n\n#{hashtags(campaign)}"
+          "#{campaign.title}\n\nA visual entry point into a connected learning path.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "substack" ->
-          "I’m sharing a RationalGrid on #{campaign.title}. It turns the topic into a navigable map of explanations, questions, and related ideas.\n\n#{link}"
+          "#{campaign.title}\n\nA navigable map of explanations, questions, and related ideas.\n\n#{cta_line(link)}"
 
         _ ->
-          "New RationalGrid: #{campaign.title}\n\nExplore the map:\n#{link}"
+          "#{campaign.title}\n\n#{cta_line(link)}"
       end
 
     fit_to_platform(copy, platform, link)
@@ -221,38 +222,35 @@ defmodule GridMediaManager.Social.Templates do
     copy =
       case platform do
         "linkedin" ->
-          "#{question}\n\nThis RationalGrid turns the question into an explorable argument map, connecting explanations, assumptions, and related lines of inquiry.\n\nExplore it here:\n#{campaign.grid_url}"
+          "#{question}\n\nFollow the claims, assumptions, and related lines of inquiry.\n\n#{cta_line(campaign.grid_url)}"
 
         "instagram" ->
-          "#{question}\n\nThis RationalGrid maps the topic visually so people can explore the question, follow related claims, and keep learning.\n\n#{hashtags(campaign)}"
+          "#{question}\n\nFollow the related claims and keep learning.\n\n#{cta_line(campaign.grid_url)}\n\n#{hashtags(campaign)}"
 
         "substack" ->
-          "A question worth mapping: #{question}\n\nThis RationalGrid collects the explanation, related claims, and follow-up questions in a form that is easier to explore than a linear article.\n\n#{campaign.grid_url}"
+          "A question worth mapping: #{question}\n\nFollow the explanation, related claims, and unanswered questions.\n\n#{cta_line(campaign.grid_url)}"
 
         _ ->
-          "#{question}\n\nA RationalGrid maps the argument and related questions.\n#{campaign.grid_url}"
+          "#{question}\n\n#{cta_line(campaign.grid_url)}"
       end
 
     fit_to_platform(copy, platform, campaign.grid_url)
   end
 
   def body(%Campaign{} = campaign, _asset, platform, "explainer") do
-    tags = campaign.tags |> Enum.take(3) |> Enum.join(", ")
-    tag_line = if tags == "", do: "", else: "\n\nTopics: #{tags}"
-
     copy =
       case platform do
         "linkedin" ->
-          "New RationalGrid: #{campaign.title}\n\nThis grid maps the topic as a learning path: key explanations, connected questions, and the structure of the argument in one place.#{tag_line}\n\nExplore the map:\n#{campaign.grid_url}"
+          "#{campaign.title}\n\nA learning path through the key explanations, connected questions, and structure of the topic.\n\n#{cta_line(campaign.grid_url)}"
 
         "instagram" ->
-          "New RationalGrid: #{campaign.title}\n\nA visual argument map for learning the topic and following the connected ideas.\n\n#{hashtags(campaign)}"
+          "#{campaign.title}\n\nA visual learning path through the connected ideas.\n\n#{cta_line(campaign.grid_url)}\n\n#{hashtags(campaign)}"
 
         "substack" ->
-          "New RationalGrid: #{campaign.title}\n\nInstead of reading the topic as a single thread, this grid lets you explore it as a map: central explanations, related questions, and paths for deeper learning.#{tag_line}\n\n#{campaign.grid_url}"
+          "#{campaign.title}\n\nExplore the topic as a map of central explanations, related questions, and paths for deeper learning.\n\n#{cta_line(campaign.grid_url)}"
 
         _ ->
-          "New RationalGrid: #{campaign.title}\n\nA map for exploring the argument, not just reading about it.\n#{campaign.grid_url}"
+          "#{campaign.title}\n\nA map for exploring the ideas, not just reading about them.\n#{cta_line(campaign.grid_url)}"
       end
 
     fit_to_platform(copy, platform, campaign.grid_url)
@@ -264,20 +262,39 @@ defmodule GridMediaManager.Social.Templates do
     copy =
       case platform do
         "linkedin" ->
-          "#{question}\n\nThe grid maps the surrounding argument, including the claims and questions that make this difficult. Where do you land?\n\nExplore it:\n#{campaign.grid_url}"
+          "#{question}\n\nWhat is claimed, what supports it, and what remains open?\n\n#{cta_line(campaign.grid_url)}"
 
         "instagram" ->
-          "#{question}\n\nFollow the argument and the questions around it.\n\n#{hashtags(campaign)}"
+          "#{question}\n\nFollow the connected questions and decide where you land.\n\n#{cta_line(campaign.grid_url)}\n\n#{hashtags(campaign)}"
 
         "substack" ->
-          "#{question}\n\nThe RationalGrid preserves the structure around the question: what is claimed, what supports it, what follows, and what remains open.\n\n#{campaign.grid_url}"
+          "#{question}\n\nTrace what is claimed, what supports it, what follows, and what remains open.\n\n#{cta_line(campaign.grid_url)}"
 
         _ ->
-          "#{question}\n\nWhere do you land?\n#{campaign.grid_url}"
+          "#{question}\n\nWhere do you land?\n\n#{cta_line(campaign.grid_url)}"
       end
 
     fit_to_platform(copy, platform, campaign.grid_url)
   end
+
+  defp full_node_text(%Campaign{} = campaign, %MediaAsset{} = asset) do
+    node_text =
+      with node_id when is_binary(node_id) and node_id != "" <- asset.node_id,
+           node when is_map(node) <- ShareCard.find_key_node(campaign, node_id) do
+        ShareCard.node_short_video_slides(campaign, node)
+        |> Enum.drop(1)
+        |> Enum.reject(&(Map.get(&1, :label) == "Learn more"))
+        |> Enum.map(&Map.get(&1, :body, ""))
+        |> Enum.reject(&(String.trim(&1) == ""))
+        |> Enum.join("\n\n")
+      else
+        _ -> ""
+      end
+
+    node_text |> fallback(asset.text) |> fallback(campaign.title)
+  end
+
+  defp cta_line(link), do: "Learn more at RationalGrid.ai:\n#{link || "https://rationalgrid.ai"}"
 
   defp lead_question(%Campaign{} = campaign) do
     MediaPayload.recommended_question(campaign.raw_payload) || ensure_question(campaign.title)
@@ -370,16 +387,16 @@ defmodule GridMediaManager.Social.Templates do
       if Platforms.within_limit?(fallback_copy, platform) do
         fallback_copy
       else
-        "Explore RationalGrid."
+        "Learn more at RationalGrid.ai"
       end
     end
   end
 
   defp compact_fallback(link) when is_binary(link) and link != "" do
-    "Explore this RationalGrid:\n#{link}"
+    cta_line(link)
   end
 
-  defp compact_fallback(_link), do: "Explore this RationalGrid."
+  defp compact_fallback(_link), do: "Learn more at RationalGrid.ai"
 
   defp fallback(nil, fallback), do: fallback
   defp fallback("", fallback), do: fallback

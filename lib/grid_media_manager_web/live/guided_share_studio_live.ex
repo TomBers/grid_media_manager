@@ -75,7 +75,19 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do
-    campaign = Campaigns.get_campaign!(id)
+    case Campaigns.get_campaign(id) do
+      nil ->
+        {:ok,
+         socket
+         |> put_flash(:error, "That campaign is no longer available.")
+         |> redirect(to: ~p"/")}
+
+      campaign ->
+        mount_campaign(campaign, params, socket)
+    end
+  end
+
+  defp mount_campaign(campaign, params, socket) do
     candidates = Workflow.candidates(campaign)
     restored_assets = restored_output_assets(campaign, params)
     restored_asset_ids = MapSet.new(restored_assets, & &1.id)

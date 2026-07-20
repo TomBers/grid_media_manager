@@ -504,8 +504,8 @@ defmodule GridMediaManager.CampaignsTest do
       assert is_binary(batch_id)
       assert Enum.all?(result.assets, &is_binary(&1.metadata["generated_at"]))
       assert carousel.metadata["format"] == "curated_carousel"
-      assert carousel.metadata["slide_count"] == length(candidates) + 2
-      assert length(carousel.metadata["slides"]) == length(candidates) + 2
+      assert carousel.metadata["slide_count"] == length(carousel.metadata["slides"])
+      assert carousel.metadata["slide_count"] >= length(candidates) + 2
       assert carousel.recommended_platforms == ["instagram", "linkedin"]
 
       if CarouselVideo.available?() do

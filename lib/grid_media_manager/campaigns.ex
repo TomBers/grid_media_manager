@@ -28,6 +28,17 @@ defmodule GridMediaManager.Campaigns do
 
   def get_campaign!(id), do: Repo.get!(Campaign, id)
 
+  def get_campaign(id) when is_integer(id), do: Repo.get(Campaign, id)
+
+  def get_campaign(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {integer, ""} -> Repo.get(Campaign, integer)
+      _ -> nil
+    end
+  end
+
+  def get_campaign(_id), do: nil
+
   def get_campaign_by_slug(slug) when is_binary(slug), do: Repo.get_by(Campaign, slug: slug)
 
   def import_grid(source_input) when is_binary(source_input) do
@@ -124,6 +135,45 @@ defmodule GridMediaManager.Campaigns do
     post_draft
     |> PostDraft.changeset(attrs)
     |> Repo.update()
+  end
+
+  def mark_post_draft_published(id, published_at \\ DateTime.utc_now()) do
+    draft = get_post_draft_with_asset!(id)
+    published_at = DateTime.truncate(published_at, :second)
+
+    with {:ok, published_draft} <-
+           update_post_draft(draft, %{status: "published", published_at: published_at}),
+         :ok <- maybe_cleanup_published_media(published_draft.media_asset_id) do
+      {:ok, published_draft}
+    end
+  end
+
+  def cleanup_published_media(%MediaAsset{} = asset) do
+    metadata = asset.metadata || %{}
+
+    keys =
+      (Map.get(metadata, "s3_keys") || List.wrap(Map.get(metadata, "s3_key")))
+      |> Enum.filter(&is_binary/1)
+      |> Enum.uniq()
+
+    case Enum.reduce_while(keys, :ok, fn key, :ok ->
+           case S3.delete_object(key) do
+             :ok -> {:cont, :ok}
+             {:error, reason} -> {:halt, {:error, reason}}
+           end
+         end) do
+      :ok ->
+        updated_metadata =
+          Map.put(metadata, "s3_deleted_at", DateTime.utc_now() |> DateTime.to_iso8601())
+          |> Map.put("s3_retained", false)
+
+        asset
+        |> MediaAsset.changeset(%{metadata: updated_metadata})
+        |> Repo.update()
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   def assign_generation_batch(assets) when is_list(assets) do
@@ -256,8 +306,8 @@ defmodule GridMediaManager.Campaigns do
       when is_list(candidates) and length(candidates) >= 2 do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
-    token = curated_carousel_token(candidates, style)
     slides = curated_carousel_slides(campaign, candidates)
+    token = curated_carousel_token(candidates, slides, style)
 
     attrs = %{
       title: "#{campaign.title} · Story carousel",
@@ -298,7 +348,8 @@ defmodule GridMediaManager.Campaigns do
              campaign,
              carousel.source_id,
              slides,
-             carousel.style
+             carousel.style,
+             force: true
            ) do
       campaign
       |> CarouselVideo.curated_asset_attr(
@@ -341,7 +392,8 @@ defmodule GridMediaManager.Campaigns do
              {:highlight, campaign.id, highlight_id, style, highlight},
              fn ->
                ShareCard.highlight_platform_image_png(campaign, highlight, style, "short")
-             end
+             end,
+             force: true
            ) do
       campaign
       |> ShareCard.highlight_short_video_asset_attr(highlight, style)
@@ -398,7 +450,7 @@ defmodule GridMediaManager.Campaigns do
     style = ShareCard.normalize_style(style)
 
     with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
-         {:ok, _video_path} <- CarouselVideo.render(campaign, node, style) do
+         {:ok, _video_path} <- CarouselVideo.render(campaign, node, style, force: true) do
       campaign
       |> CarouselVideo.asset_attr(node, style)
       |> then(&upsert_generated_asset_with_drafts(campaign, &1))
@@ -437,7 +489,8 @@ defmodule GridMediaManager.Campaigns do
          {:ok, _path} <-
            CarouselVideo.render_static(
              {:question, campaign.id, question_id, style, question},
-             fn -> ShareCard.question_platform_image_png(campaign, question, style, "short") end
+             fn -> ShareCard.question_platform_image_png(campaign, question, style, "short") end,
+             force: true
            ) do
       campaign
       |> ShareCard.question_short_video_asset_attr(question, style)
@@ -486,10 +539,10 @@ defmodule GridMediaManager.Campaigns do
 
   def highlights(%Campaign{raw_payload: raw_payload}), do: MediaPayload.highlights(raw_payload)
 
-  defp curated_carousel_token(candidates, style) do
+  defp curated_carousel_token(candidates, slides, style) do
     candidates
     |> Enum.map(&Map.take(&1, [:key, :type, :source_id, :title, :excerpt]))
-    |> then(&{style, &1})
+    |> then(&{style, &1, slides})
     |> :erlang.term_to_binary()
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.url_encode64(padding: false)
@@ -500,29 +553,49 @@ defmodule GridMediaManager.Campaigns do
     cover = %{
       "label" => "RationalGrid story",
       "title" => campaign.title,
-      "body" =>
-        "A curated path through the strongest questions, highlights, and ideas in this grid."
+      "body" => ""
     }
 
-    selected_slides =
-      Enum.map(candidates, fn candidate ->
-        %{
-          "label" => Map.get(candidate, :label) || humanize_candidate_type(candidate.type),
-          "title" => candidate.title,
-          "body" =>
-            Map.get(candidate, :excerpt) ||
-              "Explore how this moment connects to the wider argument."
-        }
-      end)
+    selected_slides = Enum.flat_map(candidates, &curated_candidate_slides(campaign, &1))
 
     closing = %{
-      "label" => "Join the conversation",
-      "title" => "Where do you stand?",
-      "body" =>
-        "Explore the complete map, follow the connections, and contribute your perspective on RationalGrid."
+      "label" => "Learn more",
+      "title" => "Continue on RationalGrid.ai",
+      "body" => ""
     }
 
     [cover] ++ selected_slides ++ [closing]
+  end
+
+  defp curated_candidate_slides(
+         %Campaign{} = campaign,
+         %{type: "key_node", source_id: node_id} = candidate
+       ) do
+    case ShareCard.find_key_node(campaign, node_id) do
+      node when is_map(node) ->
+        ShareCard.node_short_video_slides(campaign, node)
+        |> Enum.drop(1)
+        |> Enum.reject(&(&1.label == "Learn more"))
+        |> Enum.map(&curated_slide_map/1)
+
+      _ ->
+        [curated_slide_map(candidate)]
+    end
+  end
+
+  defp curated_candidate_slides(_campaign, candidate), do: [curated_slide_map(candidate)]
+
+  defp curated_slide_map(%{label: label, title: title, body: body}),
+    do: %{"label" => label, "title" => title, "body" => body}
+
+  defp curated_slide_map(candidate) do
+    %{
+      "label" => Map.get(candidate, :label) || humanize_candidate_type(candidate.type),
+      "title" => candidate.title,
+      "body" =>
+        Map.get(candidate, :excerpt) ||
+          "Explore how this moment connects to the wider argument."
+    }
   end
 
   defp humanize_candidate_type(type) do
@@ -567,10 +640,61 @@ defmodule GridMediaManager.Campaigns do
 
   defp upsert_generated_asset_with_drafts(%Campaign{} = campaign, attrs) do
     Repo.transaction(fn ->
+      delete_stale_generated_assets(campaign, attrs)
       asset = upsert_media_asset(campaign, attrs)
-      ensure_post_drafts(campaign, [asset])
+      ensure_post_drafts(campaign, [asset], refresh: true)
       asset
     end)
+  end
+
+  defp maybe_cleanup_published_media(media_asset_id) do
+    drafts = Repo.all(from d in PostDraft, where: d.media_asset_id == ^media_asset_id)
+
+    if drafts != [] and Enum.all?(drafts, &(&1.status == "published")) do
+      asset = Repo.get!(MediaAsset, media_asset_id)
+
+      case cleanup_published_media(asset) do
+        {:ok, _asset} -> :ok
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      :ok
+    end
+  end
+
+  defp delete_stale_generated_assets(%Campaign{} = campaign, attrs) do
+    format = get_in(attrs, [:metadata, "format"])
+
+    stale_assets =
+      MediaAsset
+      |> where([a], a.campaign_id == ^campaign.id)
+      |> where([a], a.kind == ^attrs.kind)
+      |> where([a], a.source_type == ^attrs.source_type)
+      |> where([a], a.style == ^attrs.style)
+      |> maybe_match_generated_source(attrs)
+      |> where([a], a.url != ^attrs.url)
+      |> Repo.all()
+      |> Enum.filter(&generated_asset_variant?(&1, format))
+
+    Enum.each(stale_assets, fn asset ->
+      PostDraft
+      |> where([d], d.media_asset_id == ^asset.id)
+      |> Repo.delete_all()
+
+      Repo.delete!(asset)
+    end)
+  end
+
+  defp generated_asset_variant?(%MediaAsset{metadata: metadata}, format) do
+    Map.get(metadata || %{}, "format") == format
+  end
+
+  defp maybe_match_generated_source(query, %{source_type: source_type})
+       when source_type in ["curated_carousel", "curated_carousel_video"],
+       do: query
+
+  defp maybe_match_generated_source(query, %{source_id: source_id}) do
+    where(query, [a], a.source_id == ^source_id)
   end
 
   defp upsert_media_asset(%Campaign{} = campaign, attrs) do
@@ -595,8 +719,9 @@ defmodule GridMediaManager.Campaigns do
     where(query, [a], a.url not in ^incoming_urls)
   end
 
-  defp ensure_post_drafts(%Campaign{} = campaign, assets) do
+  defp ensure_post_drafts(%Campaign{} = campaign, assets, opts \\ []) do
     campaign = Repo.get!(Campaign, campaign.id)
+    refresh? = Keyword.get(opts, :refresh, false)
 
     campaign
     |> Templates.draft_attrs(assets)
@@ -608,6 +733,11 @@ defmodule GridMediaManager.Campaigns do
           %PostDraft{}
           |> PostDraft.changeset(attrs)
           |> Repo.insert!()
+
+        %PostDraft{status: "draft"} = draft when refresh? ->
+          draft
+          |> PostDraft.changeset(%{body: attrs.body})
+          |> Repo.update!()
 
         %PostDraft{} ->
           :ok

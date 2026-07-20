@@ -670,6 +670,18 @@ defmodule GridMediaManager.Promotion.ShareCard do
     slides
   end
 
+  def node_short_video_slides(%Campaign{} = campaign, node) when is_map(node) do
+    [opening | remaining] = carousel_slides(campaign, node)
+
+    content_slides =
+      remaining
+      |> Enum.reject(&(&1.label == "Learn more"))
+      |> Enum.map(fn slide -> %{label: "", title: "", body: slide.body} end)
+
+    closing = List.last(remaining)
+    [%{opening | body: ""}] ++ content_slides ++ [closing]
+  end
+
   defp node_content(%Campaign{} = campaign, node) do
     direct_content = get(node, "content") || get(node, "body") || get(node, "text")
 
@@ -839,7 +851,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def node_short_video_frame_svg(campaign, node, style, slide) when is_map(node) do
     style = normalize_style(style)
     slide_index = normalize_slide_index(slide)
-    slides = carousel_slides(campaign, node)
+    slides = node_short_video_slides(campaign, node)
     selected_slide = Enum.at(slides, slide_index - 1) || List.first(slides)
 
     short_video_frame_svg(campaign, selected_slide, style, slide_index, length(slides))
@@ -867,17 +879,19 @@ defmodule GridMediaManager.Promotion.ShareCard do
     palette = quote_palette(style)
     cover? = slide_index == 1
     cta? = slide.label in ["Explore", "Learn more"]
+    text_only? = slide.title == "" and not cta?
+    minimal? = cover? or text_only? or cta?
     logo_markup = if cta?, do: rg_logo_markup(), else: ""
 
     brand_header =
-      if cta? do
+      if minimal? do
         ""
       else
         ~s(<text x="130" y="170" fill="#{palette.label}" font-size="23" font-weight="800" font-family="#{@ui_font_family}">RationalGrid.ai</text>)
       end
 
     footer_markup =
-      if cta? do
+      if minimal? do
         ""
       else
         ~s(<line x1="130" y1="1738" x2="950" y2="1738" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />) <>
@@ -885,7 +899,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end
 
     top_rule =
-      if cta? do
+      if minimal? do
         ""
       else
         ~s(<line x1="130" y1="210" x2="950" y2="210" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />)
@@ -905,11 +919,25 @@ defmodule GridMediaManager.Promotion.ShareCard do
     title_font_size = title_layout.font_size
     title_line_gap = title_layout.line_gap
     title_lines = title_layout.lines
-    title_start_y = if cta?, do: 930, else: 350
+
+    title_start_y =
+      cond do
+        cta? -> 930
+        cover? -> 760
+        true -> 350
+      end
+
     title_x = if cta?, do: 540, else: 130
     title_anchor = if cta?, do: "middle", else: "start"
     title_last_y = title_start_y + (length(title_lines) - 1) * title_line_gap
-    body_start_y = max(title_last_y + 92, 610)
+
+    body_start_y =
+      cond do
+        cta? or cover? -> 610
+        text_only? -> 360
+        true -> max(title_last_y + 92, 610)
+      end
+
     body_font_size = if cover?, do: 48, else: 46
 
     body_font_sizes =
@@ -945,7 +973,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end
 
     accent_markup =
-      if cta? do
+      if minimal? do
         ""
       else
         ~s|<rect x="130" y="#{body_start_y - 72}" width="260" height="9" rx="4.5" fill="url(#shortAccent)" opacity="0.98" />|
@@ -2099,8 +2127,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp normalize_curated_slide(slide) when is_map(slide) do
     %{
-      label: slide |> get("label") |> sanitize_text(nil) |> fallback("Story"),
-      title: slide |> get("title") |> sanitize_text(nil) |> fallback("RationalGrid"),
+      label: slide |> get("label") |> sanitize_text(nil) |> fallback(""),
+      title: slide |> get("title") |> sanitize_text(nil) |> fallback(""),
       body: slide |> get("body") |> sanitize_text(nil)
     }
   end

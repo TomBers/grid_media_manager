@@ -34,6 +34,31 @@ defmodule GridMediaManager.Storage.S3 do
 
   def put_object(_key, _body, _content_type), do: {:error, "Invalid S3 object data."}
 
+  def delete_object(key) when is_binary(key) do
+    with {:ok, config} <- configuration(),
+         encoded_key <- encode_key(key),
+         url <- object_url(config, encoded_key),
+         headers <-
+           signed_headers(config, url, "", nil, DateTime.utc_now(), "DELETE"),
+         {:ok, response} <-
+           [url: url, body: "", headers: headers, retry: false]
+           |> maybe_put_option(:plug, config.plug)
+           |> Req.delete(),
+         :ok <- successful_response(response) do
+      :ok
+    end
+  end
+
+  def delete_object(_key), do: {:error, "Invalid S3 object key."}
+
+  def delete_all_objects do
+    with {:ok, config} <- configuration(),
+         {:ok, keys} <- list_object_keys(config),
+         :ok <- delete_object_keys(keys) do
+      {:ok, length(keys)}
+    end
+  end
+
   defp configuration do
     config = %{
       bucket: bucket(),
@@ -62,7 +87,7 @@ defmodule GridMediaManager.Storage.S3 do
     end
   end
 
-  defp signed_headers(config, url, body, content_type, now) do
+  defp signed_headers(config, url, body, content_type, now, method \\ "PUT") do
     uri = URI.parse(url)
     amz_date = Calendar.strftime(now, "%Y%m%dT%H%M%SZ")
     date = Calendar.strftime(now, "%Y%m%d")
@@ -70,11 +95,11 @@ defmodule GridMediaManager.Storage.S3 do
 
     headers =
       %{
-        "content-type" => content_type,
         "host" => uri_host(uri),
         "x-amz-content-sha256" => payload_hash,
         "x-amz-date" => amz_date
       }
+      |> maybe_put("content-type", content_type)
       |> maybe_put("x-amz-security-token", config.session_token)
 
     signed_header_names = headers |> Map.keys() |> Enum.sort()
@@ -88,7 +113,7 @@ defmodule GridMediaManager.Storage.S3 do
     canonical_request =
       Enum.join(
         [
-          "PUT",
+          method,
           uri.path,
           uri.query || "",
           canonical_headers,
@@ -131,6 +156,52 @@ defmodule GridMediaManager.Storage.S3 do
       |> maybe_put_option(:plug, config_value(:plug))
 
     Req.put(options)
+  end
+
+  defp list_object_keys(config, continuation_token \\ nil, keys \\ []) do
+    query =
+      %{"list-type" => "2", "max-keys" => "1000"}
+      |> maybe_put_query("continuation-token", continuation_token)
+      |> URI.encode_query()
+
+    url = object_url(config, "") <> "?" <> query
+    headers = signed_headers(config, url, "", nil, DateTime.utc_now(), "GET")
+
+    request_options =
+      [url: url, headers: headers, retry: false]
+      |> maybe_put_option(:plug, config.plug)
+
+    case Req.get(request_options) do
+      {:ok, %{status: status, body: body}} when status in 200..299 and is_binary(body) ->
+        page_keys = Regex.scan(~r/<Key>(.*?)<\/Key>/s, body, capture: :all_but_first)
+        page_keys = Enum.map(page_keys, &List.first/1)
+
+        if body =~ "<IsTruncated>true</IsTruncated>" do
+          case Regex.run(~r/<NextContinuationToken>(.*?)<\/NextContinuationToken>/s, body,
+                 capture: :all_but_first
+               ) do
+            [next_token] -> list_object_keys(config, next_token, keys ++ page_keys)
+            _ -> {:error, "S3 listing was truncated without a continuation token."}
+          end
+        else
+          {:ok, keys ++ page_keys}
+        end
+
+      {:ok, response} ->
+        {:error, "S3 listing failed with HTTP #{response.status}."}
+
+      {:error, reason} ->
+        {:error, "S3 listing failed: #{inspect(reason)}"}
+    end
+  end
+
+  defp delete_object_keys(keys) do
+    Enum.reduce_while(keys, :ok, fn key, :ok ->
+      case delete_object(key) do
+        :ok -> {:cont, :ok}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
   end
 
   defp successful_response(%{status: status}) when status in 200..299, do: :ok
@@ -222,6 +293,9 @@ defmodule GridMediaManager.Storage.S3 do
 
   defp maybe_put_option(options, _key, nil), do: options
   defp maybe_put_option(options, key, value), do: Keyword.put(options, key, value)
+
+  defp maybe_put_query(query, _key, nil), do: query
+  defp maybe_put_query(query, key, value), do: Map.put(query, key, value)
 
   defp s3_error_message(body) when is_binary(body) do
     case Regex.run(~r/<Message>(.*?)<\/Message>/s, body, capture: :all_but_first) do

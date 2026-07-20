@@ -5,6 +5,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
   alias GridMediaManager.Campaigns
 
+  test "redirects safely when the campaign no longer exists", %{conn: conn} do
+    assert {:error, {:redirect, %{to: "/"}}} = live(conn, "/campaigns/999999/studio")
+  end
+
   test "surfaces and preselects the recommended conversation starter", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-curation")
 

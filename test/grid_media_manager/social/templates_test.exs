@@ -62,6 +62,7 @@ defmodule GridMediaManager.Social.TemplatesTest do
     |> Templates.draft_attrs([asset])
     |> Enum.each(fn draft ->
       assert Platforms.within_limit?(draft.body, draft.platform)
+      assert draft.body =~ "Learn more at RationalGrid.ai"
       refute String.ends_with?(draft.body, "…")
     end)
   end
@@ -83,6 +84,40 @@ defmodule GridMediaManager.Social.TemplatesTest do
 
     refute image_copy == video_copy
     assert video_copy =~ "Pause on this question"
+  end
+
+  test "key-node copy keeps the full source text and ends with one clear CTA" do
+    campaign = %{
+      campaign()
+      | raw_payload: %{
+          "content" => %{
+            "key_nodes" => [
+              %{
+                "id" => "node-1",
+                "title" => "Why comfort can become a cage",
+                "content" =>
+                  "Comfort solves an immediate problem.\n\nIt can also make the cost of losing agency harder to notice."
+              }
+            ]
+          }
+        }
+    }
+
+    asset = %MediaAsset{
+      id: 1,
+      title: "Why comfort can become a cage",
+      text: "Short excerpt",
+      node_id: "node-1",
+      kind: "key_node_card"
+    }
+
+    body = Templates.body(campaign, asset, "linkedin", "key_node")
+
+    assert body =~ "Comfort solves an immediate problem."
+    assert body =~ "It can also make the cost of losing agency harder to notice."
+    assert body =~ "Learn more at RationalGrid.ai:"
+    refute body =~ "Key node from"
+    refute body =~ "The full grid shows"
   end
 
   defp campaign do

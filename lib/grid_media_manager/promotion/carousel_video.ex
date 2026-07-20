@@ -23,7 +23,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @audio_bitrate "160k"
   @frame_rate 30
   @render_timeout 90_000
-  @cache_version 10
+  @cache_version 13
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -32,7 +32,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     style = ShareCard.normalize_style(style)
     node_id = node |> value("id") |> to_string()
     node_title = node |> value("title") |> present_string() |> fallback("Key node")
-    slide_count = campaign |> ShareCard.carousel_slides(node) |> length()
+    slide_count = campaign |> ShareCard.node_short_video_slides(node) |> length()
 
     %{
       title: "#{node_title} · Short video",
@@ -87,24 +87,30 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   def curated_video_path(%Campaign{id: campaign_id}, token, style) do
     encoded_token = URI.encode(to_string(token), &URI.char_unreserved?/1)
-    query = URI.encode_query(%{style: ShareCard.normalize_style(style)})
+    query = URI.encode_query(%{style: ShareCard.normalize_style(style), v: @cache_version})
     "/campaigns/#{campaign_id}/curated-carousels/#{encoded_token}/short.mp4?#{query}"
   end
 
   def video_path(%Campaign{id: campaign_id}, node_id, style) do
     encoded_node_id = URI.encode(to_string(node_id), &URI.char_unreserved?/1)
-    query = URI.encode_query(%{style: ShareCard.normalize_style(style)})
+    query = URI.encode_query(%{style: ShareCard.normalize_style(style), v: @cache_version})
     "/campaigns/#{campaign_id}/nodes/#{encoded_node_id}/carousel.mp4?#{query}"
   end
 
   def render(%Campaign{} = campaign, node, style) when is_map(node) do
+    render(campaign, node, style, force: false)
+  end
+
+  def render(%Campaign{} = campaign, node, style, opts) when is_map(node) and is_list(opts) do
     style = ShareCard.normalize_style(style)
+    force? = Keyword.get(opts, :force, false)
 
     with ffmpeg when is_binary(ffmpeg) <- ffmpeg_path(),
          {:ok, cache_dir} <- ensure_cache_dir() do
       output_path = Path.join(cache_dir, cache_filename(campaign, node, style))
+      if force?, do: File.rm(output_path)
 
-      if valid_video_file?(output_path) do
+      if not force? and valid_video_file?(output_path) do
         {:ok, output_path}
       else
         render_video(ffmpeg, campaign, node, style, cache_dir, output_path)
@@ -116,14 +122,22 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   end
 
   def render_curated(%Campaign{} = campaign, token, slides, style) when is_list(slides) do
+    render_curated(campaign, token, slides, style, force: false)
+  end
+
+  def render_curated(%Campaign{} = campaign, token, slides, style, opts)
+      when is_list(slides) and is_list(opts) do
     style = ShareCard.normalize_style(style)
+    force? = Keyword.get(opts, :force, false)
 
     with ffmpeg when is_binary(ffmpeg) <- ffmpeg_path(),
          {:ok, cache_dir} <- ensure_cache_dir() do
       output_path =
         Path.join(cache_dir, curated_cache_filename(campaign, token, slides, style))
 
-      if valid_video_file?(output_path) do
+      if force?, do: File.rm(output_path)
+
+      if not force? and valid_video_file?(output_path) do
         {:ok, output_path}
       else
         render_frame_video(
@@ -148,11 +162,19 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   end
 
   def render_static(cache_key, frame_fun) when is_function(frame_fun, 0) do
+    render_static(cache_key, frame_fun, force: false)
+  end
+
+  def render_static(cache_key, frame_fun, opts)
+      when is_function(frame_fun, 0) and is_list(opts) do
+    force? = Keyword.get(opts, :force, false)
+
     with ffmpeg when is_binary(ffmpeg) <- ffmpeg_path(),
          {:ok, cache_dir} <- ensure_cache_dir() do
       output_path = Path.join(cache_dir, static_cache_filename(cache_key))
+      if force?, do: File.rm(output_path)
 
-      if valid_video_file?(output_path) do
+      if not force? and valid_video_file?(output_path) do
         {:ok, output_path}
       else
         render_static_video(ffmpeg, frame_fun, cache_dir, output_path)
@@ -172,7 +194,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   def background_audio_available?, do: is_binary(background_audio_path())
 
   defp render_video(ffmpeg, campaign, node, style, cache_dir, output_path) do
-    slide_count = campaign |> ShareCard.carousel_slides(node) |> length()
+    slide_count = campaign |> ShareCard.node_short_video_slides(node) |> length()
 
     render_frame_video(ffmpeg, slide_count, cache_dir, output_path, fn index ->
       ShareCard.node_short_video_frame_png(campaign, node, style, index)
@@ -361,7 +383,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   end
 
   defp audio_input_args(path) when is_binary(path),
-    do: ["-stream_loop", "-1", "-i", path]
+    do: ["-i", path]
 
   defp audio_input_args(_path), do: []
 
@@ -373,7 +395,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   defp audio_filter(duration) do
     fade_out_start = max(duration - @audio_fade_seconds, 0.0)
 
-    "atrim=duration=#{decimal(duration)},asetpts=PTS-STARTPTS," <>
+    "apad=pad_dur=#{decimal(duration)},atrim=duration=#{decimal(duration)},asetpts=PTS-STARTPTS," <>
       "volume=#{decimal(@audio_volume)}," <>
       "afade=t=in:st=0:d=#{decimal(@audio_fade_seconds)}," <>
       "afade=t=out:st=#{decimal(fade_out_start)}:d=#{decimal(@audio_fade_seconds)}"
