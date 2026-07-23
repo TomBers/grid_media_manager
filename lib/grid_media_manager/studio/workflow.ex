@@ -176,7 +176,7 @@ defmodule GridMediaManager.Studio.Workflow do
   end
 
   defp generate_story_video_from_carousel(campaign, candidates, style) do
-    case Campaigns.generate_curated_carousel(campaign, candidates, style) do
+    case Campaigns.generate_curated_carousel_for_video(campaign, candidates, style) do
       {:ok, carousel} ->
         case Campaigns.generate_curated_carousel_video(campaign, carousel) do
           {:ok, video} ->

@@ -24,7 +24,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @frame_rate 30
   @render_timeout 300_000
   @render_timeout_per_second 5_000
-  @cache_version 17
+  @cache_version 18
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -450,7 +450,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   end
 
   defp audio_input_args(path) when is_binary(path),
-    do: ["-i", path]
+    do: ["-stream_loop", "-1", "-i", path]
 
   defp audio_input_args(_path), do: []
 

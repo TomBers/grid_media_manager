@@ -44,7 +44,9 @@ defmodule GridMediaManager.CampaignsTest do
 
     _result = Workflow.generate(campaign, candidates, format: "story_video")
 
-    assert Enum.any?(Campaigns.list_media_assets(campaign), &(&1.kind == "curated_carousel"))
+    assets = Campaigns.list_media_assets(campaign)
+    assert [%{id: carousel_id}] = Enum.filter(assets, &(&1.kind == "curated_carousel"))
+    assert Campaigns.list_post_drafts(campaign, media_asset_id: carousel_id) == []
   end
 
   test "keeps previous generated carousel variants" do
@@ -166,7 +168,7 @@ defmodule GridMediaManager.CampaignsTest do
     assert attrs.metadata["slide_count"] == 5
     assert attrs.metadata["duration_seconds"] > 0
     refute Map.has_key?(attrs.metadata, "selected_slide_indexes")
-    assert attrs.url =~ "v=17"
+    assert attrs.url =~ "v=18"
   end
 
   test "stores browser-rendered carousel frames for the selected slide" do

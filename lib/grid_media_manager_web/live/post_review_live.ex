@@ -141,7 +141,7 @@ defmodule GridMediaManagerWeb.PostReviewLive do
           <section
             id="post-review-packages"
             phx-update="stream"
-            class="grid gap-5 xl:grid-cols-2"
+            class="mx-auto max-w-6xl space-y-5"
           >
             <div
               id="empty-post-review-packages"
@@ -202,28 +202,45 @@ defmodule GridMediaManagerWeb.PostReviewLive do
     ~H"""
     <article
       id={@id}
-      class="overflow-hidden rounded-[2rem] border border-base-content/10 bg-base-100 shadow-xl shadow-base-content/5"
+      class="overflow-hidden rounded-[2rem] border border-base-content/10 bg-base-100 shadow-xl shadow-base-content/5 transition-shadow hover:shadow-2xl"
     >
-      <div class="grid gap-0 lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <div class="bg-base-200/70 p-4">
+      <div class="grid gap-0 lg:grid-cols-[20rem_minmax(0,1fr)]">
+        <div class="bg-base-200/70 p-5">
           <%= if @package.asset do %>
             <%= if video_asset?(@package.asset) do %>
               <video
                 id={"#{@id}-video"}
                 controls
                 preload="metadata"
-                class="aspect-[9/16] w-full rounded-2xl bg-black object-contain"
+                class="aspect-[9/16] w-full rounded-2xl bg-black object-contain shadow-lg"
               >
                 <source src={@package.asset.url} type="video/mp4" />
               </video>
             <% else %>
-              <img
-                id={"#{@id}-image"}
-                src={@package.asset.url}
-                alt={package_title(@package)}
-                loading="lazy"
-                class="aspect-[4/5] w-full rounded-2xl bg-base-200 object-contain"
-              />
+              <%= if length(@package.preview_images) > 1 do %>
+                <div id={"#{@id}-carousel-previews"} class="grid grid-cols-2 gap-3">
+                  <figure :for={preview <- @package.preview_images} class="relative">
+                    <img
+                      id={"#{@id}-carousel-slide-#{preview.index}"}
+                      src={preview.url}
+                      alt={"#{package_title(@package)} · image #{preview.index}"}
+                      loading="lazy"
+                      class="aspect-[4/5] w-full rounded-2xl bg-base-200 object-contain shadow-lg"
+                    />
+                    <figcaption class="absolute bottom-2 left-2 rounded-full bg-black/70 px-2 py-1 text-[0.68rem] font-bold text-white">
+                      {preview.index}
+                    </figcaption>
+                  </figure>
+                </div>
+              <% else %>
+                <img
+                  id={"#{@id}-image"}
+                  src={@package.asset.url}
+                  alt={package_title(@package)}
+                  loading="lazy"
+                  class="aspect-[4/5] w-full rounded-2xl bg-base-200 object-contain shadow-lg"
+                />
+              <% end %>
             <% end %>
           <% else %>
             <div class="grid aspect-[4/5] place-items-center rounded-2xl border border-dashed border-base-content/15 bg-base-100 px-5 text-center text-sm font-semibold text-base-content/45">
@@ -232,7 +249,7 @@ defmodule GridMediaManagerWeb.PostReviewLive do
           <% end %>
         </div>
 
-        <div class="min-w-0 p-5 md:p-7">
+        <div class="min-w-0 p-6 md:p-8">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
@@ -243,7 +260,7 @@ defmodule GridMediaManagerWeb.PostReviewLive do
                   {platform_labels(@package.platforms)}
                 </span>
               </div>
-              <h2 class="mt-3 truncate text-lg font-bold text-base-content">
+              <h2 class="mt-3 text-xl font-bold leading-7 text-base-content md:text-2xl">
                 {package_title(@package)}
               </h2>
               <.link
@@ -255,6 +272,9 @@ defmodule GridMediaManagerWeb.PostReviewLive do
               </.link>
               <p class="mt-1 text-xs text-base-content/45">
                 One logical post · {length(@package.drafts)} channels
+                <%= if length(@package.preview_images) > 1 do %>
+                  · {length(@package.preview_images)} images in order
+                <% end %>
               </p>
             </div>
 
@@ -284,20 +304,28 @@ defmodule GridMediaManagerWeb.PostReviewLive do
             </p>
           </div>
 
-          <div class="mt-5">
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-base-content/45">
-              Post copy
-            </p>
+          <div class="mt-7">
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs font-bold uppercase tracking-[0.16em] text-base-content/45">
+                Post copy
+              </p>
+              <span class="text-xs font-semibold text-base-content/40">
+                {length(@package.copy_variants)} {if(length(@package.copy_variants) == 1,
+                  do: "version",
+                  else: "versions"
+                )}
+              </span>
+            </div>
             <div
               :if={length(@package.copy_variants) > 1}
               class="mt-2 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs font-semibold leading-5 text-amber-800 dark:text-amber-100"
             >
               These channel drafts do not currently have identical copy. Review the variants before approving.
             </div>
-            <div class="mt-2 max-h-72 space-y-3 overflow-y-auto">
+            <div class="mt-3 space-y-3">
               <div
                 :for={variant <- @package.copy_variants}
-                class="rounded-2xl border border-base-content/10 bg-base-200/40 p-4"
+                class="rounded-2xl border border-base-content/10 bg-base-200/40 p-5"
               >
                 <p
                   :if={length(@package.copy_variants) > 1}
@@ -305,7 +333,7 @@ defmodule GridMediaManagerWeb.PostReviewLive do
                 >
                   {platform_labels(variant.platforms)}
                 </p>
-                <div class="whitespace-pre-wrap break-words text-sm leading-7 text-base-content/80">
+                <div class="whitespace-pre-wrap break-words text-base leading-8 text-base-content/85">
                   {variant.body}
                 </div>
               </div>

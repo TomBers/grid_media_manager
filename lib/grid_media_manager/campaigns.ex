@@ -359,6 +359,18 @@ defmodule GridMediaManager.Campaigns do
 
   def generate_curated_carousel(%Campaign{} = campaign, candidates, style)
       when is_list(candidates) and length(candidates) >= 1 do
+    generate_curated_carousel(campaign, candidates, style, :with_drafts)
+  end
+
+  def generate_curated_carousel(%Campaign{}, _candidates, _style),
+    do: {:error, :not_enough_candidates}
+
+  def generate_curated_carousel_for_video(%Campaign{} = campaign, candidates, style)
+      when is_list(candidates) and length(candidates) >= 1 do
+    generate_curated_carousel(campaign, candidates, style, :without_drafts)
+  end
+
+  defp generate_curated_carousel(%Campaign{} = campaign, candidates, style, draft_mode) do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
     slides = SlideSequence.build(campaign, candidates)
@@ -386,11 +398,11 @@ defmodule GridMediaManager.Campaigns do
       }
     }
 
-    upsert_generated_asset_with_drafts(campaign, attrs)
+    case draft_mode do
+      :with_drafts -> upsert_generated_asset_with_drafts(campaign, attrs)
+      :without_drafts -> Repo.transaction(fn -> upsert_media_asset(campaign, attrs) end)
+    end
   end
-
-  def generate_curated_carousel(%Campaign{}, _candidates, _style),
-    do: {:error, :not_enough_candidates}
 
   def update_curated_carousel_selection(%MediaAsset{kind: "curated_carousel"} = asset, selection)
       when is_list(selection) do

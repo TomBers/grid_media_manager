@@ -7,6 +7,8 @@ defmodule GridMediaManager.Social.PostReview do
   """
 
   alias GridMediaManager.Campaigns.Campaign
+  alias GridMediaManager.Campaigns.MediaAsset
+  alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.Social.Platforms
 
   @text_hour 15
@@ -28,7 +30,7 @@ defmodule GridMediaManager.Social.PostReview do
 
   def valid_for_asset?(draft) do
     case draft.media_asset do
-      nil -> draft.platform in Platforms.ids()
+      nil -> false
       %{mime_type: "video/mp4"} -> draft.platform in Platforms.video_ids()
       _asset -> draft.platform in Platforms.text_ids()
     end
@@ -54,6 +56,7 @@ defmodule GridMediaManager.Social.PostReview do
       id: "post-review-package-#{List.first(drafts).campaign_id}-#{List.first(drafts).id}",
       drafts: drafts,
       asset: asset,
+      preview_images: preview_images(asset, campaign),
       campaign: campaign,
       campaign_id: List.first(drafts).campaign_id,
       kind: kind,
@@ -81,6 +84,27 @@ defmodule GridMediaManager.Social.PostReview do
       _ -> nil
     end
   end
+
+  defp preview_images(%MediaAsset{kind: "curated_carousel"} = asset, %Campaign{} = campaign) do
+    metadata = asset.metadata || %{}
+    slide_count = Map.get(metadata, "slide_count", 0)
+
+    indexes =
+      case Map.get(metadata, "selected_slide_indexes") do
+        indexes when is_list(indexes) and indexes != [] -> indexes
+        _ -> if(slide_count > 0, do: Enum.to_list(1..slide_count), else: [])
+      end
+
+    Enum.map(indexes, fn index ->
+      %{
+        index: index,
+        url: ShareCard.curated_carousel_image_path(campaign, asset.source_id, index, asset.style)
+      }
+    end)
+  end
+
+  defp preview_images(%MediaAsset{} = asset, _campaign), do: [%{index: 1, url: asset.url}]
+  defp preview_images(nil, _campaign), do: []
 
   defp package_kind(drafts) do
     draft_kind(List.first(drafts))
