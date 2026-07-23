@@ -137,7 +137,7 @@ defmodule GridMediaManager.Social.BufferTest do
              ]
 
       assert input["metadata"] == %{
-               "instagram" => %{"type" => "post", "shouldShareToFeed" => true}
+               "instagram" => %{"type" => "carousel", "shouldShareToFeed" => true}
              }
 
       success_response(conn)
@@ -403,7 +403,7 @@ defmodule GridMediaManager.Social.BufferTest do
     assert Buffer.schedule(%{draft() | platform: "instagram"},
              channel_id: "channel-123",
              instagram_type: "unsupported"
-           ) == {:error, "instagram_type must be post, story, or reel"}
+           ) == {:error, "instagram_type must be post, story, reel, or carousel"}
   end
 
   test "rejects invalid items in a media list" do

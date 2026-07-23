@@ -141,7 +141,7 @@ defmodule GridMediaManager.Campaigns.S3PublishingTest do
       assert length(input["assets"]) == 4
 
       assert input["metadata"] == %{
-               "instagram" => %{"type" => "post", "shouldShareToFeed" => true}
+               "instagram" => %{"type" => "carousel", "shouldShareToFeed" => true}
              }
 
       assert Enum.all?(input["assets"], &match?(%{"image" => %{"url" => _}}, &1))

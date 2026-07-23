@@ -4,7 +4,9 @@ defmodule GridMediaManager.CampaignsTest do
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.Promotion.SlideSequence
   alias GridMediaManager.RationalGrid.MediaPayload
+  alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Studio.Workflow
 
   test "exposes distinct style presets for different editorial moods" do
@@ -21,6 +23,196 @@ defmodule GridMediaManager.CampaignsTest do
 
     assert Enum.count(styles, &(&1.category == "Foundation")) == 2
     assert Enum.count(styles, &(&1.category == "Social")) == 7
+  end
+
+  test "returns a generation error instead of crashing for a deleted campaign" do
+    campaign = %GridMediaManager.Campaigns.Campaign{id: -1}
+    candidate = %{title: "A stale selection"}
+
+    assert %{assets: [], errors: [%{candidate: ^candidate, reason: :campaign_not_found}]} =
+             Workflow.generate(campaign, [candidate], format: "story_video")
+  end
+
+  test "keeps the source carousel when generating a story video" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "kept-story-carousel")
+
+    candidates =
+      campaign
+      |> Workflow.candidates()
+      |> Enum.filter(&(&1.type in ["question", "highlight", "key_node"]))
+      |> Enum.take(2)
+
+    _result = Workflow.generate(campaign, candidates, format: "story_video")
+
+    assets = Campaigns.list_media_assets(campaign)
+    assert [%{id: carousel_id}] = Enum.filter(assets, &(&1.kind == "curated_carousel"))
+    assert Campaigns.list_post_drafts(campaign, media_asset_id: carousel_id) == []
+  end
+
+  test "keeps previous generated carousel variants" do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "kept-carousel-variants")
+
+    candidates =
+      campaign
+      |> Workflow.candidates()
+      |> Enum.filter(&(&1.type in ["question", "highlight", "key_node"]))
+      |> Enum.take(2)
+
+    assert {:ok, first} =
+             Campaigns.generate_curated_carousel(campaign, candidates, "editorial_dark")
+
+    assert {:ok, second} =
+             Campaigns.generate_curated_carousel(
+               campaign,
+               Enum.reverse(candidates),
+               "editorial_dark"
+             )
+
+    assert first.id != second.id
+
+    assert Enum.all?(
+             [first.id, second.id],
+             &Enum.any?(Campaigns.list_media_assets(campaign), fn asset -> asset.id == &1 end)
+           )
+  end
+
+  test "generates text mode as an ordered carousel with a final CTA" do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "text-carousel-package")
+
+    candidate =
+      campaign
+      |> Workflow.candidates()
+      |> Enum.find(&(&1.type == "key_node"))
+
+    result =
+      Workflow.generate(campaign, [candidate],
+        style: "editorial_dark",
+        format: "portrait"
+      )
+
+    assert result.errors == []
+    assert [%{kind: "curated_carousel"} = carousel] = result.assets
+    assert carousel.metadata["slide_count"] >= 3
+
+    assert List.last(carousel.metadata["slides"]) == %{
+             "body" => "",
+             "kind" => "cta",
+             "label" => "Learn more",
+             "title" => "Continue on RationalGrid.ai"
+           }
+
+    text_slide = %{"body" => "Readable body copy", "label" => "", "title" => ""}
+    text_svg = ShareCard.curated_carousel_image_svg(campaign, [text_slide], "editorial_dark", 1)
+
+    assert text_svg =~ "Readable"
+    assert text_svg =~ "body copy"
+    refute text_svg =~ "data:image/png;base64"
+  end
+
+  test "scales node text to the available reading area" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "adaptive-node-text")
+
+    short_slide = %{"kind" => "node_text", "title" => "", "body" => "A short, clear explanation."}
+
+    long_slide = %{
+      "kind" => "node_text",
+      "title" => "",
+      "body" =>
+        String.duplicate(
+          "A meaningful sentence explains the claim clearly and gives the reader useful context. ",
+          8
+        )
+    }
+
+    short_svg =
+      ShareCard.curated_carousel_image_svg(campaign, [short_slide], "editorial_dark", 1)
+
+    long_svg =
+      ShareCard.curated_carousel_image_svg(campaign, [long_slide], "editorial_dark", 1)
+
+    assert short_svg =~ ~s(font-size="136")
+    refute long_svg =~ ~s(font-size="136")
+  end
+
+  test "limits carousel publishing to three ordered images with the CTA last" do
+    slides = [
+      %{"title" => "Opening", "body" => ""},
+      %{"title" => "Second", "body" => ""},
+      %{"title" => "Third", "body" => ""},
+      %{"title" => "Fourth", "body" => ""},
+      %{"label" => "Learn more", "title" => "Continue on RationalGrid.ai", "body" => ""}
+    ]
+
+    assert ShareCard.curated_carousel_selected_slide_indexes(slides) == [1, 2, 5]
+    assert ShareCard.curated_carousel_selected_slide_indexes(slides, [4, 2, 1, 5]) == [4, 2, 5]
+
+    assert ShareCard.curated_carousel_selected_slides(slides, [3, 1, 5]) ==
+             [Enum.at(slides, 2), Enum.at(slides, 0), Enum.at(slides, 4)]
+  end
+
+  test "keeps every carousel frame in video metadata by default" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "video-selection")
+
+    slides = [
+      %{"title" => "Opening", "body" => ""},
+      %{"title" => "Second", "body" => ""},
+      %{"title" => "Third", "body" => ""},
+      %{"title" => "Fourth", "body" => ""},
+      %{"label" => "Learn more", "title" => "Continue on RationalGrid.ai", "body" => ""}
+    ]
+
+    attrs = CarouselVideo.curated_asset_attr(campaign, "video-token", slides, "editorial_dark")
+
+    assert attrs.metadata["slide_count"] == 5
+    assert attrs.metadata["duration_seconds"] > 0
+    refute Map.has_key?(attrs.metadata, "selected_slide_indexes")
+    assert attrs.url =~ "v=18"
+  end
+
+  test "stores browser-rendered carousel frames for the selected slide" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "browser-frame-store")
+
+    candidates = Workflow.candidates(campaign) |> Enum.take(1)
+
+    assert {:ok, asset} =
+             Campaigns.generate_curated_carousel(campaign, candidates, "editorial_dark")
+
+    png = <<137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0>>
+
+    assert {:ok, _updated_asset} =
+             Campaigns.store_curated_carousel_browser_frame(
+               campaign,
+               asset.source_id,
+               2,
+               png
+             )
+
+    stored_asset = Campaigns.get_media_asset!(asset.id)
+    path = get_in(stored_asset.metadata, ["browser_frame_paths", "2"])
+
+    assert is_binary(path)
+    assert File.read!(path) == png
+    on_exit(fn -> File.rm(path) end)
+  end
+
+  test "builds one typed sequence for highlights and full nodes" do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "typed-slide-sequence")
+
+    candidates =
+      Workflow.candidates(campaign)
+      |> Enum.filter(&(&1.type in ["highlight", "key_node"]))
+      |> Enum.take(2)
+
+    slides = SlideSequence.build(campaign, candidates)
+
+    assert hd(slides)["kind"] == "cover"
+    assert List.last(slides)["kind"] == "cta"
+    assert Enum.any?(slides, &(&1["kind"] == "highlight"))
+    assert Enum.any?(slides, &(&1["kind"] == "node_text"))
+    assert Enum.all?(slides, &is_binary(&1["body"]))
   end
 
   test "renders full titles and quotes without top-right format labels" do
@@ -350,11 +542,18 @@ defmodule GridMediaManager.CampaignsTest do
 
       drafts = Campaigns.list_post_drafts(campaign)
 
-      assert Enum.any?(
-               drafts,
-               &(&1.platform == "linkedin" and &1.angle == "question_quote" and
-                   String.contains?(&1.body, long_question))
-             )
+      question_asset_ids = MapSet.new(question_assets, & &1.id)
+
+      question_drafts =
+        Enum.filter(
+          drafts,
+          &(MapSet.member?(question_asset_ids, &1.media_asset_id) and &1.angle == "question_quote")
+        )
+
+      assert Enum.sort(Enum.map(question_drafts, & &1.platform)) ==
+               Enum.sort(Platforms.text_ids() ++ Platforms.text_ids())
+
+      assert Enum.uniq_by(question_drafts, & &1.body) |> length() == 1
     end
 
     test "generates platform-specific question and highlight cards" do
@@ -374,7 +573,7 @@ defmodule GridMediaManager.CampaignsTest do
 
       assert question_asset.metadata["format"] == "linkedin"
       assert question_asset.metadata["width"] == 1200
-      assert question_asset.recommended_platforms == ["linkedin"]
+      assert question_asset.recommended_platforms == Platforms.text_ids()
       assert question_asset.url =~ "format=linkedin"
 
       assert {:ok, highlight_asset} =
@@ -382,7 +581,7 @@ defmodule GridMediaManager.CampaignsTest do
 
       assert highlight_asset.metadata["format"] == "portrait"
       assert highlight_asset.metadata["height"] == 1350
-      assert highlight_asset.recommended_platforms == ["instagram"]
+      assert highlight_asset.recommended_platforms == Platforms.text_ids()
       assert highlight_asset.url =~ "format=portrait"
     end
 
@@ -410,7 +609,7 @@ defmodule GridMediaManager.CampaignsTest do
         assert video.mime_type == "video/mp4"
         assert video.metadata["width"] == 1080
         assert video.metadata["height"] == 1920
-        assert video.recommended_platforms == ["youtube", "instagram"]
+        assert video.recommended_platforms == Platforms.video_ids()
       else
         result =
           Workflow.generate(campaign, [question_candidate],
@@ -449,7 +648,7 @@ defmodule GridMediaManager.CampaignsTest do
                "/campaigns/#{campaign.id}/nodes/1/share-card.png?style=warm_paper&format=portrait"
 
       assert portrait_asset.metadata["format"] == "portrait"
-      assert portrait_asset.recommended_platforms == ["instagram"]
+      assert portrait_asset.recommended_platforms == Platforms.text_ids()
 
       assert {:ok, linkedin_asset} =
                Campaigns.generate_key_node_asset(campaign, "1", "warm_paper", "linkedin")
@@ -460,7 +659,7 @@ defmodule GridMediaManager.CampaignsTest do
       assert linkedin_asset.metadata["format"] == "linkedin"
       assert linkedin_asset.metadata["width"] == 1200
       assert linkedin_asset.metadata["height"] == 1200
-      assert linkedin_asset.recommended_platforms == ["linkedin"]
+      assert linkedin_asset.recommended_platforms == Platforms.text_ids()
 
       node = ShareCard.find_key_node(campaign, "1")
       assert ShareCard.node_reading_image_svg(campaign, node, "warm_paper") =~ "width=\"1080\""
@@ -504,15 +703,16 @@ defmodule GridMediaManager.CampaignsTest do
       assert is_binary(batch_id)
       assert Enum.all?(result.assets, &is_binary(&1.metadata["generated_at"]))
       assert carousel.metadata["format"] == "curated_carousel"
-      assert carousel.metadata["slide_count"] == length(candidates) + 2
-      assert length(carousel.metadata["slides"]) == length(candidates) + 2
-      assert carousel.recommended_platforms == ["instagram", "linkedin"]
+      assert carousel.metadata["slide_count"] == length(carousel.metadata["slides"])
+      assert carousel.metadata["slide_count"] >= length(candidates) + 2
+      assert carousel.recommended_platforms == Platforms.text_ids()
 
       if CarouselVideo.available?() do
         assert result.errors == []
         video = Enum.find(result.assets, &(&1.kind == "curated_carousel_video"))
         assert video
         assert video.metadata["slide_count"] == carousel.metadata["slide_count"]
+        refute Map.has_key?(video.metadata, "selected_slide_indexes")
         assert video.metadata["background_audio"]
       else
         assert result.errors != []
@@ -529,7 +729,7 @@ defmodule GridMediaManager.CampaignsTest do
       assert binary_part(png, 0, 8) == <<137, 80, 78, 71, 13, 10, 26, 10>>
 
       assert Enum.any?(
-               Campaigns.list_post_drafts(campaign, platform: "instagram"),
+               Campaigns.list_post_drafts(campaign, platform: "x"),
                &(&1.media_asset_id == carousel.id)
              )
     end
@@ -543,7 +743,7 @@ defmodule GridMediaManager.CampaignsTest do
       assert length(assets) >= 2
       assert Enum.all?(assets, &(&1.kind == "key_node_carousel_slide"))
       assert Enum.at(assets, 0).metadata["slide_index"] == 1
-      assert Enum.at(assets, 0).recommended_platforms == ["instagram", "linkedin"]
+      assert Enum.at(assets, 0).recommended_platforms == Platforms.text_ids()
       assert Enum.at(assets, 0).mime_type == "image/png"
 
       assert Enum.at(assets, 0).text ==

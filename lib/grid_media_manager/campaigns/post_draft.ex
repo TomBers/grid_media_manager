@@ -13,6 +13,7 @@ defmodule GridMediaManager.Campaigns.PostDraft do
     field :body, :string
     field :status, :string, default: "draft"
     field :copied_at, :utc_datetime
+    field :suggested_for, :utc_datetime
     field :scheduled_for, :utc_datetime
     field :published_at, :utc_datetime
     field :external_post_id, :string
@@ -34,6 +35,7 @@ defmodule GridMediaManager.Campaigns.PostDraft do
       :body,
       :status,
       :copied_at,
+      :suggested_for,
       :scheduled_for,
       :published_at,
       :external_post_id,

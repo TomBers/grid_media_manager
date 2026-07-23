@@ -66,6 +66,16 @@ defmodule GridMediaManager.Studio.Workflow do
   end
 
   def generate(%Campaign{} = campaign, candidates, opts \\ []) when is_list(candidates) do
+    case Campaigns.get_campaign(campaign.id) do
+      nil ->
+        %{assets: [], errors: [%{candidate: List.first(candidates), reason: :campaign_not_found}]}
+
+      %Campaign{} = campaign ->
+        generate_for_campaign(campaign, candidates, opts)
+    end
+  end
+
+  defp generate_for_campaign(campaign, candidates, opts) do
     style = opts |> Keyword.get(:style) |> ShareCard.normalize_style()
     format = normalize_format(Keyword.get(opts, :format, "landscape"))
 
@@ -76,6 +86,9 @@ defmodule GridMediaManager.Studio.Workflow do
 
         format == "story_video" ->
           generate_story_video(campaign, candidates, style)
+
+        format == "portrait" ->
+          generate_text_carousel(campaign, candidates, style)
 
         true ->
           {assets, errors} =
@@ -102,6 +115,17 @@ defmodule GridMediaManager.Studio.Workflow do
       end
 
     assign_generation_batch(result)
+  end
+
+  defp generate_text_carousel(campaign, candidates, style) do
+    case Campaigns.generate_curated_carousel(campaign, candidates, style) do
+      {:ok, carousel} ->
+        %{assets: [carousel], errors: []}
+
+      {:error, reason} ->
+        candidate = List.first(candidates) || %{title: campaign.title}
+        %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
+    end
   end
 
   defp assign_generation_batch(%{assets: []} = result), do: result
@@ -136,15 +160,29 @@ defmodule GridMediaManager.Studio.Workflow do
   end
 
   defp generate_story_video(campaign, candidates, style) do
-    case Campaigns.generate_curated_carousel(campaign, candidates, style) do
-      {:ok, carousel} ->
-        case Campaigns.generate_curated_carousel_video(campaign, carousel) do
+    case candidates do
+      [%{type: "key_node", source_id: source_id} = candidate] ->
+        case Campaigns.generate_key_node_video(campaign, source_id, style) do
           {:ok, video} ->
-            _ = Campaigns.delete_generated_media_asset(carousel.id)
             %{assets: [video], errors: []}
 
           {:error, reason} ->
-            _ = Campaigns.delete_generated_media_asset(carousel.id)
+            %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
+        end
+
+      _ ->
+        generate_story_video_from_carousel(campaign, candidates, style)
+    end
+  end
+
+  defp generate_story_video_from_carousel(campaign, candidates, style) do
+    case Campaigns.generate_curated_carousel_for_video(campaign, candidates, style) do
+      {:ok, carousel} ->
+        case Campaigns.generate_curated_carousel_video(campaign, carousel) do
+          {:ok, video} ->
+            %{assets: [video], errors: []}
+
+          {:error, reason} ->
             candidate = List.first(candidates) || %{title: campaign.title}
             %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
         end
@@ -216,6 +254,7 @@ defmodule GridMediaManager.Studio.Workflow do
       dom_id: dom_id("question", source_id),
       type: "question",
       source_id: source_id,
+      node_id: present_string(map_value(question, "node_id")),
       title: text,
       excerpt: question_context(question, kind, recommended?),
       label: question_label(kind),
@@ -238,6 +277,7 @@ defmodule GridMediaManager.Studio.Workflow do
           dom_id: dom_id("highlight", source_id),
           type: "highlight",
           source_id: to_string(source_id),
+          node_id: present_string(map_value(highlight, "node_id")),
           title: text,
           excerpt:
             present_string(note) || "A passage a person chose to preserve from the conversation.",
@@ -254,6 +294,13 @@ defmodule GridMediaManager.Studio.Workflow do
   defp key_node_candidates(campaign) do
     campaign
     |> Campaigns.key_nodes()
+    |> Enum.reject(fn node ->
+      node
+      |> map_value("id")
+      |> to_string()
+      |> String.downcase()
+      |> then(&(&1 in ["main"]))
+    end)
     |> Enum.map(fn node ->
       source_id = map_value(node, "id")
       title = map_value(node, "title")
@@ -266,6 +313,7 @@ defmodule GridMediaManager.Studio.Workflow do
           dom_id: dom_id("key-node", source_id),
           type: "key_node",
           source_id: to_string(source_id),
+          node_id: to_string(source_id),
           title: title,
           excerpt: present_string(map_value(node, "excerpt")),
           label: "Key node",
@@ -371,6 +419,8 @@ defmodule GridMediaManager.Studio.Workflow do
       value -> value
     end
   end
+
+  defp present_string(value) when is_integer(value), do: Integer.to_string(value)
 
   defp present_string(_value), do: nil
 

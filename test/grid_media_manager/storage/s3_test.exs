@@ -86,6 +86,26 @@ defmodule GridMediaManager.Storage.S3Test do
     assert {:ok, _url} = S3.put_object("test.txt", "data", "text/plain")
   end
 
+  test "deletes an object with AWS Signature V4" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert conn.method == "DELETE"
+      assert conn.host == "media-bucket.s3.eu-west-2.amazonaws.com"
+      assert conn.request_path == "/campaigns/a-grid/card.png"
+
+      [authorization] = Plug.Conn.get_req_header(conn, "authorization")
+      assert authorization =~ "AWS4-HMAC-SHA256 Credential=AKIATEST/"
+      assert authorization =~ "SignedHeaders=host;x-amz-content-sha256;x-amz-date"
+
+      assert Plug.Conn.get_req_header(conn, "x-amz-content-sha256") == [
+               :crypto.hash(:sha256, "") |> Base.encode16(case: :lower)
+             ]
+
+      Plug.Conn.send_resp(conn, 204, "")
+    end)
+
+    assert S3.delete_object("campaigns/a-grid/card.png") == :ok
+  end
+
   test "reports missing configuration without making a request" do
     Application.delete_env(:grid_media_manager, :s3)
 

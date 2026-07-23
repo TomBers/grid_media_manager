@@ -69,19 +69,32 @@ defmodule GridMediaManager.Promotion.AssetRenderer do
   end
 
   def render(%Campaign{} = campaign, %MediaAsset{kind: "curated_carousel"} = asset) do
-    slides = Map.get(asset.metadata || %{}, "slides", [])
-    {:ok, ShareCard.curated_carousel_image_png(campaign, slides, asset.style, 1)}
+    metadata = asset.metadata || %{}
+    slides = Map.get(metadata, "slides", [])
+
+    selected_indexes =
+      ShareCard.curated_carousel_selected_slide_indexes(
+        slides,
+        Map.get(metadata, "selected_slide_indexes")
+      )
+
+    index = List.first(selected_indexes) || 1
+
+    {:ok, browser_frame_or_render(campaign, asset, slides, index)}
   end
 
   def render(%Campaign{} = campaign, %MediaAsset{kind: "curated_carousel_video"} = asset) do
-    slides = Map.get(asset.metadata || %{}, "slides", [])
+    metadata = asset.metadata || %{}
+    slides = Map.get(metadata, "slides", [])
+    frame_paths = Map.get(metadata, "browser_frame_paths", %{})
 
     with {:ok, path} <-
            CarouselVideo.render_curated(
              campaign,
              asset.source_id,
              slides,
-             asset.style
+             asset.style,
+             frame_paths: frame_paths
            ) do
       File.read(path)
     end
@@ -133,13 +146,14 @@ defmodule GridMediaManager.Promotion.AssetRenderer do
   def render(%Campaign{}, %MediaAsset{}), do: {:error, :unsupported_asset}
 
   def render_all(%Campaign{} = campaign, %MediaAsset{kind: "curated_carousel"} = asset) do
-    slides = Map.get(asset.metadata || %{}, "slides", [])
+    metadata = asset.metadata || %{}
+    slides = Map.get(metadata, "slides", [])
 
     slides
-    |> Enum.with_index(1)
-    |> Enum.map(fn {_slide, index} ->
-      ShareCard.curated_carousel_image_png(campaign, slides, asset.style, index)
-    end)
+    |> ShareCard.curated_carousel_selected_slide_indexes(
+      Map.get(metadata, "selected_slide_indexes")
+    )
+    |> Enum.map(&browser_frame_or_render(campaign, asset, slides, &1))
     |> then(&{:ok, &1})
   end
 
@@ -151,4 +165,14 @@ defmodule GridMediaManager.Promotion.AssetRenderer do
     do: Map.get(metadata, "format", "landscape")
 
   defp asset_format(_asset), do: "landscape"
+
+  defp browser_frame_or_render(campaign, asset, slides, index) do
+    frame_paths = Map.get(asset.metadata || %{}, "browser_frame_paths", %{})
+    path = Map.get(frame_paths, to_string(index))
+
+    case path && File.read(path) do
+      {:ok, body} -> body
+      _error -> ShareCard.curated_carousel_image_png(campaign, slides, asset.style, index)
+    end
+  end
 end

@@ -24,8 +24,9 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/grid_media_manager"
 import topbar from "../vendor/topbar"
+import {CanvasSlideRenderer} from "./canvas_slide_renderer"
 
-const Hooks = {...colocatedHooks}
+const Hooks = {...colocatedHooks, CanvasSlideRenderer}
 
 Hooks.CopyToClipboard = {
   mounted() {
@@ -114,4 +115,3 @@ if (process.env.NODE_ENV === "development") {
     window.liveReloader = reloader
   })
 }
-

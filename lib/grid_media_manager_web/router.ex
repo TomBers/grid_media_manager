@@ -50,8 +50,17 @@ defmodule GridMediaManagerWeb.Router do
         PromotionAssetController,
         :highlight_short_video
 
+    live "/posts/review", PostReviewLive, :show
     live "/campaigns/:id/studio", GuidedShareStudioLive, :show
     live "/campaigns/:id", ShareStudioLive, :show
+  end
+
+  scope "/api", GridMediaManagerWeb do
+    pipe_through :api
+
+    post "/campaigns/:id/curated-carousels/:token/browser-frames",
+         PromotionAssetController,
+         :browser_frame
   end
 
   # Other scopes may use custom stacks.
