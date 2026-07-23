@@ -22,7 +22,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @audio_bitrate "160k"
   @frame_rate 30
   @render_timeout 300_000
-  @cache_version 15
+  @cache_version 16
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -367,7 +367,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       "scale=#{@width}:#{@height}:force_original_aspect_ratio=decrease," <>
         "pad=#{@width}:#{@height}:(ow-iw)/2:(oh-ih)/2," <>
         "format=yuv420p,fps=#{@frame_rate}," <>
-        "fade=t=in:st=0:d=#{decimal(@fade_seconds)}," <>
         "fade=t=out:st=#{decimal(fade_out_start)}:d=#{decimal(@fade_seconds)}",
       "-c:v",
       "libx264",
@@ -438,12 +437,13 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   defp slide_filter(index, duration) do
     fade_out_start = max(duration - @fade_seconds, 0.0)
+    fade_in = if index == 0, do: "", else: "fade=t=in:st=0:d=#{decimal(@fade_seconds)},"
 
     "[#{index}:v]scale=#{@width}:#{@height}:force_original_aspect_ratio=decrease," <>
       "pad=#{@width}:#{@height}:(ow-iw)/2:(oh-ih)/2," <>
       "setsar=1,format=yuv420p,fps=#{@frame_rate},trim=duration=#{decimal(duration)}," <>
       "settb=AVTB,setpts=N/(#{@frame_rate}*TB)," <>
-      "fade=t=in:st=0:d=#{decimal(@fade_seconds)}," <>
+      fade_in <>
       "fade=t=out:st=#{decimal(fade_out_start)}:" <>
       "d=#{decimal(@fade_seconds)}[v#{index}]"
   end
