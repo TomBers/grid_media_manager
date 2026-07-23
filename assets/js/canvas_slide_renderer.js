@@ -401,6 +401,11 @@ function loadImage(source) {
   })
 }
 
+function cacheBustedUrl(source) {
+  const separator = source.includes("?") ? "&" : "?"
+  return `${source}${separator}browser_frames=${Date.now()}`
+}
+
 export const CanvasSlideRenderer = {
   mounted() {
     this.root = document.getElementById(this.el.dataset.rootId)
@@ -408,6 +413,8 @@ export const CanvasSlideRenderer = {
 
     this.rendering = false
     this.renderAgain = false
+    this.uploadingFrames = false
+    this.uploadedFrameFingerprint = null
     this.previewClickHandler = event => {
       const uploadButton = event.target.closest("[data-browser-render-upload]")
       if (uploadButton && this.root.contains(uploadButton)) {
@@ -483,9 +490,17 @@ export const CanvasSlideRenderer = {
 
       const status = this.root.querySelector("[data-browser-render-status]")
       if (status) status.textContent = "Browser-rendered preview"
+
+      if (this.root.dataset.videoPreviewId) {
+        const fingerprint = `${this.root.dataset.slides}|${style}`
+        if (this.uploadedFrameFingerprint !== fingerprint && !this.uploadingFrames) {
+          await this.uploadFrames({automatic: true, fingerprint})
+        }
+      }
     } catch (_error) {
       const status = this.root?.querySelector("[data-browser-render-status]")
       if (status) status.textContent = "Preview fallback"
+      this.loadVideoFallback()
     } finally {
       this.rendering = false
       if (this.renderAgain) {
@@ -495,10 +510,13 @@ export const CanvasSlideRenderer = {
     }
   },
 
-  async uploadFrames() {
+  async uploadFrames(options = {}) {
     if (!this.root) return
+    if (this.uploadingFrames) return
     const uploadButton = this.root.querySelector("[data-browser-render-upload]")
     if (!uploadButton) return
+    const automatic = options.automatic === true
+    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}`
     const slides = JSON.parse(this.root.dataset.slides || "[]")
     const frameIndexes = slides.map((_slide, index) => index + 1)
     const targets = this.root.querySelectorAll("[data-canvas-slide]")
@@ -506,8 +524,9 @@ export const CanvasSlideRenderer = {
     const uploadUrl = this.root.dataset.uploadUrl.startsWith("/api/")
       ? this.root.dataset.uploadUrl
       : `/api${this.root.dataset.uploadUrl}`
+    this.uploadingFrames = true
     uploadButton.disabled = true
-    uploadButton.textContent = "Saving browser frames…"
+    if (!automatic) uploadButton.textContent = "Saving browser frames…"
 
     try {
       for (const index of frameIndexes) {
@@ -528,14 +547,43 @@ export const CanvasSlideRenderer = {
 
       if (status) {
         status.textContent = this.root.dataset.videoPreviewId
-          ? "Browser frames saved; reload the video to rebuild"
+          ? "Video rebuilt from browser-rendered frames"
           : "Browser frames saved for images and video"
       }
       uploadButton.textContent = "Browser frames saved"
+      this.uploadedFrameFingerprint = fingerprint
+      this.reloadVideoFromBrowserFrames()
     } catch (_error) {
       if (status) status.textContent = "Could not save browser frames"
       uploadButton.textContent = "Retry browser render"
       uploadButton.disabled = false
+      this.loadVideoFallback()
+    } finally {
+      this.uploadingFrames = false
     }
+  },
+
+  reloadVideoFromBrowserFrames() {
+    const videoId = this.root?.dataset.videoPreviewId
+    if (!videoId) return
+
+    const video = document.getElementById(videoId)
+    const source = video?.dataset.browserFrameVideoUrl
+    if (!video || !source) return
+
+    video.src = cacheBustedUrl(source)
+    video.load()
+  },
+
+  loadVideoFallback() {
+    const videoId = this.root?.dataset.videoPreviewId
+    if (!videoId) return
+
+    const video = document.getElementById(videoId)
+    const source = video?.dataset.browserFrameVideoUrl
+    if (!video || !source || video.src) return
+
+    video.src = source
+    video.load()
   },
 }

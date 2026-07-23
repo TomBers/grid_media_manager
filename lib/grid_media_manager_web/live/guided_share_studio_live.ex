@@ -1659,7 +1659,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       <video
         :if={video_asset?(@asset)}
         id={"guided-video-preview-#{@asset.id}"}
-        src={@asset.url}
+        src={if(@asset.kind == "curated_carousel_video", do: nil, else: @asset.url)}
+        data-browser-frame-video-url={
+          if(@asset.kind == "curated_carousel_video", do: @asset.url, else: nil)
+        }
         controls
         playsinline
         preload="metadata"
