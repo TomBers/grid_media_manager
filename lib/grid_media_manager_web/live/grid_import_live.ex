@@ -5,6 +5,8 @@ defmodule GridMediaManagerWeb.GridImportLive do
   alias GridMediaManager.Automation
   alias GridMediaManager.RationalGrid.Client
 
+  @preview_platforms ["instagram", "youtube", "tiktok", "x", "linkedin", "facebook"]
+
   @impl true
   def mount(_params, _session, socket) do
     socket =
@@ -47,37 +49,31 @@ defmodule GridMediaManagerWeb.GridImportLive do
     end
   end
 
-  def handle_event("schedule_grid", %{"source" => source}, socket) do
-    case Automation.schedule_grid(source) do
+  def handle_event("preview_grid", %{"source" => source}, socket) do
+    case Automation.preview_grid(source) do
       {:ok, result} ->
-        automation_flash(socket, result)
-
-      {:error, :buffer_accounts_not_configured} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "Connect all three video and all three text Buffer channels first."
-         )}
+        preview_flash(socket, result)
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Automation stopped: #{inspect(reason)}")}
+        {:noreply, put_flash(socket, :error, "Preview stopped: #{inspect(reason)}")}
     end
   end
 
-  defp automation_flash(socket, %{
-         grid: grid,
-         scheduled: scheduled,
-         failed: failed,
-         scheduled_for: scheduled_for
-       }) do
+  defp preview_flash(socket, %{campaign: campaign, assets: assets}) do
     message =
-      "#{grid.title} scheduled #{length(scheduled)} posts for #{Calendar.strftime(scheduled_for, "%d %b %H:%M UTC")}."
+      "Preview ready for #{campaign.title}: #{length(assets)} media assets generated. Nothing was sent to Buffer."
 
-    message =
-      if failed == [], do: message, else: message <> " #{length(failed)} posts need attention."
+    {:noreply,
+     socket
+     |> put_flash(:info, message)
+     |> push_navigate(to: preview_path(campaign, assets))}
+  end
 
-    {:noreply, put_flash(socket, :info, message)}
+  defp preview_path(campaign, assets) do
+    asset_ids = assets |> Enum.map(& &1.id) |> Enum.uniq() |> Enum.map_join(",", &to_string/1)
+    platforms = Enum.join(@preview_platforms, ",")
+
+    ~p"/campaigns/#{campaign.id}/studio?#{[step: "review", assets: asset_ids, platform: platforms, asset: "all"]}"
   end
 
   @impl true
@@ -135,7 +131,7 @@ defmodule GridMediaManagerWeb.GridImportLive do
                 <div>
                   <h2 class="text-lg font-semibold text-base-content">Browse RationalGrid</h2>
                   <p class="mt-1 text-sm leading-6 text-base-content/60">
-                    Fetch the promotion grid index, then choose whether to import or schedule a specific grid.
+                    Fetch the promotion grid index, then preview a specific package before choosing whether to publish it.
                   </p>
                 </div>
                 <button
@@ -203,13 +199,13 @@ defmodule GridMediaManagerWeb.GridImportLive do
                         Open source <.icon name="hero-arrow-up-right" class="ml-1 size-3" />
                       </a>
                       <button
-                        id={"schedule-grid-#{grid.id}"}
+                        id={"preview-grid-#{grid.id}"}
                         type="button"
-                        phx-click="schedule_grid"
+                        phx-click="preview_grid"
                         phx-value-source={grid.source}
                         class="inline-flex items-center rounded-full bg-sky-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-500 phx-click-loading:cursor-wait phx-click-loading:opacity-60"
                       >
-                        <.icon name="hero-sparkles" class="mr-1.5 size-3.5" /> Schedule package
+                        <.icon name="hero-eye" class="mr-1.5 size-3.5" /> Preview package
                       </button>
                     </div>
                   </div>

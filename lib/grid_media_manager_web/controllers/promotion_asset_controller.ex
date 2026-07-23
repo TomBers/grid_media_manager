@@ -96,9 +96,10 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
         send_resp(conn, 404, "Curated carousel not found")
 
       asset ->
-        slides = Map.get(asset.metadata || %{}, "slides", [])
+        metadata = asset.metadata || %{}
+        slides = Map.get(metadata, "slides", [])
         style = Map.get(params, "style") || asset.style
-        frame_paths = Map.get(asset.metadata || %{}, "browser_frame_paths", %{})
+        frame_paths = Map.get(metadata, "browser_frame_paths", %{})
 
         CarouselVideo.render_curated(campaign, token, slides, style, frame_paths: frame_paths)
         |> send_short_video(conn, "rationalgrid-story-#{token}.mp4")

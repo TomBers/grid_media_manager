@@ -50,6 +50,7 @@ defmodule GridMediaManagerWeb.Router do
         PromotionAssetController,
         :highlight_short_video
 
+    live "/posts/review", PostReviewLive, :show
     live "/campaigns/:id/studio", GuidedShareStudioLive, :show
     live "/campaigns/:id", ShareStudioLive, :show
   end

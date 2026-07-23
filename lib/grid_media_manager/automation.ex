@@ -5,27 +5,48 @@ defmodule GridMediaManager.Automation do
 
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Social.Buffer
+  alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Studio.Workflow
 
-  @video_platforms ["instagram", "youtube", "tiktok"]
-  @text_platforms ["x", "linkedin", "facebook"]
+  @video_platforms Platforms.video_ids()
+  @text_platforms Platforms.text_ids()
 
-  def schedule_grid(source, opts \\ []) when is_binary(source) do
+  @doc """
+  Generates a package for review without contacting Buffer.
+
+  This is the default entry point for the home-page automation action. It imports
+  the grid, creates both media variants and their drafts, and leaves publication
+  to the explicit review action in the studio.
+  """
+  def preview_grid(source, opts \\ []) when is_binary(source) do
+    scheduled_for = Keyword.get(opts, :scheduled_for, next_morning())
+    builder = Keyword.get(opts, :builder, &build_package/1)
+
+    with {:ok, package} <- builder.(source) do
+      {:ok,
+       package
+       |> Map.put(:mode, :preview)
+       |> Map.put(:scheduled_for, scheduled_for)
+       |> Map.put(:scheduled, [])
+       |> Map.put(:failed, [])}
+    end
+  end
+
+  @doc """
+  Publishes a generated package by scheduling its drafts through Buffer.
+
+  Callers should prefer `preview_grid/2` and only invoke this function after the
+  package has been reviewed by a person.
+  """
+  def publish_grid(source, opts \\ []) when is_binary(source) do
     scheduled_for = Keyword.get(opts, :scheduled_for, next_morning())
 
     with :ok <- ensure_buffer_accounts(),
-         {:ok, campaign} <- Campaigns.import_grid(source),
-         {:ok, candidates} <- selected_candidates(campaign),
-         {:ok, video_assets} <- generate_video(campaign, candidates),
-         {:ok, text_assets} <- generate_text(campaign, candidates) do
-      Campaigns.ensure_post_drafts_for_platforms(campaign, video_assets, @video_platforms)
-      Campaigns.ensure_post_drafts_for_platforms(campaign, text_assets, @text_platforms)
-
-      assets = video_assets ++ text_assets
-      asset_ids = MapSet.new(assets, & &1.id)
+         {:ok, package} <- build_package(source) do
+      asset_ids = MapSet.new(package.assets, & &1.id)
 
       drafts =
-        campaign
+        package.campaign
         |> Campaigns.list_post_drafts()
         |> Enum.filter(&(&1.media_asset_id in asset_ids))
         |> Enum.filter(&(&1.platform in (@video_platforms ++ @text_platforms)))
@@ -33,14 +54,37 @@ defmodule GridMediaManager.Automation do
       {scheduled, failed} = schedule_drafts(drafts, scheduled_for)
 
       {:ok,
+       Map.merge(package, %{
+         mode: :live,
+         scheduled_for: scheduled_for,
+         scheduled: scheduled,
+         failed: failed
+       })}
+    end
+  end
+
+  @doc """
+  Compatibility alias for callers that explicitly request live scheduling.
+
+  The web UI uses `preview_grid/2`; this function is intentionally named after
+  the side effect it performs for non-UI callers.
+  """
+  def schedule_grid(source, opts \\ []) when is_binary(source), do: publish_grid(source, opts)
+
+  defp build_package(source) do
+    with {:ok, campaign} <- Campaigns.import_grid(source),
+         {:ok, candidates} <- selected_candidates(campaign),
+         {:ok, video_assets} <- generate_video(campaign, candidates),
+         {:ok, text_assets} <- generate_text(campaign, candidates) do
+      Campaigns.ensure_post_drafts_for_platforms(campaign, video_assets, @video_platforms)
+      Campaigns.ensure_post_drafts_for_platforms(campaign, text_assets, @text_platforms)
+
+      {:ok,
        %{
          campaign: campaign,
          grid: %{source: source, title: campaign.title},
          candidates: candidates,
-         assets: assets,
-         scheduled_for: scheduled_for,
-         scheduled: scheduled,
-         failed: failed
+         assets: video_assets ++ text_assets
        }}
     end
   end

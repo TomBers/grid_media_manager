@@ -79,6 +79,13 @@ defmodule GridMediaManager.Campaigns do
     |> Repo.all()
   end
 
+  def list_all_post_drafts do
+    PostDraft
+    |> order_by([d], asc: d.inserted_at, asc: d.id)
+    |> preload([:media_asset, :campaign])
+    |> Repo.all()
+  end
+
   def ensure_post_drafts_for_platforms(%Campaign{} = campaign, media_assets, platforms)
       when is_list(media_assets) and is_list(platforms) do
     campaign = Repo.get!(Campaign, campaign.id)
@@ -254,6 +261,53 @@ defmodule GridMediaManager.Campaigns do
     |> update_post_draft(%{status: "approved"})
   end
 
+  def approve_post_drafts(ids) when is_list(ids),
+    do: approve_post_drafts_query(ids)
+
+  def set_post_draft_suggestion(id, %DateTime{} = suggested_for) do
+    id
+    |> get_post_draft!()
+    |> update_post_draft(%{suggested_for: DateTime.truncate(suggested_for, :second)})
+  end
+
+  def delete_post_drafts(ids) when is_list(ids) do
+    ids = ids |> Enum.map(&parse_integer/1) |> Enum.reject(&is_nil/1)
+
+    if ids == [] do
+      {:ok, 0}
+    else
+      Repo.transaction(fn ->
+        {count, _rows} =
+          PostDraft
+          |> where([d], d.id in ^ids)
+          |> where([d], d.status in ["draft", "copied", "failed"])
+          |> Repo.delete_all()
+
+        count
+      end)
+    end
+  end
+
+  defp approve_post_drafts_query(ids) do
+    ids = ids |> Enum.map(&parse_integer/1) |> Enum.reject(&is_nil/1)
+
+    if ids == [] do
+      {:ok, []}
+    else
+      Repo.transaction(fn ->
+        PostDraft
+        |> where([d], d.id in ^ids)
+        |> where([d], d.status in ["draft", "copied"])
+        |> Repo.all()
+        |> Enum.map(fn draft ->
+          draft
+          |> PostDraft.changeset(%{status: "approved"})
+          |> Repo.update!()
+        end)
+      end)
+    end
+  end
+
   def schedule_post_draft(id, scheduled_for) do
     draft = get_post_draft_with_asset!(id)
     campaign = get_campaign!(draft.campaign_id)
@@ -318,7 +372,7 @@ defmodule GridMediaManager.Campaigns do
       text: campaign.title,
       node_id: nil,
       highlight_id: nil,
-      recommended_platforms: ["instagram", "linkedin"],
+      recommended_platforms: Platforms.text_ids(),
       style: style,
       source_type: "curated_carousel",
       source_id: token,

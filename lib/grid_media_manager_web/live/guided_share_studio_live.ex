@@ -37,7 +37,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     %{
       id: "landscape",
       label: "Feed hook",
-      size: "1200 × 630 · X / Bluesky",
+      size: "1200 × 630 · X",
       description: "A concise landscape hook for fast feeds, links, and reposts.",
       icon: "hero-photo"
     },
@@ -92,7 +92,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     restored_assets = restored_output_assets(campaign, params)
     restored_asset_ids = MapSet.new(restored_assets, & &1.id)
     restored_step = if restored_assets == [], do: "curate", else: "review"
-    restored_platforms = restore_platforms(params)
     restored_asset_filter = restore_asset_filter(params, restored_asset_ids)
     restored_video_only? = restored_assets != [] and Enum.all?(restored_assets, &video_asset?/1)
 
@@ -102,9 +101,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         else: "text"
 
     restored_platforms =
-      if restored_content_mode == "text",
-        do: text_platforms(restored_platforms),
-        else: restored_platforms
+      if restored_assets == [],
+        do: Platforms.video_ids(),
+        else: platforms_for_assets(restored_assets)
 
     previous_packages = previous_output_packages(campaign)
     selected_keys = Workflow.default_selection(candidates)
@@ -123,7 +122,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:candidate_filters, @candidate_filters)
       |> assign(:formats, @formats)
       |> assign(:card_styles, ShareCard.styles())
-      |> assign(:platforms, Platforms.all())
       |> assign(:all_candidates, candidates)
       |> assign(:candidate_by_key, Map.new(candidates, &{&1.key, &1}))
       |> assign(:candidate_filter, "all")
@@ -145,6 +143,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:output_video_only?, restored_video_only?)
       |> assign(:review_draft_count, 0)
       |> assign(:review_schedulable_count, 0)
+      |> assign(:preview_mode?, true)
       |> assign(:bulk_schedule_form, to_form(%{"scheduled_for" => ""}, as: :bulk_schedule))
       |> assign(:previous_package_count, length(previous_packages))
       |> assign(:generation_error, nil)
@@ -241,13 +240,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     {:noreply,
      socket
      |> assign(:selected_format, format)
-     |> assign(:content_mode, content_mode)}
+     |> assign(:content_mode, content_mode)
+     |> assign(:selected_platforms, platforms_for_mode(content_mode))}
   end
 
   def handle_event("select_content_mode", %{"mode" => mode}, socket)
       when mode in ["video", "text"] do
     selected_format = if mode == "video", do: "story_video", else: "portrait"
-    selected_platforms = content_mode_platforms(socket.assigns.selected_platforms, mode)
+    selected_platforms = platforms_for_mode(mode)
 
     {:noreply,
      socket
@@ -342,34 +342,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     {:noreply, socket}
   end
 
-  def handle_event("toggle_platform", %{"platform" => platform}, socket) do
-    if platform in Platforms.ids() do
-      selected_platforms =
-        if platform in socket.assigns.selected_platforms do
-          List.delete(socket.assigns.selected_platforms, platform)
-        else
-          socket.assigns.selected_platforms ++ [platform]
-        end
+  def handle_event("toggle_platform", _params, socket), do: {:noreply, socket}
 
-      if selected_platforms == [] do
-        {:noreply, put_flash(socket, :error, "Choose at least one channel for this package.")}
-      else
-        socket =
-          socket
-          |> assign(:selected_platforms, selected_platforms)
-          |> ensure_review_channel_drafts(platform)
-          |> refresh_review_drafts()
-          |> maybe_patch_review_url()
-
-        {:noreply, socket}
-      end
-    else
-      {:noreply, socket}
-    end
-  end
-
-  def handle_event("select_platform", params, socket),
-    do: handle_event("toggle_platform", params, socket)
+  def handle_event("select_platform", _params, socket), do: {:noreply, socket}
 
   def handle_event("select_output_asset", %{"id" => asset_id}, socket) do
     asset_id = valid_output_asset_filter(socket.assigns.output_asset_ids, asset_id)
@@ -652,12 +627,21 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </div>
               </div>
 
-              <.link
-                navigate={~p"/campaigns/#{@campaign.id}"}
-                class="inline-flex items-center justify-center rounded-2xl border border-base-content/15 bg-base-100 px-4 py-3 text-sm font-semibold text-base-content/70 shadow-sm transition hover:-translate-y-0.5 hover:bg-base-200"
-              >
-                Open classic studio <.icon name="hero-arrow-up-right" class="ml-2 size-4" />
-              </.link>
+              <div class="flex flex-wrap justify-end gap-2">
+                <.link
+                  id="open-post-review"
+                  navigate={~p"/posts/review"}
+                  class="inline-flex items-center justify-center rounded-2xl bg-base-content px-4 py-3 text-sm font-semibold text-base-100 shadow-sm transition hover:-translate-y-0.5 hover:bg-base-content/85"
+                >
+                  Review proposed posts <.icon name="hero-queue-list" class="ml-2 size-4" />
+                </.link>
+                <.link
+                  navigate={~p"/campaigns/#{@campaign.id}"}
+                  class="inline-flex items-center justify-center rounded-2xl border border-base-content/15 bg-base-100 px-4 py-3 text-sm font-semibold text-base-content/70 shadow-sm transition hover:-translate-y-0.5 hover:bg-base-200"
+                >
+                  Open classic studio <.icon name="hero-arrow-up-right" class="ml-2 size-4" />
+                </.link>
+              </div>
             </div>
 
             <div class="border-t border-base-content/10 bg-base-200/35 px-4 py-4 sm:px-6 lg:px-10">
@@ -1131,7 +1115,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                       One combined vertical video
                     </span>
                     <span class="mt-2 block text-xs leading-5 text-base-content/55">
-                      Automatically ready for Instagram Reels, YouTube Shorts, and TikTok.
+                      Automatically ready for TikTok, Instagram, and YouTube.
                     </span>
                   </button>
 
@@ -1158,7 +1142,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                       Ordered multi-image carousel
                     </span>
                     <span class="mt-2 block text-xs leading-5 text-base-content/55">
-                      Buffer-ready Instagram carousel with the RationalGrid CTA as the final image.
+                      Buffer-ready text cards for X, LinkedIn, and Facebook with the RationalGrid CTA last.
                     </span>
                   </button>
                 </div>
@@ -1333,19 +1317,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     {length(@selected_platforms)} selected
                   </span>
                 </div>
-                <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                  <button
-                    :for={platform <- @platforms}
-                    id={"generate-platform-#{platform.id}"}
-                    type="button"
-                    phx-click="toggle_platform"
-                    phx-value-platform={platform.id}
-                    aria-pressed={platform.id in @selected_platforms}
-                    class={platform_tab_class(platform.id in @selected_platforms)}
-                  >
-                    <.icon name={platform_icon(platform.id)} class="mx-auto mb-1 size-4" />
-                    <span class="block text-xs font-bold">{platform.label}</span>
-                  </button>
+                <div
+                  id="generate-platform-summary"
+                  class="mt-4 rounded-2xl bg-base-100 px-4 py-3 text-sm font-semibold text-base-content"
+                >
+                  {destination_summary(@selected_platforms)}
                 </div>
               </div>
 
@@ -1418,15 +1394,24 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   </p>
                 </div>
               </div>
-              <button
-                id="revise-package"
-                type="button"
-                phx-click="go_to_step"
-                phx-value-step="design"
-                class="inline-flex shrink-0 items-center justify-center rounded-2xl border border-base-content/15 bg-base-100 px-4 py-2.5 text-sm font-semibold text-base-content/65 transition hover:-translate-y-0.5 hover:bg-base-200"
-              >
-                <.icon name="hero-pencil-square" class="mr-2 size-4" /> Revise package
-              </button>
+              <div class="flex shrink-0 flex-wrap justify-end gap-2">
+                <.link
+                  id="review-all-proposed-posts"
+                  navigate={~p"/posts/review"}
+                  class="inline-flex items-center justify-center rounded-2xl bg-base-content px-4 py-2.5 text-sm font-semibold text-base-100 transition hover:-translate-y-0.5 hover:bg-base-content/85"
+                >
+                  <.icon name="hero-queue-list" class="mr-2 size-4" /> Review all posts
+                </.link>
+                <button
+                  id="revise-package"
+                  type="button"
+                  phx-click="go_to_step"
+                  phx-value-step="design"
+                  class="inline-flex items-center justify-center rounded-2xl border border-base-content/15 bg-base-100 px-4 py-2.5 text-sm font-semibold text-base-content/65 transition hover:-translate-y-0.5 hover:bg-base-200"
+                >
+                  <.icon name="hero-pencil-square" class="mr-2 size-4" /> Revise package
+                </button>
+              </div>
             </div>
 
             <p
@@ -1436,6 +1421,18 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
             >
               {@generation_error}
             </p>
+
+            <div
+              :if={@preview_mode?}
+              id="preview-only-notice"
+              class="flex items-start gap-3 rounded-2xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-900 dark:text-sky-100"
+            >
+              <.icon name="hero-eye" class="mt-0.5 size-5 shrink-0 text-sky-600 dark:text-sky-300" />
+              <p>
+                <span class="font-bold">Preview mode.</span>
+                Nothing has been sent to Buffer. Review the media and copy below; scheduling is the only action that creates live social posts.
+              </p>
+            </div>
 
             <div class="space-y-6">
               <div class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 md:p-6">
@@ -1502,7 +1499,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                       <%= if @selected_output_asset_id == "all" do %>
                         Showing copy across all visuals. Select one above to focus on a single visual.
                       <% else %>
-                        The drafts below belong to the visual selected above. Each channel has its own copy, limits, and scheduling controls.
+                        The drafts below belong to the visual selected above. The same reviewed copy will be posted to TikTok, Instagram, and YouTube.
                       <% end %>
                     <% end %>
                   </p>
@@ -1521,27 +1518,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
                 <div
                   :if={@content_mode == "video"}
-                  id="guided-platform-tabs"
-                  class="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6"
+                  id="guided-platform-summary"
+                  class="mt-5 rounded-2xl border border-base-content/10 bg-base-200/50 px-4 py-3 text-sm font-semibold text-base-content"
                 >
-                  <button
-                    :for={platform <- @platforms}
-                    id={"guided-platform-#{platform.id}"}
-                    type="button"
-                    phx-click="toggle_platform"
-                    phx-value-platform={platform.id}
-                    aria-pressed={platform.id in @selected_platforms}
-                    class={platform_tab_class(platform.id in @selected_platforms)}
-                  >
-                    <span class="mb-1 inline-flex items-center gap-1 text-[0.65rem] font-bold uppercase tracking-wide opacity-70">
-                      <.icon name={platform_icon(platform.id)} class="size-3.5" />
-                      {if(platform.id in @selected_platforms, do: "Selected", else: "Add")}
-                    </span>
-                    <span class="block text-sm font-bold">{platform.label}</span>
-                    <span class="block text-[0.65rem] text-current/55">
-                      {platform.max_chars || "long-form"}
-                    </span>
-                  </button>
+                  {destination_summary(@selected_platforms)}
                 </div>
 
                 <div class="mt-4 flex items-center justify-between gap-3 text-xs text-base-content/50">
@@ -1561,20 +1541,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                       id="guided-bulk-scheduled-for"
                       field={@bulk_schedule_form[:scheduled_for]}
                       type="datetime-local"
-                      label={
-                        if(@content_mode == "text",
-                          do: "Publish X, LinkedIn, and Facebook posts at (UTC)",
-                          else: "Publish all selected posts at (UTC)"
-                        )
-                      }
+                      label={schedule_label(@selected_platforms)}
                       required
                     />
                     <p class="mt-1 text-xs text-base-content/50">
-                      {if(@content_mode == "text",
-                        do: "X, LinkedIn, and Facebook use the text Buffer account.",
-                        else:
-                          "X uses image assets; Instagram and YouTube Shorts use video assets when available."
-                      )}
+                      {schedule_help(@selected_platforms)}
                     </p>
                     <p
                       :if={not buffer_ready_for_platforms?(@selected_platforms)}
@@ -1587,10 +1558,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     id="guided-schedule-selected-drafts"
                     type="submit"
                     disabled={@review_schedulable_count == 0}
+                    phx-confirm="This will create live posts in Buffer for the selected channels. Continue only after reviewing the media and copy."
                     class="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-lg shadow-emerald-950/15 transition hover:-translate-y-0.5 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <.icon name="hero-calendar-days" class="mr-1.5 size-4" />
-                    Schedule {@review_schedulable_count} posts
+                    Publish {@review_schedulable_count} posts
                   </button>
                 </.form>
 
@@ -2113,8 +2085,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp complete_generation(socket, %{assets: assets, errors: errors}) do
     output_asset_ids = assets |> Enum.map(& &1.id) |> MapSet.new()
 
-    selected_platforms =
-      suggested_platforms(socket.assigns.selected_platforms, socket.assigns.selected_format)
+    selected_platforms = platforms_for_assets(assets)
 
     Campaigns.ensure_post_drafts_for_platforms(
       socket.assigns.campaign,
@@ -2214,12 +2185,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp previous_asset_label(%MediaAsset{}), do: "image"
 
   defp previous_package_platform(assets) do
-    cond do
-      Enum.any?(assets, &("instagram" in (&1.recommended_platforms || []))) -> "instagram"
-      Enum.any?(assets, &("linkedin" in (&1.recommended_platforms || []))) -> "linkedin"
-      Enum.any?(assets, &("x" in (&1.recommended_platforms || []))) -> "x"
-      true -> "linkedin"
-    end
+    assets
+    |> platforms_for_assets()
+    |> Enum.join(",")
   end
 
   defp refresh_previous_packages(socket) do
@@ -2251,18 +2219,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       _result -> nil
     end
   end
-
-  defp restore_platforms(%{"platform" => platform}) when is_binary(platform) do
-    platforms =
-      platform
-      |> String.split(",", trim: true)
-      |> Enum.filter(&(&1 in Platforms.ids()))
-      |> Enum.uniq()
-
-    if platforms == [], do: ["instagram", "youtube", "tiktok"], else: platforms
-  end
-
-  defp restore_platforms(_params), do: ["instagram", "youtube", "tiktok"]
 
   defp restore_asset_filter(%{"asset" => asset_id}, asset_ids),
     do: valid_output_asset_filter(asset_ids, asset_id)
@@ -2317,7 +2273,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> Enum.filter(&review_draft?(socket, &1))
       |> deduplicate_review_drafts()
 
+    preview_mode? = Enum.all?(drafts, &(&1.status not in ["scheduled", "published"]))
+
     socket
+    |> assign(:preview_mode?, preview_mode?)
     |> assign(:review_draft_count, length(drafts))
     |> assign(
       :review_schedulable_count,
@@ -2327,20 +2286,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp schedulable_drafts(drafts) do
-    has_video? = Enum.any?(drafts, &video_asset?(&1.media_asset))
-
     Enum.filter(drafts, fn draft ->
       Buffer.account_for(draft.platform) != nil and
-        case draft.platform do
-          "x" ->
-            not video_asset?(draft.media_asset)
-
-          platform when platform in ["instagram", "youtube", "tiktok"] ->
-            not has_video? or video_asset?(draft.media_asset)
-
-          _ ->
-            true
-        end
+        if draft.platform in Platforms.video_ids(),
+          do: video_asset?(draft.media_asset),
+          else: not video_asset?(draft.media_asset)
     end)
   end
 
@@ -2364,23 +2314,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       end
 
     {media_score, if(status == "scheduled", do: 1, else: 0)}
-  end
-
-  defp ensure_review_channel_drafts(socket, platform) do
-    if socket.assigns.output_asset_count > 0 do
-      assets =
-        socket.assigns.campaign
-        |> Campaigns.list_media_assets()
-        |> Enum.filter(&MapSet.member?(socket.assigns.output_asset_ids, &1.id))
-
-      Campaigns.ensure_post_drafts_for_platforms(
-        socket.assigns.campaign,
-        assets,
-        [platform]
-      )
-    end
-
-    socket
   end
 
   defp review_draft?(socket, draft) do
@@ -2509,25 +2442,58 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp pexels_error_message(_reason), do: "Pexels search is unavailable right now."
 
-  defp suggested_platforms(["linkedin"], "portrait"), do: ["instagram"]
-  defp suggested_platforms(["linkedin"], "story_video"), do: ["instagram", "youtube", "tiktok"]
-  defp suggested_platforms(["linkedin"], "carousel"), do: ["instagram", "youtube"]
-  defp suggested_platforms(["linkedin"], "combined_carousel"), do: ["instagram", "youtube"]
-  defp suggested_platforms(platforms, _format), do: platforms
+  defp platforms_for_mode("text"), do: Platforms.text_ids()
+  defp platforms_for_mode("video"), do: Platforms.video_ids()
 
-  defp content_mode_platforms(["instagram", "youtube", "tiktok"], "text"), do: ["instagram"]
+  defp platforms_for_assets(assets) do
+    has_video? = Enum.any?(assets, &video_asset?/1)
+    has_text? = Enum.any?(assets, &(not video_asset?(&1)))
 
-  defp content_mode_platforms(platforms, "video")
-       when platforms in [
-              ["x", "linkedin"],
-              ["x", "linkedin", "facebook"],
-              ["x", "linkedin", "bluesky"]
-            ],
-       do: ["instagram", "youtube", "tiktok"]
+    cond do
+      has_video? and has_text? -> Platforms.text_ids() ++ Platforms.video_ids()
+      has_video? -> Platforms.video_ids()
+      true -> Platforms.text_ids()
+    end
+  end
 
-  defp content_mode_platforms(platforms, _mode), do: platforms
+  defp destination_summary(platforms) do
+    cond do
+      platforms == Platforms.text_ids() ->
+        "Text cards will be posted to X, LinkedIn, and Facebook with the same copy."
 
-  defp text_platforms(_platforms), do: ["instagram"]
+      platforms == Platforms.video_ids() ->
+        "The video will be posted to TikTok, Instagram, and YouTube with the same copy."
+
+      true ->
+        "Text cards will be posted to X, LinkedIn, and Facebook; videos will be posted to TikTok, Instagram, and YouTube."
+    end
+  end
+
+  defp schedule_label(platforms) do
+    cond do
+      platforms == Platforms.text_ids() ->
+        "Publish X, LinkedIn, and Facebook posts at (UTC)"
+
+      platforms == Platforms.video_ids() ->
+        "Publish TikTok, Instagram, and YouTube posts at (UTC)"
+
+      true ->
+        "Publish text and video posts at (UTC)"
+    end
+  end
+
+  defp schedule_help(platforms) do
+    cond do
+      platforms == Platforms.text_ids() ->
+        "X, LinkedIn, and Facebook use the text Buffer accounts."
+
+      platforms == Platforms.video_ids() ->
+        "TikTok, Instagram, and YouTube use the generated video asset."
+
+      true ->
+        "Text and video posts use their matching Buffer accounts and assets."
+    end
+  end
 
   defp maybe_text_quote_candidates(candidates, "text", all_candidates) do
     quote_candidates = Enum.filter(candidates, &quote_candidate?/1)
@@ -2601,6 +2567,24 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp positive_integer(_value), do: {:error, :invalid_index}
+
+  defp carousel_selected_slide_indexes(%MediaAsset{
+         kind: "curated_carousel_video",
+         metadata: metadata
+       }) do
+    metadata = metadata || %{}
+
+    case Map.get(metadata, "selected_slide_indexes") do
+      indexes when is_list(indexes) ->
+        indexes
+
+      _ ->
+        case length(Map.get(metadata, "slides", [])) do
+          0 -> []
+          count -> Enum.to_list(1..count)
+        end
+    end
+  end
 
   defp carousel_selected_slide_indexes(%MediaAsset{metadata: metadata}) do
     metadata = metadata || %{}
@@ -2920,11 +2904,13 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp curated_carousel_slide_urls(%MediaAsset{kind: "curated_carousel_video"} = asset) do
-    count = Map.get(asset.metadata || %{}, "slide_count", 1)
+    metadata = asset.metadata || %{}
+    count = Map.get(metadata, "slide_count", 1)
+    indexes = Map.get(metadata, "selected_slide_indexes") || Enum.to_list(1..count)
     token = URI.encode(to_string(asset.source_id), &URI.char_unreserved?/1)
     query = URI.encode_query(%{style: asset.style})
 
-    Enum.map(1..count, fn index ->
+    Enum.map(indexes, fn index ->
       {"/campaigns/#{asset.campaign_id}/curated-carousels/#{token}/slides/#{index}/image.png?#{query}",
        index}
     end)
@@ -3008,26 +2994,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       )
     ]
   end
-
-  defp platform_tab_class(active?) do
-    [
-      "rounded-2xl px-2 py-2.5 text-center transition hover:-translate-y-0.5",
-      if(active?,
-        do: "bg-base-content text-base-100 shadow-lg",
-        else: "border border-base-content/10 bg-base-100 text-base-content/60 hover:bg-base-200"
-      )
-    ]
-  end
-
-  defp platform_icon("x"), do: "hero-chat-bubble-left-ellipsis"
-  defp platform_icon("instagram"), do: "hero-camera"
-  defp platform_icon("youtube"), do: "hero-play-circle"
-  defp platform_icon("tiktok"), do: "hero-musical-note"
-  defp platform_icon("linkedin"), do: "hero-briefcase"
-  defp platform_icon("facebook"), do: "hero-user-group"
-  defp platform_icon("bluesky"), do: "hero-cloud"
-  defp platform_icon("substack"), do: "hero-envelope"
-  defp platform_icon(_platform), do: "hero-globe-alt"
 
   defp character_count_class(true),
     do: "rounded-full bg-red-500/10 px-2.5 py-1 text-xs font-bold text-red-700 dark:text-red-200"

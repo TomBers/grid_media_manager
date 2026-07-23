@@ -39,9 +39,17 @@ defmodule GridMediaManager.Social.Platforms do
     %{id: "substack", label: "Substack", max_chars: nil, style: "Newsletter intro or note"}
   ]
 
-  def all, do: @platforms
+  @text_ids ["x", "linkedin", "facebook"]
+  @video_ids ["tiktok", "instagram", "youtube"]
+  @supported_ids @text_ids ++ @video_ids
 
-  def ids, do: Enum.map(@platforms, & &1.id)
+  def all, do: Enum.map(@supported_ids, &get/1)
+
+  def ids, do: @supported_ids
+
+  def text_ids, do: @text_ids
+
+  def video_ids, do: @video_ids
 
   def get(id) when is_binary(id), do: Enum.find(@platforms, &(&1.id == id))
 

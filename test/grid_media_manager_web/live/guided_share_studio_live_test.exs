@@ -15,6 +15,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
     assert has_element?(view, "#guided-share-studio")
+    assert has_element?(view, "#open-post-review[href='/posts/review']", "Review proposed posts")
     assert has_element?(view, "#stage-curate")
     assert has_element?(view, "#studio-progress")
     assert has_element?(view, "#content-candidates [id^='select-aspect-question-']")
@@ -120,7 +121,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
            ]
 
     assert Enum.any?(
-             Campaigns.list_post_drafts(campaign, platform: "instagram"),
+             Campaigns.list_post_drafts(campaign, platform: "x"),
              &(&1.media_asset_id == carousel.id)
            )
   end
@@ -162,7 +163,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     [asset] = Campaigns.list_media_assets(campaign)
 
     resume_path =
-      ~p"/campaigns/#{campaign.id}/studio?#{[step: "review", assets: Integer.to_string(asset.id), platform: "instagram", asset: "all"]}"
+      ~p"/campaigns/#{campaign.id}/studio?#{[step: "review", assets: Integer.to_string(asset.id), platform: "x,linkedin,facebook", asset: "all"]}"
 
     assert_patch(view, resume_path)
 
@@ -192,7 +193,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     [draft] =
       Campaigns.list_post_drafts(campaign,
-        platform: "instagram",
+        platform: "x",
         media_asset_id: asset.id
       )
 

@@ -5,6 +5,7 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
 
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.Social.Platforms
 
   test "renders grid summary, media assets, and draft composer", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(sample_payload(), "res.json")
@@ -128,7 +129,7 @@ defmodule GridMediaManagerWeb.ShareStudioLiveTest do
     assert Enum.any?(
              Campaigns.list_media_assets(campaign),
              &(&1.kind == "key_node_card" and &1.metadata["format"] == "linkedin" and
-                 &1.recommended_platforms == ["linkedin"])
+                 &1.recommended_platforms == Platforms.text_ids())
            )
 
     assert has_element?(view, "#generate-key-node-linkedin-image-1[disabled]")

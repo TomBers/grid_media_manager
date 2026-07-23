@@ -3,6 +3,15 @@ defmodule GridMediaManager.Social.PlatformsTest do
 
   alias GridMediaManager.Social.Platforms
 
+  test "exposes only the supported text and video platform groups" do
+    assert Platforms.text_ids() == ["x", "linkedin", "facebook"]
+    assert Platforms.video_ids() == ["tiktok", "instagram", "youtube"]
+    assert Platforms.ids() == Platforms.text_ids() ++ Platforms.video_ids()
+    assert Enum.map(Platforms.all(), & &1.id) == Platforms.ids()
+    refute "bluesky" in Platforms.ids()
+    refute "substack" in Platforms.ids()
+  end
+
   test "X character counts exclude hashtags" do
     text = "A post about maps #RationalGrid #Argument_Mapping"
 

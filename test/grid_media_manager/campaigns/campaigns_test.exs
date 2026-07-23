@@ -6,6 +6,7 @@ defmodule GridMediaManager.CampaignsTest do
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.Promotion.SlideSequence
   alias GridMediaManager.RationalGrid.MediaPayload
+  alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Studio.Workflow
 
   test "exposes distinct style presets for different editorial moods" do
@@ -147,6 +148,25 @@ defmodule GridMediaManager.CampaignsTest do
 
     assert ShareCard.curated_carousel_selected_slides(slides, [3, 1, 5]) ==
              [Enum.at(slides, 2), Enum.at(slides, 0), Enum.at(slides, 4)]
+  end
+
+  test "keeps every carousel frame in video metadata by default" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "video-selection")
+
+    slides = [
+      %{"title" => "Opening", "body" => ""},
+      %{"title" => "Second", "body" => ""},
+      %{"title" => "Third", "body" => ""},
+      %{"title" => "Fourth", "body" => ""},
+      %{"label" => "Learn more", "title" => "Continue on RationalGrid.ai", "body" => ""}
+    ]
+
+    attrs = CarouselVideo.curated_asset_attr(campaign, "video-token", slides, "editorial_dark")
+
+    assert attrs.metadata["slide_count"] == 5
+    assert attrs.metadata["duration_seconds"] > 0
+    refute Map.has_key?(attrs.metadata, "selected_slide_indexes")
+    assert attrs.url =~ "v=17"
   end
 
   test "stores browser-rendered carousel frames for the selected slide" do
@@ -520,11 +540,18 @@ defmodule GridMediaManager.CampaignsTest do
 
       drafts = Campaigns.list_post_drafts(campaign)
 
-      assert Enum.any?(
-               drafts,
-               &(&1.platform == "linkedin" and &1.angle == "question_quote" and
-                   String.contains?(&1.body, long_question))
-             )
+      question_asset_ids = MapSet.new(question_assets, & &1.id)
+
+      question_drafts =
+        Enum.filter(
+          drafts,
+          &(MapSet.member?(question_asset_ids, &1.media_asset_id) and &1.angle == "question_quote")
+        )
+
+      assert Enum.sort(Enum.map(question_drafts, & &1.platform)) ==
+               Enum.sort(Platforms.text_ids() ++ Platforms.text_ids())
+
+      assert Enum.uniq_by(question_drafts, & &1.body) |> length() == 1
     end
 
     test "generates platform-specific question and highlight cards" do
@@ -544,7 +571,7 @@ defmodule GridMediaManager.CampaignsTest do
 
       assert question_asset.metadata["format"] == "linkedin"
       assert question_asset.metadata["width"] == 1200
-      assert question_asset.recommended_platforms == ["linkedin"]
+      assert question_asset.recommended_platforms == Platforms.text_ids()
       assert question_asset.url =~ "format=linkedin"
 
       assert {:ok, highlight_asset} =
@@ -552,7 +579,7 @@ defmodule GridMediaManager.CampaignsTest do
 
       assert highlight_asset.metadata["format"] == "portrait"
       assert highlight_asset.metadata["height"] == 1350
-      assert highlight_asset.recommended_platforms == ["instagram"]
+      assert highlight_asset.recommended_platforms == Platforms.text_ids()
       assert highlight_asset.url =~ "format=portrait"
     end
 
@@ -580,7 +607,7 @@ defmodule GridMediaManager.CampaignsTest do
         assert video.mime_type == "video/mp4"
         assert video.metadata["width"] == 1080
         assert video.metadata["height"] == 1920
-        assert video.recommended_platforms == ["youtube", "instagram"]
+        assert video.recommended_platforms == Platforms.video_ids()
       else
         result =
           Workflow.generate(campaign, [question_candidate],
@@ -619,7 +646,7 @@ defmodule GridMediaManager.CampaignsTest do
                "/campaigns/#{campaign.id}/nodes/1/share-card.png?style=warm_paper&format=portrait"
 
       assert portrait_asset.metadata["format"] == "portrait"
-      assert portrait_asset.recommended_platforms == ["instagram"]
+      assert portrait_asset.recommended_platforms == Platforms.text_ids()
 
       assert {:ok, linkedin_asset} =
                Campaigns.generate_key_node_asset(campaign, "1", "warm_paper", "linkedin")
@@ -630,7 +657,7 @@ defmodule GridMediaManager.CampaignsTest do
       assert linkedin_asset.metadata["format"] == "linkedin"
       assert linkedin_asset.metadata["width"] == 1200
       assert linkedin_asset.metadata["height"] == 1200
-      assert linkedin_asset.recommended_platforms == ["linkedin"]
+      assert linkedin_asset.recommended_platforms == Platforms.text_ids()
 
       node = ShareCard.find_key_node(campaign, "1")
       assert ShareCard.node_reading_image_svg(campaign, node, "warm_paper") =~ "width=\"1080\""
@@ -676,13 +703,14 @@ defmodule GridMediaManager.CampaignsTest do
       assert carousel.metadata["format"] == "curated_carousel"
       assert carousel.metadata["slide_count"] == length(carousel.metadata["slides"])
       assert carousel.metadata["slide_count"] >= length(candidates) + 2
-      assert carousel.recommended_platforms == ["instagram", "linkedin"]
+      assert carousel.recommended_platforms == Platforms.text_ids()
 
       if CarouselVideo.available?() do
         assert result.errors == []
         video = Enum.find(result.assets, &(&1.kind == "curated_carousel_video"))
         assert video
         assert video.metadata["slide_count"] == carousel.metadata["slide_count"]
+        refute Map.has_key?(video.metadata, "selected_slide_indexes")
         assert video.metadata["background_audio"]
       else
         assert result.errors != []
@@ -699,7 +727,7 @@ defmodule GridMediaManager.CampaignsTest do
       assert binary_part(png, 0, 8) == <<137, 80, 78, 71, 13, 10, 26, 10>>
 
       assert Enum.any?(
-               Campaigns.list_post_drafts(campaign, platform: "instagram"),
+               Campaigns.list_post_drafts(campaign, platform: "x"),
                &(&1.media_asset_id == carousel.id)
              )
     end
@@ -713,7 +741,7 @@ defmodule GridMediaManager.CampaignsTest do
       assert length(assets) >= 2
       assert Enum.all?(assets, &(&1.kind == "key_node_carousel_slide"))
       assert Enum.at(assets, 0).metadata["slide_index"] == 1
-      assert Enum.at(assets, 0).recommended_platforms == ["instagram", "linkedin"]
+      assert Enum.at(assets, 0).recommended_platforms == Platforms.text_ids()
       assert Enum.at(assets, 0).mime_type == "image/png"
 
       assert Enum.at(assets, 0).text ==

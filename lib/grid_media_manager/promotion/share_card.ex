@@ -13,6 +13,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Promotion.Markdown
   alias GridMediaManager.RationalGrid.MediaPayload
+  alias GridMediaManager.Social.Platforms
 
   @image_width 1200
   @image_height 630
@@ -124,7 +125,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       text: nil,
       node_id: nil,
       highlight_id: nil,
-      recommended_platforms: ["x", "linkedin", "substack", "bluesky"],
+      recommended_platforms: Platforms.text_ids(),
       style: style,
       source_type: "grid",
       source_id: to_string(campaign.id),
@@ -825,7 +826,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         text: slide.body,
         node_id: node_id,
         highlight_id: nil,
-        recommended_platforms: if(index == 1, do: ["instagram", "linkedin"], else: []),
+        recommended_platforms: if(index == 1, do: Platforms.text_ids(), else: []),
         style: style,
         source_type: "key_node_carousel",
         source_id: "#{node_id}|#{index}",
@@ -1913,7 +1914,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       text: text,
       node_id: question |> get("node_id") |> string_value(),
       highlight_id: nil,
-      recommended_platforms: ["youtube", "instagram"],
+      recommended_platforms: Platforms.video_ids(),
       style: style,
       source_type: "question_video",
       source_id: id,
@@ -1940,7 +1941,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       text: highlight_text(highlight),
       node_id: highlight_node_id(highlight),
       highlight_id: highlight_id,
-      recommended_platforms: ["youtube", "instagram"],
+      recommended_platforms: Platforms.video_ids(),
       style: style,
       source_type: "highlight_video",
       source_id: Integer.to_string(highlight_id),
@@ -2316,9 +2317,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   defp normalize_node_format(format) when format in ["portrait", "linkedin"], do: format
   defp normalize_node_format(_format), do: "landscape"
 
-  defp key_node_platforms("portrait"), do: ["instagram"]
-  defp key_node_platforms("linkedin"), do: ["linkedin"]
-  defp key_node_platforms(_format), do: ["x", "bluesky", "linkedin"]
+  defp key_node_platforms(_format), do: Platforms.text_ids()
 
   defp key_node_format_metadata("portrait") do
     %{"format" => "portrait", "platform" => "instagram", "width" => 1080, "height" => 1350}
@@ -2337,10 +2336,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp normalize_quote_format(_format), do: "landscape"
 
-  defp quote_platforms("linkedin"), do: ["linkedin"]
-  defp quote_platforms("portrait"), do: ["instagram"]
-  defp quote_platforms("short"), do: ["youtube", "instagram"]
-  defp quote_platforms(_format), do: ["x", "bluesky", "linkedin"]
+  defp quote_platforms("short"), do: Platforms.video_ids()
+  defp quote_platforms(_format), do: Platforms.text_ids()
 
   defp quote_format_metadata("linkedin") do
     %{"format" => "linkedin", "platform" => "linkedin", "width" => 1200, "height" => 1200}

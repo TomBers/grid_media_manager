@@ -86,6 +86,49 @@ defmodule GridMediaManager.Social.TemplatesTest do
     assert video_copy =~ "Pause on this question"
   end
 
+  test "uses identical copy across each supported platform group" do
+    campaign = campaign()
+
+    text_asset = %MediaAsset{
+      id: 1,
+      title: "A useful highlight",
+      kind: "highlight_card",
+      text: "The important idea is easier to see when the pieces are connected."
+    }
+
+    video_asset = %MediaAsset{
+      id: 2,
+      title: "A useful highlight",
+      kind: "highlight_video",
+      mime_type: "video/mp4",
+      text: "The important idea is easier to see when the pieces are connected."
+    }
+
+    text_copies =
+      Enum.map(Platforms.text_ids(), &Templates.body(campaign, text_asset, &1, "highlight"))
+
+    video_copies =
+      Enum.map(Platforms.video_ids(), &Templates.body(campaign, video_asset, &1, "highlight"))
+
+    assert Enum.uniq(text_copies) |> length() == 1
+    assert Enum.uniq(video_copies) |> length() == 1
+  end
+
+  test "creates drafts only for the matching platform group for each asset" do
+    campaign = campaign()
+
+    image = %MediaAsset{id: 1, kind: "highlight_card", mime_type: "image/png", text: "A quote"}
+    video = %MediaAsset{id: 2, kind: "highlight_video", mime_type: "video/mp4", text: "A quote"}
+
+    drafts = Templates.draft_attrs_for_platforms(campaign, [image, video], Platforms.ids())
+
+    assert drafts |> Enum.filter(&(&1.media_asset_id == image.id)) |> Enum.map(& &1.platform) ==
+             Platforms.text_ids()
+
+    assert drafts |> Enum.filter(&(&1.media_asset_id == video.id)) |> Enum.map(& &1.platform) ==
+             Platforms.video_ids()
+  end
+
   test "key-node copy keeps the full source text and ends with one clear CTA" do
     campaign = %{
       campaign()

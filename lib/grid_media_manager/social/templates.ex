@@ -14,6 +14,10 @@ defmodule GridMediaManager.Social.Templates do
 
   @base_angles ~w(question explainer discussion)
 
+  def body(%Campaign{} = campaign, asset, platform, angle) do
+    body_for_platform(campaign, asset, canonical_platform(platform), angle)
+  end
+
   def draft_attrs(%Campaign{} = campaign, media_assets) when is_list(media_assets) do
     base_drafts =
       for platform <- Platforms.ids(),
@@ -52,6 +56,8 @@ defmodule GridMediaManager.Social.Templates do
     media_assets
     |> Enum.flat_map(fn asset ->
       angle = asset_angle(asset)
+      asset_platforms = asset_platforms(asset)
+      platforms = Enum.filter(platforms, &(&1 in asset_platforms))
 
       Enum.map(platforms, fn platform ->
         %{
@@ -77,12 +83,12 @@ defmodule GridMediaManager.Social.Templates do
     angle |> String.replace("_", " ") |> String.capitalize()
   end
 
-  def body(
-        %Campaign{} = campaign,
-        %MediaAsset{kind: "highlight_video"} = asset,
-        platform,
-        "highlight"
-      ) do
+  defp body_for_platform(
+         %Campaign{} = campaign,
+         %MediaAsset{kind: "highlight_video"} = asset,
+         platform,
+         "highlight"
+       ) do
     link = asset_link(campaign, asset)
     quote = asset.text |> fallback(campaign.title)
 
@@ -101,12 +107,12 @@ defmodule GridMediaManager.Social.Templates do
     fit_to_platform(copy, platform, link)
   end
 
-  def body(
-        %Campaign{} = campaign,
-        %MediaAsset{kind: "question_video"} = asset,
-        platform,
-        "question_quote"
-      ) do
+  defp body_for_platform(
+         %Campaign{} = campaign,
+         %MediaAsset{kind: "question_video"} = asset,
+         platform,
+         "question_quote"
+       ) do
     link = asset_link(campaign, asset)
     question = asset.text |> fallback(campaign.title)
 
@@ -125,12 +131,15 @@ defmodule GridMediaManager.Social.Templates do
     fit_to_platform(copy, platform, link)
   end
 
-  def body(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "highlight") do
+  defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "highlight") do
     link = asset_link(campaign, asset)
     quote = asset.text |> fallback(campaign.title)
 
     copy =
       case platform do
+        "x" ->
+          "“#{quote}”\n\nThis idea sits inside a larger question about #{campaign.title}.\n\n#{cta_line(link)}"
+
         "linkedin" ->
           "“#{quote}”\n\nThis idea sits inside a larger question about #{campaign.title}.\n\n#{cta_line(link)}"
 
@@ -147,7 +156,12 @@ defmodule GridMediaManager.Social.Templates do
     fit_to_platform(copy, platform, link)
   end
 
-  def body(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "question_quote") do
+  defp body_for_platform(
+         %Campaign{} = campaign,
+         %MediaAsset{} = asset,
+         platform,
+         "question_quote"
+       ) do
     link = asset_link(campaign, asset)
     question = asset.text |> fallback(campaign.title)
 
@@ -169,7 +183,7 @@ defmodule GridMediaManager.Social.Templates do
     fit_to_platform(copy, platform, link)
   end
 
-  def body(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "key_node") do
+  defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "key_node") do
     link = asset_link(campaign, asset)
     node_title = asset.title |> fallback("Key node")
     node_text = full_node_text(campaign, asset)
@@ -195,7 +209,7 @@ defmodule GridMediaManager.Social.Templates do
     fit_to_platform(copy, platform, link)
   end
 
-  def body(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "visual") do
+  defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "visual") do
     link = asset_link(campaign, asset)
 
     copy =
@@ -216,7 +230,7 @@ defmodule GridMediaManager.Social.Templates do
     fit_to_platform(copy, platform, link)
   end
 
-  def body(%Campaign{} = campaign, _asset, platform, "question") do
+  defp body_for_platform(%Campaign{} = campaign, _asset, platform, "question") do
     question = ensure_question(campaign.title)
 
     copy =
@@ -237,7 +251,7 @@ defmodule GridMediaManager.Social.Templates do
     fit_to_platform(copy, platform, campaign.grid_url)
   end
 
-  def body(%Campaign{} = campaign, _asset, platform, "explainer") do
+  defp body_for_platform(%Campaign{} = campaign, _asset, platform, "explainer") do
     copy =
       case platform do
         "linkedin" ->
@@ -256,7 +270,7 @@ defmodule GridMediaManager.Social.Templates do
     fit_to_platform(copy, platform, campaign.grid_url)
   end
 
-  def body(%Campaign{} = campaign, _asset, platform, "discussion") do
+  defp body_for_platform(%Campaign{} = campaign, _asset, platform, "discussion") do
     question = lead_question(campaign)
 
     copy =
@@ -314,10 +328,25 @@ defmodule GridMediaManager.Social.Templates do
   defp asset_angle(%MediaAsset{text: text}) when text in [nil, ""], do: "visual"
   defp asset_angle(%MediaAsset{}), do: "highlight"
 
-  defp asset_platforms(%MediaAsset{recommended_platforms: platforms}) do
-    platforms = Enum.filter(platforms || [], &(&1 in Platforms.ids()))
-    if platforms == [], do: Platforms.ids(), else: platforms
-  end
+  defp asset_platforms(%MediaAsset{mime_type: "video/mp4"}), do: Platforms.video_ids()
+
+  defp asset_platforms(%MediaAsset{kind: kind})
+       when kind in [
+              "question_video",
+              "highlight_video",
+              "key_node_video",
+              "curated_carousel_video"
+            ],
+       do: Platforms.video_ids()
+
+  defp asset_platforms(%MediaAsset{}), do: Platforms.text_ids()
+
+  defp canonical_platform(platform) when platform in ["x", "linkedin", "facebook"], do: "x"
+
+  defp canonical_platform(platform) when platform in ["tiktok", "instagram", "youtube"],
+    do: "instagram"
+
+  defp canonical_platform(_platform), do: "x"
 
   defp asset_link(%Campaign{} = campaign, %MediaAsset{} = asset) do
     highlight_link(campaign, asset) || node_link(campaign, asset) || campaign.grid_url ||

@@ -12,6 +12,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.Social.Platforms
 
   @width 1080
   @height 1920
@@ -22,7 +23,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @audio_bitrate "160k"
   @frame_rate 30
   @render_timeout 300_000
-  @cache_version 16
+  @render_timeout_per_second 5_000
+  @cache_version 17
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -42,7 +44,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       text: node |> value("excerpt") |> present_string() |> fallback(node_title),
       node_id: node_id,
       highlight_id: nil,
-      recommended_platforms: ["youtube", "instagram", "linkedin"],
+      recommended_platforms: Platforms.video_ids(),
       style: style,
       source_type: "key_node_video",
       source_id: node_id,
@@ -58,9 +60,33 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   end
 
   def curated_asset_attr(%Campaign{} = campaign, token, slides, style) when is_list(slides) do
+    curated_asset_attr(campaign, token, slides, style, selected_slide_indexes: nil)
+  end
+
+  def curated_asset_attr(%Campaign{} = campaign, token, slides, style, opts)
+      when is_list(slides) and is_list(opts) do
     style = ShareCard.normalize_style(style)
-    slide_count = length(slides)
-    durations = ShareCard.curated_carousel_short_video_durations(slides)
+    selected_slide_indexes = Keyword.get(opts, :selected_slide_indexes)
+    video_indexes = video_slide_indexes(slides, selected_slide_indexes)
+    video_slides = selected_slides(slides, video_indexes)
+    durations = ShareCard.curated_carousel_short_video_durations(video_slides)
+
+    metadata = %{
+      "format" => "short_video",
+      "width" => @width,
+      "height" => @height,
+      "slide_count" => length(video_slides),
+      "duration_seconds" => duration_seconds(durations),
+      "background_audio" => background_audio_available?(),
+      "slides" => slides
+    }
+
+    metadata =
+      if is_list(selected_slide_indexes) do
+        Map.put(metadata, "selected_slide_indexes", video_indexes)
+      else
+        metadata
+      end
 
     %{
       title: "#{campaign.title} · Story Short",
@@ -70,19 +96,11 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       text: campaign.title,
       node_id: nil,
       highlight_id: nil,
-      recommended_platforms: ["youtube", "instagram", "linkedin"],
+      recommended_platforms: Platforms.video_ids(),
       style: style,
       source_type: "curated_carousel_video",
       source_id: token,
-      metadata: %{
-        "format" => "short_video",
-        "width" => @width,
-        "height" => @height,
-        "slide_count" => slide_count,
-        "duration_seconds" => duration_seconds(durations),
-        "background_audio" => background_audio_available?(),
-        "slides" => slides
-      }
+      metadata: metadata
     }
   end
 
@@ -132,17 +150,31 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     force? = Keyword.get(opts, :force, false)
     frame_paths = Keyword.get(opts, :frame_paths, %{})
 
+    selected_slide_indexes =
+      video_slide_indexes(slides, Keyword.get(opts, :selected_slide_indexes))
+
     with ffmpeg when is_binary(ffmpeg) <- ffmpeg_path(),
          {:ok, cache_dir} <- ensure_cache_dir() do
       output_path =
-        Path.join(cache_dir, curated_cache_filename(campaign, token, slides, style, frame_paths))
+        Path.join(
+          cache_dir,
+          curated_cache_filename(
+            campaign,
+            token,
+            slides,
+            style,
+            frame_paths,
+            selected_slide_indexes
+          )
+        )
 
       if force?, do: File.rm(output_path)
 
       if not force? and valid_video_file?(output_path) do
         {:ok, output_path}
       else
-        durations = ShareCard.curated_carousel_short_video_durations(slides)
+        video_slides = selected_slides(slides, selected_slide_indexes)
+        durations = ShareCard.curated_carousel_short_video_durations(video_slides)
 
         render_frame_video(
           ffmpeg,
@@ -150,7 +182,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
           cache_dir,
           output_path,
           fn index ->
-            browser_frame_or_render(campaign, slides, style, index, frame_paths)
+            slide_index = Enum.at(selected_slide_indexes, index - 1)
+            browser_frame_or_render(campaign, slides, style, slide_index, frame_paths)
           end
         )
       end
@@ -220,10 +253,11 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     with :ok <- File.mkdir_p(work_dir) do
       try do
         slide_paths = write_frames!(length(durations), frame_fun, work_dir)
+        manifest_path = write_concat_manifest!(slide_paths, durations, work_dir)
         temporary_output = Path.join(work_dir, "carousel.mp4")
-        args = ffmpeg_args(slide_paths, background_audio_path(), temporary_output, durations)
+        args = ffmpeg_args(manifest_path, background_audio_path(), temporary_output, durations)
 
-        case run_ffmpeg(ffmpeg, args) do
+        case run_ffmpeg(ffmpeg, args, duration_seconds(durations)) do
           {:ok, _output} ->
             with true <- valid_video_file?(temporary_output),
                  :ok <- move_video(temporary_output, output_path) do
@@ -259,7 +293,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
         case run_ffmpeg(
                ffmpeg,
-               static_ffmpeg_args(frame_path, background_audio_path(), temporary_output)
+               static_ffmpeg_args(frame_path, background_audio_path(), temporary_output),
+               @static_seconds
              ) do
           {:ok, _output} ->
             with true <- valid_video_file?(temporary_output),
@@ -295,53 +330,73 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     end)
   end
 
-  defp ffmpeg_args(slide_paths, audio_path, output_path, durations) do
-    input_args =
+  defp write_concat_manifest!(slide_paths, durations, work_dir) do
+    manifest_path = Path.join(work_dir, "slides.concat.txt")
+
+    entries =
       Enum.zip(slide_paths, durations)
-      |> Enum.flat_map(fn {path, duration} ->
-        [
-          "-loop",
-          "1",
-          "-framerate",
-          Integer.to_string(@frame_rate),
-          "-t",
-          decimal(duration),
-          "-i",
-          path
-        ]
+      |> Enum.map_join("\n", fn {path, duration} ->
+        "file '#{escape_concat_path(path)}'\nduration #{decimal(duration)}"
       end)
 
-    audio? = is_binary(audio_path)
+    last_path = List.last(slide_paths)
+    contents = entries <> "\nfile '#{escape_concat_path(last_path)}'\n"
+    File.write!(manifest_path, contents)
+    manifest_path
+  end
 
-    ["-y", "-hide_banner", "-loglevel", "error"] ++
-      input_args ++
-      audio_input_args(audio_path) ++
+  defp escape_concat_path(path), do: String.replace(path, "'", "'\\''")
+
+  defp ffmpeg_args(manifest_path, audio_path, output_path, durations) do
+    audio? = is_binary(audio_path)
+    duration = duration_seconds(durations)
+
+    base_args =
       [
-        "-filter_complex",
-        filter_complex(durations, audio?),
-        "-map",
-        "[outv]"
-      ] ++
-      audio_output_args(audio?) ++
-      [
-        "-c:v",
-        "libx264",
-        "-preset",
-        "medium",
-        "-crf",
-        "20",
-        "-pix_fmt",
-        "yuv420p",
-        "-r",
-        Integer.to_string(@frame_rate),
-        "-t",
-        decimal(duration_seconds(durations)),
-        "-movflags",
-        "+faststart",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
         "-f",
-        "mp4",
-        output_path
-      ]
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        manifest_path
+      ] ++ audio_input_args(audio_path)
+
+    output_args =
+      [
+        "-vf",
+        video_filter(),
+        "-map",
+        "0:v:0"
+      ] ++
+        if(audio?, do: ["-map", "1:a:0", "-af", audio_filter(duration)], else: ["-an"]) ++
+        [
+          "-c:v",
+          "libx264",
+          "-preset",
+          "veryfast",
+          "-crf",
+          "20",
+          "-pix_fmt",
+          "yuv420p",
+          "-r",
+          Integer.to_string(@frame_rate),
+          "-t",
+          decimal(duration)
+        ] ++
+        if(audio?, do: audio_codec_args(), else: []) ++
+        ["-movflags", "+faststart", "-f", "mp4", output_path]
+
+    base_args ++ output_args
+  end
+
+  defp video_filter do
+    "scale=#{@width}:#{@height}:force_original_aspect_ratio=decrease," <>
+      "pad=#{@width}:#{@height}:(ow-iw)/2:(oh-ih)/2," <>
+      "setsar=1,format=yuv420p,fps=#{@frame_rate}"
   end
 
   defp static_ffmpeg_args(frame_path, audio_path, output_path) do
@@ -399,9 +454,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   defp audio_input_args(_path), do: []
 
-  defp audio_output_args(true), do: ["-map", "[outa]"] ++ audio_codec_args()
-  defp audio_output_args(false), do: ["-an"]
-
   defp audio_codec_args, do: ["-c:a", "aac", "-b:a", @audio_bitrate]
 
   defp audio_filter(duration) do
@@ -413,45 +465,11 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       "afade=t=out:st=#{decimal(fade_out_start)}:d=#{decimal(@audio_fade_seconds)}"
   end
 
-  defp filter_complex(durations, audio?) do
-    slide_count = length(durations)
-
-    slide_filters =
-      durations
-      |> Enum.with_index()
-      |> Enum.map(fn {duration, index} -> slide_filter(index, duration) end)
-
-    inputs = Enum.map_join(0..(slide_count - 1), "", &"[v#{&1}]")
-    concat_filter = "#{inputs}concat=n=#{slide_count}:v=1:a=0[outv]"
-
-    filters =
-      if audio? do
-        duration = duration_seconds(durations)
-        slide_filters ++ [concat_filter, "[#{slide_count}:a]#{audio_filter(duration)}[outa]"]
-      else
-        slide_filters ++ [concat_filter]
-      end
-
-    Enum.join(filters, ";")
-  end
-
-  defp slide_filter(index, duration) do
-    fade_out_start = max(duration - @fade_seconds, 0.0)
-    fade_in = if index == 0, do: "", else: "fade=t=in:st=0:d=#{decimal(@fade_seconds)},"
-
-    "[#{index}:v]scale=#{@width}:#{@height}:force_original_aspect_ratio=decrease," <>
-      "pad=#{@width}:#{@height}:(ow-iw)/2:(oh-ih)/2," <>
-      "setsar=1,format=yuv420p,fps=#{@frame_rate},trim=duration=#{decimal(duration)}," <>
-      "settb=AVTB,setpts=N/(#{@frame_rate}*TB)," <>
-      fade_in <>
-      "fade=t=out:st=#{decimal(fade_out_start)}:" <>
-      "d=#{decimal(@fade_seconds)}[v#{index}]"
-  end
-
-  defp run_ffmpeg(executable, args) do
+  defp run_ffmpeg(executable, args, expected_duration) do
     task = Task.async(fn -> System.cmd(executable, args, stderr_to_stdout: true) end)
+    timeout = ffmpeg_timeout(expected_duration)
 
-    case Task.yield(task, @render_timeout) do
+    case Task.yield(task, timeout) do
       {:ok, {output, 0}} ->
         {:ok, output}
 
@@ -463,7 +481,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
       nil ->
         Task.shutdown(task, :brutal_kill)
-        {:error, :timeout, "FFmpeg exceeded #{@render_timeout}ms"}
+        {:error, :timeout, "FFmpeg exceeded #{timeout}ms for #{decimal(expected_duration)}s"}
     end
   end
 
@@ -491,10 +509,10 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     "#{digest}.mp4"
   end
 
-  defp curated_cache_filename(campaign, token, slides, style, frame_paths) do
+  defp curated_cache_filename(campaign, token, slides, style, frame_paths, selected_slide_indexes) do
     digest =
       {@cache_version, :curated, campaign.id, campaign.title, token, slides, style, @fade_seconds,
-       frame_paths, background_audio_signature()}
+       frame_paths, selected_slide_indexes, background_audio_signature()}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))
       |> Base.url_encode64(padding: false)
@@ -548,6 +566,31 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
         Application.app_dir(:grid_media_manager, @default_background_audio_path)
 
     if is_binary(configured_path) and File.regular?(configured_path), do: configured_path
+  end
+
+  defp video_slide_indexes(slides, nil) do
+    case length(slides) do
+      0 -> []
+      count -> Enum.to_list(1..count)
+    end
+  end
+
+  defp video_slide_indexes(slides, selection) when is_list(selection) do
+    ShareCard.curated_carousel_selected_slide_indexes(slides, selection)
+  end
+
+  defp selected_slides(slides, indexes) do
+    indexes
+    |> Enum.map(&Enum.at(slides, &1 - 1))
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp ffmpeg_timeout(expected_duration) do
+    case Application.get_env(:grid_media_manager, :ffmpeg_render_timeout) do
+      :infinity -> :infinity
+      timeout when is_integer(timeout) and timeout > 0 -> timeout
+      _ -> max(@render_timeout, trunc(max(expected_duration, 1.0) * @render_timeout_per_second))
+    end
   end
 
   defp ffmpeg_path do
