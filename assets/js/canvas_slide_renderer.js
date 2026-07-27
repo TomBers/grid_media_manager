@@ -368,7 +368,7 @@ function drawFooter(context, slideIndex, slideCount, palette) {
   context.fillText(`${slideIndex} / ${slideCount} · Learn more at rationalgrid.ai`, 130, 1248)
 }
 
-function drawSlide(canvas, slide, slideIndex, slideCount, style, logo) {
+function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverCard) {
   const context = canvas.getContext("2d")
   const palette = paletteFor(style)
   canvas.width = WIDTH
@@ -378,6 +378,11 @@ function drawSlide(canvas, slide, slideIndex, slideCount, style, logo) {
 
   if (slide.kind === "cta" || slide.label === "Learn more") {
     drawCta(context, palette, logo)
+    return
+  }
+
+  if (slide.kind === "cover" && coverCard) {
+    context.drawImage(coverCard, 0, 0, WIDTH, HEIGHT)
     return
   }
 
@@ -468,6 +473,9 @@ export const CanvasSlideRenderer = {
       const slides = JSON.parse(this.root.dataset.slides || "[]")
       const style = this.root.dataset.style || "editorial_dark"
       const logo = await loadImage(this.root.dataset.logoSrc || "/images/rg_logo.webp")
+      const coverCard = this.root.dataset.coverCardUrl
+        ? await loadImage(this.root.dataset.coverCardUrl)
+        : null
       const targets = this.root.querySelectorAll("[data-canvas-slide]")
 
       targets.forEach(target => {
@@ -475,7 +483,7 @@ export const CanvasSlideRenderer = {
         const slide = slides[index - 1]
         const canvas = target
         if (!slide || !canvas) return
-        drawSlide(canvas, slide, index, slides.length, style, logo)
+        drawSlide(canvas, slide, index, slides.length, style, logo, coverCard)
         canvas.classList.remove("hidden")
         const image = target.parentElement?.querySelector("img")
         if (image) image.classList.add("hidden")
@@ -492,7 +500,7 @@ export const CanvasSlideRenderer = {
       if (status) status.textContent = "Browser-rendered preview"
 
       if (this.root.dataset.videoPreviewId) {
-        const fingerprint = `${this.root.dataset.slides}|${style}`
+        const fingerprint = `${this.root.dataset.slides}|${style}|${this.root.dataset.coverCardUrl || ""}`
         if (this.uploadedFrameFingerprint !== fingerprint && !this.uploadingFrames) {
           await this.uploadFrames({automatic: true, fingerprint})
         }
@@ -516,7 +524,7 @@ export const CanvasSlideRenderer = {
     const uploadButton = this.root.querySelector("[data-browser-render-upload]")
     if (!uploadButton) return
     const automatic = options.automatic === true
-    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}`
+    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}|${this.root.dataset.coverCardUrl || ""}`
     const slides = JSON.parse(this.root.dataset.slides || "[]")
     const frameIndexes = slides.map((_slide, index) => index + 1)
     const targets = this.root.querySelectorAll("[data-canvas-slide]")

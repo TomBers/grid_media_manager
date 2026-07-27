@@ -24,7 +24,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @frame_rate 30
   @render_timeout 300_000
   @render_timeout_per_second 5_000
-  @cache_version 18
+  @cache_version 19
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -148,7 +148,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       when is_list(slides) and is_list(opts) do
     style = ShareCard.normalize_style(style)
     force? = Keyword.get(opts, :force, false)
-    frame_paths = Keyword.get(opts, :frame_paths, %{})
 
     selected_slide_indexes =
       video_slide_indexes(slides, Keyword.get(opts, :selected_slide_indexes))
@@ -163,7 +162,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
             token,
             slides,
             style,
-            frame_paths,
             selected_slide_indexes
           )
         )
@@ -183,7 +181,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
           output_path,
           fn index ->
             slide_index = Enum.at(selected_slide_indexes, index - 1)
-            browser_frame_or_render(campaign, slides, style, slide_index, frame_paths)
+            ShareCard.curated_carousel_short_video_frame_png(campaign, slides, style, slide_index)
           end
         )
       end
@@ -209,7 +207,9 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       if not force? and valid_video_file?(output_path) do
         {:ok, output_path}
       else
-        render_static_video(ffmpeg, frame_fun, cache_dir, output_path)
+        render_frame_video(ffmpeg, [@static_seconds], cache_dir, output_path, fn _index ->
+          frame_fun.()
+        end)
       end
     else
       nil -> {:error, :ffmpeg_not_found}
@@ -235,15 +235,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     render_frame_video(ffmpeg, durations, cache_dir, output_path, fn index ->
       ShareCard.node_short_video_frame_png(campaign, node, style, index)
     end)
-  end
-
-  defp browser_frame_or_render(campaign, slides, style, index, frame_paths) do
-    path = Map.get(frame_paths, to_string(index))
-
-    case path && File.read(path) do
-      {:ok, body} -> body
-      _error -> ShareCard.curated_carousel_short_video_frame_png(campaign, slides, style, index)
-    end
   end
 
   defp render_frame_video(ffmpeg, durations, cache_dir, output_path, frame_fun) do
@@ -274,47 +265,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       rescue
         error ->
           Logger.warning("Carousel video rendering failed: #{Exception.message(error)}")
-          {:error, :render_failed}
-      after
-        File.rm_rf(work_dir)
-      end
-    end
-  end
-
-  defp render_static_video(ffmpeg, frame_fun, cache_dir, output_path) do
-    work_dir =
-      Path.join(cache_dir, "static-work-#{System.unique_integer([:positive, :monotonic])}")
-
-    with :ok <- File.mkdir_p(work_dir) do
-      try do
-        frame_path = Path.join(work_dir, "frame.png")
-        temporary_output = Path.join(work_dir, "short.mp4")
-        File.write!(frame_path, frame_fun.())
-
-        case run_ffmpeg(
-               ffmpeg,
-               static_ffmpeg_args(frame_path, background_audio_path(), temporary_output),
-               @static_seconds
-             ) do
-          {:ok, _output} ->
-            with true <- valid_video_file?(temporary_output),
-                 :ok <- move_video(temporary_output, output_path) do
-              {:ok, output_path}
-            else
-              false -> {:error, :empty_video}
-              {:error, reason} -> {:error, reason}
-            end
-
-          {:error, reason, output} ->
-            Logger.warning(
-              "Static short video encoding failed: #{String.slice(output, 0, 1_000)}"
-            )
-
-            {:error, reason}
-        end
-      rescue
-        error ->
-          Logger.warning("Static short video rendering failed: #{Exception.message(error)}")
           {:error, :render_failed}
       after
         File.rm_rf(work_dir)
@@ -399,56 +349,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       "setsar=1,format=yuv420p,fps=#{@frame_rate}"
   end
 
-  defp static_ffmpeg_args(frame_path, audio_path, output_path) do
-    fade_out_start = @static_seconds - @fade_seconds
-
-    base_args = [
-      "-y",
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-loop",
-      "1",
-      "-framerate",
-      Integer.to_string(@frame_rate),
-      "-t",
-      decimal(@static_seconds),
-      "-i",
-      frame_path
-    ]
-
-    video_args = [
-      "-vf",
-      "scale=#{@width}:#{@height}:force_original_aspect_ratio=decrease," <>
-        "pad=#{@width}:#{@height}:(ow-iw)/2:(oh-ih)/2," <>
-        "format=yuv420p,fps=#{@frame_rate}," <>
-        "fade=t=out:st=#{decimal(fade_out_start)}:d=#{decimal(@fade_seconds)}",
-      "-c:v",
-      "libx264",
-      "-preset",
-      "medium",
-      "-crf",
-      "20",
-      "-pix_fmt",
-      "yuv420p",
-      "-r",
-      Integer.to_string(@frame_rate),
-      "-t",
-      decimal(@static_seconds)
-    ]
-
-    output_args = ["-movflags", "+faststart", "-f", "mp4", output_path]
-
-    if is_binary(audio_path) do
-      base_args ++
-        audio_input_args(audio_path) ++
-        ["-map", "0:v:0", "-map", "1:a:0", "-af", audio_filter(@static_seconds)] ++
-        video_args ++ audio_codec_args() ++ output_args
-    else
-      base_args ++ ["-an"] ++ video_args ++ output_args
-    end
-  end
-
   defp audio_input_args(path) when is_binary(path),
     do: ["-stream_loop", "-1", "-i", path]
 
@@ -509,10 +409,10 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     "#{digest}.mp4"
   end
 
-  defp curated_cache_filename(campaign, token, slides, style, frame_paths, selected_slide_indexes) do
+  defp curated_cache_filename(campaign, token, slides, style, selected_slide_indexes) do
     digest =
       {@cache_version, :curated, campaign.id, campaign.title, token, slides, style, @fade_seconds,
-       frame_paths, selected_slide_indexes, background_audio_signature()}
+       selected_slide_indexes, background_audio_signature()}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))
       |> Base.url_encode64(padding: false)

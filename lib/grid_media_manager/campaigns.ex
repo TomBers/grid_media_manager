@@ -222,7 +222,10 @@ defmodule GridMediaManager.Campaigns do
     raw_payload = campaign.raw_payload || %{}
 
     share_studio =
-      raw_payload |> Map.get("share_studio", %{}) |> Map.put("pexels_background", background)
+      raw_payload
+      |> Map.get("share_studio", %{})
+      |> Map.put("pexels_background", background)
+      |> Map.put("title_card_mode", "pexels")
 
     raw_payload = Map.put(raw_payload, "share_studio", share_studio)
 
@@ -234,8 +237,13 @@ defmodule GridMediaManager.Campaigns do
   def clear_pexels_background(%Campaign{} = campaign) do
     raw_payload =
       update_in(campaign.raw_payload || %{}, ["share_studio"], fn
-        studio when is_map(studio) -> Map.delete(studio, "pexels_background")
-        _studio -> %{}
+        studio when is_map(studio) ->
+          studio
+          |> Map.delete("pexels_background")
+          |> Map.put("title_card_mode", "text")
+
+        _studio ->
+          %{}
       end)
 
     campaign
@@ -245,6 +253,32 @@ defmodule GridMediaManager.Campaigns do
 
   def pexels_background(%Campaign{} = campaign) do
     get_in(campaign.raw_payload || %{}, ["share_studio", "pexels_background"])
+  end
+
+  def title_card_mode(%Campaign{} = campaign) do
+    get_in(campaign.raw_payload || %{}, ["share_studio", "title_card_mode"]) || "text"
+  end
+
+  def guided_studio_state(%Campaign{} = campaign) do
+    get_in(campaign.raw_payload || %{}, ["share_studio", "state"]) || %{}
+  end
+
+  def save_guided_studio_state(%Campaign{} = campaign, state) when is_map(state) do
+    raw_payload = campaign.raw_payload || %{}
+    share_studio = raw_payload |> Map.get("share_studio", %{}) |> Map.put("state", state)
+
+    campaign
+    |> Campaign.changeset(%{raw_payload: Map.put(raw_payload, "share_studio", share_studio)})
+    |> Repo.update()
+  end
+
+  def set_title_card_mode(%Campaign{} = campaign, mode) when mode in ["text", "pexels"] do
+    raw_payload = campaign.raw_payload || %{}
+    share_studio = raw_payload |> Map.get("share_studio", %{}) |> Map.put("title_card_mode", mode)
+
+    campaign
+    |> Campaign.changeset(%{raw_payload: Map.put(raw_payload, "share_studio", share_studio)})
+    |> Repo.update()
   end
 
   def mark_post_draft_copied(id) do

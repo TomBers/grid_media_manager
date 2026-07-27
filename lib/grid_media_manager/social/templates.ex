@@ -90,7 +90,8 @@ defmodule GridMediaManager.Social.Templates do
          "highlight"
        ) do
     link = asset_link(campaign, asset)
-    quote = asset.text |> fallback(campaign.title)
+    title = caption_title(campaign.title)
+    quote = asset.text |> fallback(title)
 
     copy =
       case platform do
@@ -98,7 +99,7 @@ defmodule GridMediaManager.Social.Templates do
           "A moment worth sitting with:\n\n“#{quote}”\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "youtube" ->
-          "Can this idea change how you see #{campaign.title}?\n\n“#{quote}”\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
+          "Can this idea change how you see #{title}?\n\n“#{quote}”\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
 
         _ ->
           "#{quote}\n\n#{cta_line(link)}"
@@ -114,7 +115,8 @@ defmodule GridMediaManager.Social.Templates do
          "question_quote"
        ) do
     link = asset_link(campaign, asset)
-    question = asset.text |> fallback(campaign.title)
+    title = caption_title(campaign.title)
+    question = asset.text |> fallback(title)
 
     copy =
       case platform do
@@ -122,7 +124,7 @@ defmodule GridMediaManager.Social.Templates do
           "Pause on this question, then take a position:\n\n#{question}\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "youtube" ->
-          "A question about #{campaign.title}:\n\n#{question}\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
+          "A question about #{title}:\n\n#{question}\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
 
         _ ->
           "#{question}\n\n#{cta_line(link)}"
@@ -133,21 +135,22 @@ defmodule GridMediaManager.Social.Templates do
 
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "highlight") do
     link = asset_link(campaign, asset)
-    quote = asset.text |> fallback(campaign.title)
+    title = caption_title(campaign.title)
+    quote = asset.text |> fallback(title)
 
     copy =
       case platform do
         "x" ->
-          "“#{quote}”\n\nThis idea sits inside a larger question about #{campaign.title}.\n\n#{cta_line(link)}"
+          "“#{quote}”\n\nThis idea sits inside a larger question about #{title}.\n\n#{cta_line(link)}"
 
         "linkedin" ->
-          "“#{quote}”\n\nThis idea sits inside a larger question about #{campaign.title}.\n\n#{cta_line(link)}"
+          "“#{quote}”\n\nThis idea sits inside a larger question about #{title}.\n\n#{cta_line(link)}"
 
         "instagram" ->
-          "“#{quote}”\n\nA highlight from #{campaign.title}.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
+          "“#{quote}”\n\nA highlight from #{title}.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "substack" ->
-          "A useful excerpt from #{campaign.title}:\n\n“#{quote}”\n\n#{cta_line(link)}"
+          "A useful excerpt from #{title}:\n\n“#{quote}”\n\n#{cta_line(link)}"
 
         _ ->
           "“#{quote}”\n\n#{cta_line(link)}"
@@ -163,18 +166,19 @@ defmodule GridMediaManager.Social.Templates do
          "question_quote"
        ) do
     link = asset_link(campaign, asset)
-    question = asset.text |> fallback(campaign.title)
+    title = caption_title(campaign.title)
+    question = asset.text |> fallback(title)
 
     copy =
       case platform do
         "linkedin" ->
-          "#{question}\n\nA question worth exploring in #{campaign.title}.\n\n#{cta_line(link)}"
+          "#{question}\n\nA question worth exploring in #{title}.\n\n#{cta_line(link)}"
 
         "instagram" ->
-          "#{question}\n\nA question worth exploring in #{campaign.title}.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
+          "#{question}\n\nA question worth exploring in #{title}.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "substack" ->
-          "A question worth exploring from #{campaign.title}:\n\n#{question}\n\n#{cta_line(link)}"
+          "A question worth exploring from #{title}:\n\n#{question}\n\n#{cta_line(link)}"
 
         _ ->
           "#{question}\n\n#{cta_line(link)}"
@@ -185,7 +189,7 @@ defmodule GridMediaManager.Social.Templates do
 
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "key_node") do
     link = asset_link(campaign, asset)
-    node_title = asset.title |> fallback("Key node")
+    node_title = asset.title |> fallback("Key node") |> caption_title()
     node_text = full_node_text(campaign, asset)
 
     copy =
@@ -211,20 +215,21 @@ defmodule GridMediaManager.Social.Templates do
 
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "visual") do
     link = asset_link(campaign, asset)
+    title = caption_title(campaign.title)
 
     copy =
       case platform do
         "linkedin" ->
-          "#{campaign.title}\n\nA visual entry point into a connected learning path.\n\n#{cta_line(link)}"
+          "#{title}\n\nA visual entry point into a connected learning path.\n\n#{cta_line(link)}"
 
         "instagram" ->
-          "#{campaign.title}\n\nA visual entry point into a connected learning path.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
+          "#{title}\n\nA visual entry point into a connected learning path.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "substack" ->
-          "#{campaign.title}\n\nA navigable map of explanations, questions, and related ideas.\n\n#{cta_line(link)}"
+          "#{title}\n\nA navigable map of explanations, questions, and related ideas.\n\n#{cta_line(link)}"
 
         _ ->
-          "#{campaign.title}\n\n#{cta_line(link)}"
+          "#{title}\n\n#{cta_line(link)}"
       end
 
     fit_to_platform(copy, platform, link)
@@ -252,19 +257,21 @@ defmodule GridMediaManager.Social.Templates do
   end
 
   defp body_for_platform(%Campaign{} = campaign, _asset, platform, "explainer") do
+    title = caption_title(campaign.title)
+
     copy =
       case platform do
         "linkedin" ->
-          "#{campaign.title}\n\nA learning path through the key explanations, connected questions, and structure of the topic.\n\n#{cta_line(campaign.grid_url)}"
+          "#{title}\n\nA learning path through the key explanations, connected questions, and structure of the topic.\n\n#{cta_line(campaign.grid_url)}"
 
         "instagram" ->
-          "#{campaign.title}\n\nA visual learning path through the connected ideas.\n\n#{cta_line(campaign.grid_url)}\n\n#{hashtags(campaign)}"
+          "#{title}\n\nA visual learning path through the connected ideas.\n\n#{cta_line(campaign.grid_url)}\n\n#{hashtags(campaign)}"
 
         "substack" ->
-          "#{campaign.title}\n\nExplore the topic as a map of central explanations, related questions, and paths for deeper learning.\n\n#{cta_line(campaign.grid_url)}"
+          "#{title}\n\nExplore the topic as a map of central explanations, related questions, and paths for deeper learning.\n\n#{cta_line(campaign.grid_url)}"
 
         _ ->
-          "#{campaign.title}\n\nA map for exploring the ideas, not just reading about them.\n#{cta_line(campaign.grid_url)}"
+          "#{title}\n\nA map for exploring the ideas, not just reading about them.\n#{cta_line(campaign.grid_url)}"
       end
 
     fit_to_platform(copy, platform, campaign.grid_url)
@@ -305,7 +312,7 @@ defmodule GridMediaManager.Social.Templates do
         _ -> ""
       end
 
-    node_text |> fallback(asset.text) |> fallback(campaign.title)
+    node_text |> fallback(asset.text) |> fallback(caption_title(campaign.title))
   end
 
   defp cta_line(link), do: "Learn more at RationalGrid.ai:\n#{link || "https://rationalgrid.ai"}"
@@ -382,7 +389,7 @@ defmodule GridMediaManager.Social.Templates do
   defp node_link(_campaign, _asset), do: nil
 
   defp ensure_question(title) do
-    title = String.trim(title || "")
+    title = title |> caption_title() |> String.trim()
 
     if String.ends_with?(title, "?") do
       title
@@ -390,6 +397,38 @@ defmodule GridMediaManager.Social.Templates do
       "What can we learn from #{title}?"
     end
   end
+
+  defp caption_title(title) when is_binary(title) do
+    title
+    |> String.trim()
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.with_index()
+    |> Enum.map_join(" ", fn {word, index} ->
+      normalized = String.downcase(word)
+
+      if index > 0 and
+           normalized in [
+             "a",
+             "an",
+             "and",
+             "as",
+             "at",
+             "for",
+             "in",
+             "of",
+             "on",
+             "or",
+             "the",
+             "to"
+           ] do
+        normalized
+      else
+        String.capitalize(normalized)
+      end
+    end)
+  end
+
+  defp caption_title(title), do: title
 
   defp hashtags(%Campaign{tags: tags}) do
     tags

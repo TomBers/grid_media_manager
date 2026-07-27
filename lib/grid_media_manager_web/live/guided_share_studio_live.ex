@@ -91,7 +91,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     candidates = Workflow.candidates(campaign)
     restored_assets = restored_output_assets(campaign, params)
     restored_asset_ids = MapSet.new(restored_assets, & &1.id)
-    restored_step = if restored_assets == [], do: "curate", else: "review"
+    default_step = if restored_assets == [], do: "curate", else: "review"
+
+    restored_step =
+      if params["step"] in Enum.map(@steps, & &1.id), do: params["step"], else: default_step
+
     restored_asset_filter = restore_asset_filter(params, restored_asset_ids)
     restored_video_only? = restored_assets != [] and Enum.all?(restored_assets, &video_asset?/1)
 
@@ -106,12 +110,26 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         else: platforms_for_assets(restored_assets)
 
     previous_packages = previous_output_packages(campaign)
-    selected_keys = Workflow.default_selection(candidates)
+    studio_state = Campaigns.guided_studio_state(campaign)
+    selected_keys = restored_selected_keys(candidates, studio_state)
 
     selected_order =
-      candidates
-      |> Workflow.selected_candidates(selected_keys)
-      |> Enum.map(& &1.key)
+      restored_selected_order(candidates, selected_keys, studio_state)
+
+    restored_content_mode = Map.get(studio_state, "content_mode", restored_content_mode)
+    restored_format = Map.get(studio_state, "selected_format")
+
+    restored_format =
+      if restored_format in @formats,
+        do: restored_format,
+        else: if(restored_content_mode == "video", do: "story_video", else: "portrait")
+
+    restored_style = ShareCard.normalize_style(Map.get(studio_state, "selected_style"))
+
+    restored_filter =
+      if Map.get(studio_state, "candidate_filter") in Enum.map(@candidate_filters, & &1.id),
+        do: Map.get(studio_state, "candidate_filter"),
+        else: "all"
 
     socket =
       socket
@@ -124,16 +142,16 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:card_styles, ShareCard.styles())
       |> assign(:all_candidates, candidates)
       |> assign(:candidate_by_key, Map.new(candidates, &{&1.key, &1}))
-      |> assign(:candidate_filter, "all")
+      |> assign(:candidate_filter, restored_filter)
       |> assign(:selected_keys, selected_keys)
       |> assign(:selected_order, selected_order)
       |> assign(:selected_count, MapSet.size(selected_keys))
       |> assign(:step, restored_step)
-      |> assign(:selected_style, ShareCard.default_style())
+      |> assign(:selected_style, restored_style)
       |> assign(:content_mode, restored_content_mode)
       |> assign(
         :selected_format,
-        if(restored_content_mode == "video", do: "story_video", else: "portrait")
+        restored_format
       )
       |> assign(:selected_platforms, restored_platforms)
       |> assign(:selected_output_asset_id, restored_asset_filter)
@@ -153,13 +171,21 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:pexels_search_error, nil)
       |> assign(:pexels_by_id, %{})
       |> assign(:selected_pexels_background, Campaigns.pexels_background(campaign))
+      |> assign(:title_card_mode, Campaigns.title_card_mode(campaign))
       |> stream_configure(:candidate_groups, dom_id: &"candidate-group-#{&1.dom_id}")
       |> stream_configure(:selected_aspects, dom_id: &"selected-#{&1.dom_id}")
       |> stream_configure(:output_assets, dom_id: &"guided-output-#{&1.id}")
       |> stream_configure(:review_drafts, dom_id: &"guided-draft-#{&1.id}")
       |> stream_configure(:pexels_photos, dom_id: &"pexels-photo-#{&1.id}")
       |> stream_configure(:previous_packages, dom_id: &"previous-package-#{&1.dom_id}")
-      |> stream(:candidate_groups, candidate_groups(candidates, selected_keys, candidates))
+      |> stream(
+        :candidate_groups,
+        candidate_groups(
+          Workflow.filter_candidates(candidates, restored_filter),
+          selected_keys,
+          candidates
+        )
+      )
       |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_order))
       |> stream(:output_assets, restored_assets)
       |> stream(:review_drafts, [])
@@ -202,7 +228,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
        :candidate_groups,
        candidate_groups(candidates, socket.assigns.selected_keys, socket.assigns.all_candidates),
        reset: true
-     )}
+     )
+     |> persist_studio_state()}
   end
 
   def handle_event("toggle_aspect", %{"key" => key}, socket) do
@@ -228,7 +255,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   def handle_event("select_style", %{"style" => style}, socket) do
-    {:noreply, assign(socket, :selected_style, ShareCard.normalize_style(style))}
+    {:noreply,
+     socket
+     |> assign(:selected_style, ShareCard.normalize_style(style))
+     |> persist_studio_state()}
   end
 
   def handle_event("select_format", %{"format" => format}, socket) do
@@ -241,7 +271,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
      socket
      |> assign(:selected_format, format)
      |> assign(:content_mode, content_mode)
-     |> assign(:selected_platforms, platforms_for_mode(content_mode))}
+     |> assign(:selected_platforms, platforms_for_mode(content_mode))
+     |> persist_studio_state()}
   end
 
   def handle_event("select_content_mode", %{"mode" => mode}, socket)
@@ -253,7 +284,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
      socket
      |> assign(:content_mode, mode)
      |> assign(:selected_format, selected_format)
-     |> assign(:selected_platforms, selected_platforms)}
+     |> assign(:selected_platforms, selected_platforms)
+     |> persist_studio_state()}
   end
 
   def handle_event("select_content_mode", _params, socket), do: {:noreply, socket}
@@ -306,6 +338,20 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not clear that background.")}
+    end
+  end
+
+  def handle_event("select_title_card_mode", %{"mode" => mode}, socket)
+      when mode in ["text", "pexels"] do
+    case Campaigns.set_title_card_mode(socket.assigns.campaign, mode) do
+      {:ok, campaign} ->
+        {:noreply,
+         socket
+         |> assign(:campaign, campaign)
+         |> assign(:title_card_mode, mode)}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not save the title card choice.")}
     end
   end
 
@@ -392,9 +438,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
           slide_index in content_indexes ->
             List.delete(content_indexes, slide_index)
 
-          length(content_indexes) >= ShareCard.curated_carousel_max_images() - 1 ->
-            :at_limit
-
           true ->
             content_indexes ++ [slide_index]
         end
@@ -402,14 +445,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       case next_indexes do
         :keep_one_content_slide ->
           {:noreply, put_flash(socket, :error, "Keep at least one content image before the CTA.")}
-
-        :at_limit ->
-          {:noreply,
-           put_flash(
-             socket,
-             :error,
-             "Choose up to #{ShareCard.curated_carousel_max_images() - 1} content images; the CTA is added last."
-           )}
 
         next_indexes ->
           persist_carousel_selection(socket, asset, next_indexes)
@@ -914,6 +949,55 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                         name="hero-check-circle-solid"
                         class="size-5 shrink-0 text-orange-500"
                       />
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <div
+                id="title-card-picker"
+                class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 md:p-7"
+              >
+                <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-600 dark:text-orange-300">
+                  Title card
+                </p>
+                <h2 class="mt-2 text-xl font-semibold text-base-content">
+                  Choose the opening frame.
+                </h2>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
+                  Use a clean text title, or make the title card a Pexels image with a readability overlay.
+                </p>
+                <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                  <button
+                    id="title-card-mode-text"
+                    type="button"
+                    phx-click="select_title_card_mode"
+                    phx-value-mode="text"
+                    aria-pressed={@title_card_mode == "text"}
+                    class={title_card_mode_class(@title_card_mode == "text")}
+                  >
+                    <.icon name="hero-document-text" class="size-5" />
+                    <span>
+                      <span class="block text-sm font-bold">Text title</span>
+                      <span class="mt-1 block text-xs text-current/55">
+                        The default, typography-led opening.
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    id="title-card-mode-pexels"
+                    type="button"
+                    phx-click="select_title_card_mode"
+                    phx-value-mode="pexels"
+                    aria-pressed={@title_card_mode == "pexels"}
+                    class={title_card_mode_class(@title_card_mode == "pexels")}
+                  >
+                    <.icon name="hero-photo" class="size-5" />
+                    <span>
+                      <span class="block text-sm font-bold">Pexels image</span>
+                      <span class="mt-1 block text-xs text-current/55">
+                        Use the selected photo as the opening frame.
+                      </span>
                     </span>
                   </button>
                 </div>
@@ -1694,6 +1778,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
           )
         }
         data-style={@asset.style}
+        data-cover-card-url={curated_carousel_cover_url(@asset)}
         data-logo-src="/images/rg_logo.webp"
         data-upload-url={"/api/campaigns/#{@asset.campaign_id}/curated-carousels/#{@asset.source_id}/browser-frames"}
         class={[
@@ -1721,7 +1806,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               :if={@asset.kind == "curated_carousel"}
               class="mt-1 text-xs leading-5 text-base-content/60"
             >
-              Select up to 3 images total. Click in the order you want, then refine it below. The RationalGrid CTA is always last.
+              Choose the images to publish. Click in the order you want, then refine it below. The RationalGrid CTA is always last.
             </p>
             <p
               :if={@asset.kind == "curated_carousel_video"}
@@ -2054,6 +2139,39 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_order),
       reset: true
     )
+    |> persist_studio_state()
+  end
+
+  defp persist_studio_state(socket) do
+    state = %{
+      "selected_keys" => socket.assigns.selected_order,
+      "selected_style" => socket.assigns.selected_style,
+      "selected_format" => socket.assigns.selected_format,
+      "content_mode" => socket.assigns.content_mode,
+      "candidate_filter" => socket.assigns.candidate_filter
+    }
+
+    case Campaigns.save_guided_studio_state(socket.assigns.campaign, state) do
+      {:ok, campaign} -> assign(socket, :campaign, campaign)
+      {:error, _changeset} -> socket
+    end
+  end
+
+  defp restored_selected_keys(candidates, state) do
+    keys = Map.get(state, "selected_keys")
+
+    if is_list(keys) and keys != [] do
+      valid_keys = MapSet.new(candidates, & &1.key)
+      keys |> Enum.filter(&MapSet.member?(valid_keys, &1)) |> MapSet.new()
+    else
+      Workflow.default_selection(candidates)
+    end
+  end
+
+  defp restored_selected_order(candidates, selected_keys, state) do
+    order = Map.get(state, "selected_keys", [])
+    selected = Workflow.selected_candidates(candidates, selected_keys) |> Enum.map(& &1.key)
+    Enum.uniq(Enum.filter(order, &MapSet.member?(selected_keys, &1)) ++ selected)
   end
 
   defp move_to_step(socket, step) do
@@ -2654,7 +2772,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp carousel_selection_summary(asset) do
-    "#{length(carousel_selected_slide_indexes(asset))} / #{ShareCard.curated_carousel_max_images()} images"
+    "#{length(carousel_selected_slide_indexes(asset))} images"
   end
 
   defp carousel_slide_action_label(asset, slide_index) do
@@ -2843,6 +2961,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     ]
   end
 
+  defp title_card_mode_class(active?) do
+    [
+      "flex items-start gap-3 rounded-2xl border p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-lg",
+      if(active?,
+        do: "border-orange-500/50 bg-orange-500/8 shadow-md",
+        else:
+          "border-base-content/10 bg-base-100 text-base-content/70 hover:border-base-content/20"
+      )
+    ]
+  end
+
   defp content_mode_card_class(active?) do
     [
       "rounded-3xl border p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-xl",
@@ -2918,6 +3047,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
        index}
     end)
   end
+
+  defp curated_carousel_cover_url(%MediaAsset{kind: kind} = asset)
+       when kind in ["curated_carousel", "curated_carousel_video"] do
+    curated_carousel_slide_urls(asset)
+    |> Enum.find_value(fn {url, index} -> if(index == 1, do: url) end)
+  end
+
+  defp curated_carousel_cover_url(%MediaAsset{}), do: nil
 
   defp output_asset_preview_url(%MediaAsset{kind: "curated_carousel"} = asset, slide) do
     curated_carousel_slide_urls(asset)
