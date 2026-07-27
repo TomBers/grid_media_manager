@@ -18,7 +18,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#open-post-review[href='/posts/review']", "Review proposed posts")
     assert has_element?(view, "#stage-curate")
     assert has_element?(view, "#studio-progress")
+    assert has_element?(view, "#candidate-type-legend", "Longer answers · multi-slide ideas")
     assert has_element?(view, "#content-candidates [id^='select-aspect-question-']")
+    assert has_element?(view, "#content-candidates", "chars")
+    assert has_element?(view, "#content-candidates", "slide")
     assert has_element?(view, "#selected-aspects", "If a drug like soma existed today...")
     assert has_element?(view, "#continue-to-design:not([disabled])")
 
@@ -36,7 +39,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
-    assert has_element?(view, "#content-candidates", "Answer question")
+    assert has_element?(view, "#content-candidates", "Question")
     assert has_element?(view, "#content-candidates", "What evidence would change your mind?")
     assert has_element?(view, "#content-candidates", "Found inside “The case for uncertainty”.")
 
@@ -99,7 +102,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert carousel.metadata["slide_count"] >= 3
     assert List.last(carousel.metadata["slides"])["label"] == "Learn more"
     last_slide = carousel.metadata["slide_count"]
-    assert carousel.metadata["selected_slide_indexes"] == [1, 2, last_slide]
+    assert carousel.metadata["selected_slide_indexes"] == Enum.to_list(1..last_slide)
     assert has_element?(view, "#curated-carousel-order-#{carousel.id}")
 
     preview_url = String.replace(carousel.url, "/slides/1/", "/slides/2/")
@@ -114,11 +117,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     |> element("#move-curated-carousel-slide-down-#{carousel.id}-1")
     |> render_click()
 
-    assert Campaigns.get_media_asset!(carousel.id).metadata["selected_slide_indexes"] == [
-             2,
-             1,
-             last_slide
-           ]
+    assert Campaigns.get_media_asset!(carousel.id).metadata["selected_slide_indexes"] ==
+             [2, 1] ++ Enum.to_list(3..last_slide)
 
     assert Enum.any?(
              Campaigns.list_post_drafts(campaign, platform: "x"),

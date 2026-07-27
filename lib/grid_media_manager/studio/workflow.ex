@@ -259,6 +259,8 @@ defmodule GridMediaManager.Studio.Workflow do
       excerpt: question_context(question, kind, recommended?),
       label: question_label(kind),
       signal: question_signal(kind, recommended?),
+      character_count: String.length(text),
+      slide_count: 1,
       recommended?: recommended?
     }
   end
@@ -283,6 +285,8 @@ defmodule GridMediaManager.Studio.Workflow do
             present_string(note) || "A passage a person chose to preserve from the conversation.",
           label: "Highlight",
           signal: "Human-curated signal",
+          character_count: String.length(text),
+          slide_count: 1,
           recommended?: false
         }
       end
@@ -307,6 +311,13 @@ defmodule GridMediaManager.Studio.Workflow do
 
       if source_id && is_binary(title) && String.trim(title) != "" do
         node_class = map_value(node, "class") || "node"
+        reading_slides = ShareCard.node_reading_slides(campaign, node)
+        content_slides = Enum.reject(reading_slides, &(&1.kind in ["node_title", "cta"]))
+
+        character_count =
+          [title | Enum.map(content_slides, &Map.get(&1, :body, ""))]
+          |> Enum.join(" ")
+          |> String.length()
 
         %{
           key: "key_node:#{source_id}",
@@ -316,8 +327,10 @@ defmodule GridMediaManager.Studio.Workflow do
           node_id: to_string(source_id),
           title: title,
           excerpt: present_string(map_value(node, "excerpt")),
-          label: "Key node",
+          label: "Longer answer",
           signal: "#{node_class} · structural context",
+          character_count: character_count,
+          slide_count: max(length(content_slides), 1),
           recommended?: false
         }
       end
@@ -336,6 +349,8 @@ defmodule GridMediaManager.Studio.Workflow do
       excerpt: "A title card that introduces the complete grid rather than one moment within it.",
       label: "Grid overview",
       signal: "Broad entry point",
+      character_count: String.length(campaign.title || ""),
+      slide_count: 1,
       recommended?: false
     }
   end
@@ -385,7 +400,7 @@ defmodule GridMediaManager.Studio.Workflow do
   defp question_context(_question, _kind, false),
     do: "A follow-up path surfaced from the conversation."
 
-  defp question_label("answer_question"), do: "Answer question"
+  defp question_label("answer_question"), do: "Question"
   defp question_label(_kind), do: "Question"
 
   defp question_signal("answer_question", true), do: "Recommended · found in answer"

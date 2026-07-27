@@ -1,13 +1,10 @@
 const WIDTH = 1080
-const HEIGHT = 1350
-const BODY_X = 130
-const BODY_WIDTH = 820
-const BODY_START_Y = 240
-const BODY_MAX_Y = 1160
-const BODY_HEIGHT = BODY_MAX_Y - BODY_START_Y
+const IMAGE_HEIGHT = 1350
+const VIDEO_HEIGHT = 1920
 const UI_FONT = "Arial, Helvetica, sans-serif"
 const QUOTE_FONT = "Georgia, Times New Roman, serif"
 const FONT_SIZES = [136, 128, 120, 112, 104, 96, 88, 80, 72, 64, 56, 52, 48, 44, 40, 36, 32]
+const TITLE_CASE_MINOR_WORDS = new Set(["a", "an", "and", "as", "at", "for", "in", "of", "on", "or", "the", "to"])
 
 const PALETTES = {
   minimal_light: {
@@ -125,45 +122,45 @@ function roundedRect(context, x, y, width, height, radius) {
   context.quadraticCurveTo(x, y, x + radius, y)
 }
 
-function drawBackground(context, palette) {
-  const gradient = context.createLinearGradient(0, 0, WIDTH, HEIGHT)
+function drawBackground(context, palette, frame) {
+  const gradient = context.createLinearGradient(0, 0, WIDTH, frame.height)
   const colors = palette.canvas
   colors.forEach((color, index) => gradient.addColorStop(index / Math.max(colors.length - 1, 1), color))
   context.fillStyle = gradient
-  context.fillRect(0, 0, WIDTH, HEIGHT)
+  context.fillRect(0, 0, WIDTH, frame.height)
 
   context.fillStyle = "rgba(255,255,255,0.035)"
   context.beginPath()
-  context.arc(940, 170, 230, 0, Math.PI * 2)
+  context.arc(940, frame.video ? 230 : 170, 230, 0, Math.PI * 2)
   context.fill()
   context.beginPath()
-  context.arc(110, 1190, 250, 0, Math.PI * 2)
+  context.arc(110, frame.video ? 1690 : 1190, 250, 0, Math.PI * 2)
   context.fill()
 
   context.fillStyle = palette.card
-  roundedRect(context, 54, 54, 972, 1242, 44)
+  roundedRect(context, 54, frame.video ? 64 : 54, 972, frame.video ? 1792 : 1242, frame.video ? 48 : 44)
   context.fill()
   context.strokeStyle = palette.border
   context.lineWidth = 1
   context.stroke()
 
   context.fillStyle = palette.panel
-  roundedRect(context, 82, 82, 916, 1186, 32)
+  roundedRect(context, 82, frame.video ? 92 : 82, 916, frame.video ? 1736 : 1186, frame.video ? 34 : 32)
   context.fill()
   context.strokeStyle = palette.border
   context.stroke()
 }
 
-function drawHeader(context, palette) {
-  context.fillStyle = palette.text
+function drawHeader(context, palette, frame, textColor = palette.text) {
+  context.fillStyle = textColor
   context.globalAlpha = 0.92
-  context.font = `800 20px ${UI_FONT}`
-  context.fillText("RationalGrid.ai", 130, 142)
+  context.font = `800 ${frame.video ? 23 : 20}px ${UI_FONT}`
+  context.fillText("RationalGrid.ai", 130, frame.video ? 170 : 142)
   context.globalAlpha = 1
   context.strokeStyle = palette.border
   context.beginPath()
-  context.moveTo(130, 176)
-  context.lineTo(950, 176)
+  context.moveTo(130, frame.video ? 210 : 176)
+  context.lineTo(950, frame.video ? 210 : 176)
   context.stroke()
 }
 
@@ -175,6 +172,18 @@ function cleanInlineMarkdown(value) {
     .replace(/[*_~]/g, "")
     .replace(/\s+/g, " ")
     .trim()
+}
+
+function titleCase(value) {
+  return cleanInlineMarkdown(value)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word, index) => {
+      const normalized = word.toLowerCase()
+      if (index > 0 && TITLE_CASE_MINOR_WORDS.has(normalized)) return normalized
+      return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+    })
+    .join(" ")
 }
 
 function sentenceGroups(value, maxCharacters = 220) {
@@ -248,7 +257,7 @@ function blockStyle(block, fontSize, palette) {
   return {size: fontSize, lineHeight: fontSize * 1.42, gap: 14, weight: 500, color: palette.secondary, family: UI_FONT}
 }
 
-function layoutBlocks(context, blocks, fontSize, palette) {
+function layoutBlocks(context, blocks, fontSize, palette, bodyWidth) {
   let y = 0
   const layout = []
 
@@ -256,7 +265,7 @@ function layoutBlocks(context, blocks, fontSize, palette) {
     const style = blockStyle(block, fontSize, palette)
     context.font = `${style.weight} ${style.size}px ${style.family}`
     const indent = block.type === "list_item" || block.type === "blockquote" ? 30 : 0
-    const lines = wrapText(context, block.text, BODY_WIDTH - indent)
+    const lines = wrapText(context, block.text, bodyWidth - indent)
     layout.push({block, style, indent, lines, y})
     y += lines.length * style.lineHeight + style.gap
   })
@@ -264,14 +273,15 @@ function layoutBlocks(context, blocks, fontSize, palette) {
   return {layout, height: Math.max(y - (layout.at(-1)?.style.gap || 0), 0)}
 }
 
-function nodeLayout(context, slide, palette) {
+function nodeLayout(context, slide, palette, frame) {
   const blocks = normalizedBlocks(slide)
-  return FONT_SIZES.map(fontSize => layoutBlocks(context, blocks, fontSize, palette)).find(result => result.height <= BODY_MAX_Y - BODY_START_Y) || layoutBlocks(context, blocks, FONT_SIZES[FONT_SIZES.length - 1], palette)
+  return FONT_SIZES.map(fontSize => layoutBlocks(context, blocks, fontSize, palette, frame.bodyWidth)).find(result => result.height <= frame.bodyMaxY - frame.bodyStartY) || layoutBlocks(context, blocks, FONT_SIZES[FONT_SIZES.length - 1], palette, frame.bodyWidth)
 }
 
-function drawNode(context, slide, palette) {
-  const {layout, height} = nodeLayout(context, slide, palette)
-  const startY = BODY_START_Y + Math.max(Math.floor((BODY_HEIGHT - height) / 2), 0)
+function drawNode(context, slide, palette, frame) {
+  const {layout, height} = nodeLayout(context, slide, palette, frame)
+  const bodyHeight = frame.bodyMaxY - frame.bodyStartY
+  const startY = frame.bodyStartY + Math.max(Math.floor((bodyHeight - height) / 2), 0)
 
   layout.forEach(({block, style, indent, lines, y}) => {
     context.font = `${style.weight} ${style.size}px ${style.family}`
@@ -281,48 +291,52 @@ function drawNode(context, slide, palette) {
       const prefix = block.type === "list_item" && index === 0 ? `${block.marker}  ` : ""
       const quote = block.type === "blockquote" && index === 0 ? "“" : ""
       const closingQuote = block.type === "blockquote" && index === lines.length - 1 ? "”" : ""
-      context.fillText(`${prefix}${quote}${line}${closingQuote}`, BODY_X + indent, startY + y + index * style.lineHeight)
+      context.fillText(`${prefix}${quote}${line}${closingQuote}`, frame.bodyX + indent, startY + y + index * style.lineHeight)
     })
     context.globalAlpha = 1
     if (block.type === "blockquote") {
       context.fillStyle = palette.accent
-      context.fillRect(BODY_X, startY + y - style.size, 5, lines.length * style.lineHeight)
+      context.fillRect(frame.bodyX, startY + y - style.size, 5, lines.length * style.lineHeight)
     }
     y += lines.length * style.lineHeight + style.gap
   })
 }
 
-function titleLayout(context, title, palette) {
+function titleLayout(context, title, palette, maxWidth = 820) {
   const sizes = [80, 76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32]
   for (const size of sizes) {
     context.font = `900 ${size}px ${UI_FONT}`
-    const lines = wrapText(context, cleanInlineMarkdown(title), 820)
+    const lines = wrapText(context, cleanInlineMarkdown(title), maxWidth)
     if (lines.length * size * 1.18 <= 360) return {size, lines, lineHeight: size * 1.18}
   }
   const size = 32
   context.font = `900 ${size}px ${UI_FONT}`
-  return {size, lines: wrapText(context, cleanInlineMarkdown(title), 820), lineHeight: size * 1.18}
+  return {size, lines: wrapText(context, cleanInlineMarkdown(title), maxWidth), lineHeight: size * 1.18}
 }
 
-function drawCover(context, slide, palette) {
-  const title = titleLayout(context, slide.title, palette)
+function drawCover(context, slide, palette, frame, textColor = palette.text) {
+  const title = titleLayout(context, titleCase(slide.title), palette, frame.bodyWidth)
   const titleHeight = title.lines.length * title.lineHeight
-  const titleStartY = 430 + Math.floor((430 - titleHeight) / 2) + title.size
-  context.fillStyle = palette.text
+  const titleAreaStart = frame.video ? 610 : 430
+  const titleAreaHeight = frame.video ? 390 : 430
+  const titleStartY = titleAreaStart + Math.floor((titleAreaHeight - titleHeight) / 2) + title.size
+  context.fillStyle = textColor
   context.font = `900 ${title.size}px ${UI_FONT}`
-  title.lines.forEach((line, index) => context.fillText(line, BODY_X, titleStartY + index * title.lineHeight))
-  context.fillStyle = palette.accent
-  context.fillRect(BODY_X, titleStartY + titleHeight + 46, 220, 7)
+  title.lines.forEach((line, index) => context.fillText(line, frame.bodyX, titleStartY + index * title.lineHeight))
+  if (!frame.video) {
+    context.fillStyle = palette.accent
+    context.fillRect(frame.bodyX, titleStartY + titleHeight + 46, 220, 7)
+  }
 }
 
-function drawQuote(context, slide, palette) {
+function drawQuote(context, slide, palette, frame) {
   const sizes = [72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32]
   const quoteText = cleanInlineMarkdown(slide.title)
   let quote = null
 
   for (const size of sizes) {
     context.font = `700 ${size}px ${QUOTE_FONT}`
-    const lines = wrapText(context, quoteText, 820)
+    const lines = wrapText(context, quoteText, frame.bodyWidth)
     if (lines.length * size * 1.18 <= 560) {
       quote = {size, lines, lineHeight: size * 1.18}
       break
@@ -331,61 +345,98 @@ function drawQuote(context, slide, palette) {
 
   quote ||= {size: 32, lines: [quoteText], lineHeight: 38}
   const quoteHeight = quote.lines.length * quote.lineHeight
-  const quoteStartY = 290 + Math.floor((560 - quoteHeight) / 2) + quote.size
+  const quoteAreaStart = frame.video ? 290 : 290
+  const quoteAreaHeight = frame.video ? 560 : 560
+  const contentHeight = quoteHeight + (frame.video ? 172 : 80)
+  const contentStart = frame.video
+    ? quoteAreaStart + Math.max(Math.floor((frame.bodyMaxY - quoteAreaStart - contentHeight) / 2), 0)
+    : quoteAreaStart
+  const quoteStartY = contentStart + (frame.video ? quote.size : Math.floor((quoteAreaHeight - quoteHeight) / 2) + quote.size)
   context.fillStyle = palette.text
   context.font = `700 ${quote.size}px ${QUOTE_FONT}`
   quote.lines.forEach((line, index) => {
     const opening = index === 0 ? "“" : ""
     const closing = index === quote.lines.length - 1 ? "”" : ""
-    context.fillText(`${opening}${line}${closing}`, BODY_X, quoteStartY + index * quote.lineHeight)
+    context.fillText(`${opening}${line}${closing}`, frame.bodyX, quoteStartY + index * quote.lineHeight)
   })
   context.fillStyle = palette.accent
-  context.fillRect(BODY_X, 930, 240, 8)
-  context.fillStyle = palette.muted
-  context.font = `800 23px ${UI_FONT}`
-  wrapText(context, cleanInlineMarkdown(slide.body), 820).slice(0, 2).forEach((line, index) => context.fillText(line, BODY_X, 1010 + index * 34))
+  const bodyStart = frame.video ? contentStart + quoteHeight + 92 : 930
+  context.fillRect(frame.bodyX, bodyStart - 72, 240, 8)
 }
 
-function drawCta(context, palette, logo) {
-  if (logo) context.drawImage(logo, 420, 360, 240, 240)
+function drawCta(context, palette, logo, frame) {
+  if (logo) context.drawImage(logo, 420, frame.video ? 520 : 360, 240, 240)
   context.fillStyle = palette.text
   context.textAlign = "center"
   context.font = `900 48px ${UI_FONT}`
-  context.fillText("Continue on", 540, 760)
+  context.fillText("Continue on", 540, frame.video ? 930 : 760)
   context.font = `900 54px ${UI_FONT}`
-  context.fillText("RationalGrid.ai", 540, 830)
+  context.fillText("RationalGrid.ai", 540, frame.video ? 1000 : 830)
   context.textAlign = "left"
 }
 
-function drawFooter(context, slideIndex, slideCount, palette) {
+function drawFooter(context, slideIndex, slideCount, palette, frame, mutedColor = palette.muted) {
   context.strokeStyle = palette.border
   context.beginPath()
-  context.moveTo(130, 1210)
-  context.lineTo(950, 1210)
+  context.moveTo(130, frame.video ? 1738 : 1210)
+  context.lineTo(950, frame.video ? 1738 : 1210)
   context.stroke()
-  context.fillStyle = palette.muted
-  context.font = `700 18px ${UI_FONT}`
-  context.fillText(`${slideIndex} / ${slideCount} · Learn more at rationalgrid.ai`, 130, 1248)
+  context.fillStyle = mutedColor
+  context.font = `700 ${frame.video ? 22 : 18}px ${UI_FONT}`
+  context.fillText(`${slideIndex} / ${slideCount} · Learn more at rationalgrid.ai`, 130, frame.video ? 1790 : 1248)
 }
 
-function drawSlide(canvas, slide, slideIndex, slideCount, style, logo) {
+function drawImageCover(context, image, width, height) {
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight)
+  const drawWidth = image.naturalWidth * scale
+  const drawHeight = image.naturalHeight * scale
+  context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight)
+}
+
+function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverCard, videoCoverImage, video) {
   const context = canvas.getContext("2d")
   const palette = paletteFor(style)
+  const frame = {
+    video,
+    height: video ? VIDEO_HEIGHT : IMAGE_HEIGHT,
+    bodyX: 130,
+    bodyWidth: 820,
+    bodyStartY: video ? 350 : 240,
+    bodyMaxY: video ? 1620 : 1160,
+  }
   canvas.width = WIDTH
-  canvas.height = HEIGHT
-  context.clearRect(0, 0, WIDTH, HEIGHT)
-  drawBackground(context, palette)
+  canvas.height = frame.height
+  context.clearRect(0, 0, WIDTH, frame.height)
+  drawBackground(context, palette, frame)
 
   if (slide.kind === "cta" || slide.label === "Learn more") {
-    drawCta(context, palette, logo)
+    drawCta(context, palette, logo, frame)
     return
   }
 
-  drawHeader(context, palette)
-  if (slide.kind === "cover" || slide.kind === "node_title") drawCover(context, slide, palette)
-  else if (slide.kind === "quote" || slide.kind === "highlight") drawQuote(context, slide, palette)
-  else drawNode(context, slide, palette)
-  drawFooter(context, slideIndex, slideCount, palette)
+  if (slide.kind === "cover" && !video && coverCard) {
+    context.drawImage(coverCard, 0, 0, WIDTH, frame.height)
+    return
+  }
+
+  if (slide.kind === "cover" && video && videoCoverImage) {
+    context.save()
+    roundedRect(context, 54, 64, 972, 1792, 48)
+    context.clip()
+    drawImageCover(context, videoCoverImage, WIDTH, frame.height)
+    context.fillStyle = "rgba(2, 6, 23, 0.58)"
+    context.fillRect(0, 0, WIDTH, frame.height)
+    context.restore()
+  }
+
+  const coverPhoto = slide.kind === "cover" && video && videoCoverImage
+  const coverTextColor = coverPhoto ? "#fff7ed" : palette.text
+  const coverMutedColor = coverPhoto ? "rgba(255,247,237,0.82)" : palette.muted
+  drawHeader(context, palette, frame, coverPhoto ? "#fff7ed" : palette.text)
+  if (slide.kind === "cover" || slide.kind === "node_title") drawCover(context, slide, palette, frame, coverTextColor)
+  else if (slide.kind === "quote" || slide.kind === "highlight") drawQuote(context, slide, palette, frame)
+  else drawNode(context, slide, palette, frame)
+  drawFooter(context, slideIndex, slideCount, palette, frame, coverMutedColor)
 }
 
 function canvasBlob(canvas) {
@@ -395,6 +446,7 @@ function canvasBlob(canvas) {
 function loadImage(source) {
   return new Promise(resolve => {
     const image = new Image()
+    if (/^https?:\/\//.test(source)) image.crossOrigin = "anonymous"
     image.onload = () => resolve(image)
     image.onerror = () => resolve(null)
     image.src = source
@@ -467,7 +519,14 @@ export const CanvasSlideRenderer = {
       if (!this.root) return
       const slides = JSON.parse(this.root.dataset.slides || "[]")
       const style = this.root.dataset.style || "editorial_dark"
+      const video = this.root.dataset.videoFrame === "true"
       const logo = await loadImage(this.root.dataset.logoSrc || "/images/rg_logo.webp")
+      const coverCard = this.root.dataset.coverCardUrl
+        ? await loadImage(this.root.dataset.coverCardUrl)
+        : null
+      const videoCoverImage = video && this.root.dataset.videoCoverImageUrl
+        ? await loadImage(this.root.dataset.videoCoverImageUrl)
+        : null
       const targets = this.root.querySelectorAll("[data-canvas-slide]")
 
       targets.forEach(target => {
@@ -475,7 +534,7 @@ export const CanvasSlideRenderer = {
         const slide = slides[index - 1]
         const canvas = target
         if (!slide || !canvas) return
-        drawSlide(canvas, slide, index, slides.length, style, logo)
+        drawSlide(canvas, slide, index, slides.length, style, logo, coverCard, videoCoverImage, video)
         canvas.classList.remove("hidden")
         const image = target.parentElement?.querySelector("img")
         if (image) image.classList.add("hidden")
@@ -492,7 +551,7 @@ export const CanvasSlideRenderer = {
       if (status) status.textContent = "Browser-rendered preview"
 
       if (this.root.dataset.videoPreviewId) {
-        const fingerprint = `${this.root.dataset.slides}|${style}`
+        const fingerprint = `${this.root.dataset.slides}|${style}|${this.root.dataset.coverCardUrl || ""}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.videoCoverImageUrl || ""}`
         if (this.uploadedFrameFingerprint !== fingerprint && !this.uploadingFrames) {
           await this.uploadFrames({automatic: true, fingerprint})
         }
@@ -516,7 +575,7 @@ export const CanvasSlideRenderer = {
     const uploadButton = this.root.querySelector("[data-browser-render-upload]")
     if (!uploadButton) return
     const automatic = options.automatic === true
-    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}`
+    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}|${this.root.dataset.coverCardUrl || ""}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.videoCoverImageUrl || ""}`
     const slides = JSON.parse(this.root.dataset.slides || "[]")
     const frameIndexes = slides.map((_slide, index) => index + 1)
     const targets = this.root.querySelectorAll("[data-canvas-slide]")

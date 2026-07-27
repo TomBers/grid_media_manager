@@ -22,7 +22,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
   @square_size 1200
   @short_width 1080
   @short_height 1920
-  @short_body_x 110
   @short_body_width 860
   @short_body_area_top 260
   @short_body_area_bottom 1_690
@@ -31,7 +30,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
   @short_min_duration 4.5
   @short_words_per_second 3.0
   @short_pause_duration 1.5
-  @max_curated_carousel_images 3
   @carousel_reading_max_characters 360
 
   @quote_area_left 112
@@ -135,9 +133,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   def graph_image_path(campaign, style \\ @default_style)
 
-  def graph_image_path(%Campaign{id: id}, style) do
+  def graph_image_path(%Campaign{id: id} = campaign, style) do
     "/campaigns/#{id}/share-card.png"
     |> maybe_add_style_query(style)
+    |> maybe_add_title_card_query(campaign)
   end
 
   def highlight_image_path(campaign, highlight_id, style \\ @default_style),
@@ -166,20 +165,22 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   def curated_carousel_image_path(campaign, token, slide, style \\ @default_style)
 
-  def curated_carousel_image_path(%Campaign{id: id}, token, slide, style) do
+  def curated_carousel_image_path(%Campaign{id: id} = campaign, token, slide, style) do
     encoded_token = URI.encode(to_string(token), &URI.char_unreserved?/1)
 
     "/campaigns/#{id}/curated-carousels/#{encoded_token}/slides/#{slide}/image.png"
     |> maybe_add_style_query(style)
+    |> maybe_add_title_card_query(campaign)
   end
 
   def node_carousel_image_path(campaign, node_id, slide, style \\ @default_style)
 
-  def node_carousel_image_path(%Campaign{id: id}, node_id, slide, style) do
+  def node_carousel_image_path(%Campaign{id: id} = campaign, node_id, slide, style) do
     encoded_node_id = URI.encode(to_string(node_id), &URI.char_unreserved?/1)
 
     "/campaigns/#{id}/nodes/#{encoded_node_id}/carousel.png"
     |> then(&(&1 <> "?" <> URI.encode_query(%{style: normalize_style(style), slide: slide})))
+    |> maybe_add_title_card_query(campaign)
   end
 
   def question_image_path(campaign, question_id, style \\ @default_style),
@@ -313,7 +314,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="1200" height="630" fill="url(#canvas)" />
-      #{pexels_background_markup(campaign, 1200, 630)}
       <rect width="1200" height="630" fill="url(#violetHalo)" />
       <rect width="1200" height="630" fill="url(#blueHalo)" />
       <circle cx="1040" cy="126" r="132" fill="#{palette.bloom_b}" fill-opacity="#{palette.decoration_opacity}" />
@@ -322,6 +322,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
       <rect x="52" y="44" width="1096" height="542" rx="44" fill="#{palette.card}" fill-opacity="#{palette.card_opacity}" filter="url(#cardShadow)" />
       <rect x="52.5" y="44.5" width="1095" height="541" rx="43.5" fill="none" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
       <rect x="52" y="44" width="1096" height="542" rx="44" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" />
+
+      #{pexels_background_markup(campaign, 1200, 630, true)}
 
       <text x="96" y="98" fill="#{palette.label}" fill-opacity="0.86" font-size="17" font-weight="700" font-family="#{@ui_font_family}" letter-spacing="0.15">RationalGrid.ai</text>
       <line x1="96" y1="134" x2="1104" y2="134" stroke="#{palette.border}" stroke-width="1" stroke-opacity="#{palette.border_opacity}" />
@@ -728,13 +730,17 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp short_video_slide_duration(slide) do
     label = slide |> get("label") |> to_string()
+    kind = slide |> get("kind") |> to_string()
     title = slide |> get("title") |> sanitize_text(nil)
     body = slide |> get("body") |> sanitize_text(nil)
+
+    duration_text =
+      if kind in ["quote", "highlight"], do: title, else: Enum.join([title, body], " ")
 
     cond do
       label == "Learn more" -> @short_min_duration
       title != "" and body == "" -> readable_duration(title)
-      true -> readable_duration(Enum.join([title, body], " "))
+      true -> readable_duration(duration_text)
     end
   end
 
@@ -870,8 +876,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end
   end
 
-  def curated_carousel_max_images, do: @max_curated_carousel_images
-
   def curated_carousel_selected_slide_indexes(slides, selection \\ nil) when is_list(slides) do
     slide_count = length(slides)
     content_count = max(slide_count - 1, 0)
@@ -886,7 +890,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
       |> Enum.filter(&valid_curated_content_index?(&1, content_count))
-      |> Enum.take(@max_curated_carousel_images - 1)
 
     if slide_count == 0, do: [], else: content_indexes ++ [slide_count]
   end
@@ -933,10 +936,12 @@ defmodule GridMediaManager.Promotion.ShareCard do
     palette = quote_palette(style)
     cta? = slide.label == "Learn more"
     titled? = is_binary(slide.title) and String.trim(slide.title) != ""
+    cover_photo? = slide_index == 1 and pexels_background_selected?(campaign)
     body_start_y = if titled?, do: 480, else: 240
+    title_text = if slide_index == 1, do: title_case(slide.title), else: slide.title
 
     title_image_markup =
-      if cta? or not titled?, do: "", else: carousel_title_image_markup(slide.title, palette.text)
+      if cta? or not titled?, do: "", else: carousel_title_image_markup(title_text, palette.text)
 
     brand_header =
       if(cta?,
@@ -956,7 +961,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
     footer_font_size = single_line_font_size(footer, 820, 18, 8)
 
     body_markup =
-      if cta? do
+      if cta? or slide.kind in ["quote", "highlight"] do
         ""
       else
         fitted_markdown_body_markup(
@@ -1023,12 +1028,13 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="1080" height="1350" fill="url(#carouselCanvas)" />
-      #{pexels_background_markup(campaign, 1080, 1350)}
       <rect width="1080" height="1350" fill="url(#carouselBloomA)" />
       <rect width="1080" height="1350" fill="url(#carouselBloomB)" />
-      <rect x="54" y="54" width="972" height="1242" rx="44" fill="#{palette.card}" fill-opacity="#{palette.card_opacity}" filter="url(#carouselShadow)" />
+      <rect x="54" y="54" width="972" height="1242" rx="44" fill="#{palette.card}" fill-opacity="#{if(cover_photo?, do: "0.42", else: palette.card_opacity)}" filter="url(#carouselShadow)" />
       <rect x="54.5" y="54.5" width="971" height="1241" rx="43.5" fill="none" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
-      <rect x="82" y="82" width="916" height="1186" rx="32" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
+      <rect x="82" y="82" width="916" height="1186" rx="32" fill="#{palette.panel}" fill-opacity="#{if(cover_photo?, do: "0.18", else: palette.panel_opacity)}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
+
+      #{pexels_background_markup(campaign, 1080, 1350, slide_index == 1)}
 
       #{brand_header}
       #{top_rule}
@@ -1099,9 +1105,11 @@ defmodule GridMediaManager.Promotion.ShareCard do
   defp short_video_frame_svg(campaign, slide, style, slide_index, slide_count) do
     palette = quote_palette(style)
     cover? = slide_index == 1
+    cover_photo? = cover? and pexels_background_selected?(campaign)
     cta? = slide.label in ["Explore", "Learn more"]
     text_only? = slide.title == "" and not cta?
     minimal? = cover? or text_only? or cta?
+    display_title = if cover?, do: title_case(slide.title), else: slide.title
     logo_markup = if cta?, do: rg_logo_markup(), else: ""
 
     brand_header =
@@ -1128,7 +1136,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
     title_layout =
       bounded_text_layout(
-        slide.title,
+        display_title,
         820,
         390,
         if(cover?,
@@ -1184,19 +1192,20 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end)
 
     body_markup =
-      if cta? do
+      if cta? or slide.kind in ["quote", "highlight"] do
         ""
       else
         fitted_markdown_body_markup(
           slide_content(slide),
           nil,
           %{
-            x: if(text_only?, do: @short_body_x, else: 130),
+            x: if(text_only?, do: @short_width / 2, else: 130),
             start_y: body_start_y,
             max_y: if(text_only?, do: @short_body_max_y, else: 1_620),
             width: if(text_only?, do: @short_body_width, else: 820),
             font_size: body_font_size,
-            palette: palette
+            palette: palette,
+            text_anchor: if(text_only?, do: "middle", else: nil)
           },
           body_font_sizes
         )
@@ -1211,7 +1220,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
     """
     <svg xmlns="http://www.w3.org/2000/svg" width="#{@short_width}" height="#{@short_height}" viewBox="0 0 #{@short_width} #{@short_height}" role="img" aria-labelledby="title desc">
-      <title id="title">#{escape_xml(slide.title)} · #{escape_xml(campaign.title)} · RationalGrid Short</title>
+      <title id="title">#{escape_xml(display_title)} · #{escape_xml(campaign.title)} · RationalGrid Short</title>
       <desc id="desc">Vertical short-video frame #{slide_index} of #{slide_count}</desc>
       <defs>
         <linearGradient id="shortCanvas" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1238,15 +1247,16 @@ defmodule GridMediaManager.Promotion.ShareCard do
       </defs>
 
       <rect width="1080" height="1920" fill="url(#shortCanvas)" />
-      #{pexels_background_markup(campaign, 1080, 1920)}
       <rect width="1080" height="1920" fill="url(#shortBloomA)" />
       <rect width="1080" height="1920" fill="url(#shortBloomB)" />
       <circle cx="950" cy="230" r="220" fill="#{palette.bloom_b}" fill-opacity="#{palette.decoration_opacity}" />
       <circle cx="120" cy="1690" r="240" fill="#{palette.bloom_a}" fill-opacity="#{palette.decoration_opacity}" />
 
-      <rect x="54" y="64" width="972" height="1792" rx="48" fill="#{palette.card}" fill-opacity="#{palette.card_opacity}" filter="url(#shortShadow)" />
+      <rect x="54" y="64" width="972" height="1792" rx="48" fill="#{palette.card}" fill-opacity="#{if(cover_photo?, do: "0.42", else: palette.card_opacity)}" filter="url(#shortShadow)" />
       <rect x="54.5" y="64.5" width="971" height="1791" rx="47.5" fill="none" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
-      <rect x="82" y="92" width="916" height="1736" rx="34" fill="#{palette.panel}" fill-opacity="#{palette.panel_opacity}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
+      <rect x="82" y="92" width="916" height="1736" rx="34" fill="#{palette.panel}" fill-opacity="#{if(cover_photo?, do: "0.18", else: palette.panel_opacity)}" stroke="#{palette.border}" stroke-opacity="#{palette.border_opacity}" />
+
+      #{pexels_background_markup(campaign, 1080, 1920, cover?)}
 
       #{brand_header}
 
@@ -2296,6 +2306,15 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end
   end
 
+  defp maybe_add_title_card_query(path, %Campaign{} = campaign) do
+    state = get_in(campaign.raw_payload || %{}, ["share_studio"]) || %{}
+
+    version =
+      :erlang.phash2({Map.get(state, "title_card_mode"), Map.get(state, "pexels_background")})
+
+    append_query(path, %{cover: version})
+  end
+
   defp maybe_add_quote_format_query(path, format) do
     case normalize_quote_format(format) do
       "landscape" -> path
@@ -2541,6 +2560,9 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   defp markdown_block_markup(block, lines, first_y, style, opts) do
+    text_anchor = Map.get(opts, :text_anchor)
+    text_anchor_markup = if text_anchor, do: ~s( text-anchor="#{text_anchor}"), else: ""
+
     text_markup =
       lines
       |> Enum.with_index()
@@ -2549,7 +2571,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         text = decorate_markdown_quote(block, text, index, length(lines))
         y = first_y + index * style.line_gap
 
-        ~s(<text x="#{x}" y="#{y}" fill="#{style.color}" font-size="#{style.font_size}" font-weight="#{style.weight}" font-style="#{style.style}" font-family="#{style.family}" opacity="#{style.opacity}">#{escape_xml(text)}</text>)
+        ~s(<text x="#{x}" y="#{y}"#{text_anchor_markup} fill="#{style.color}" font-size="#{style.font_size}" font-weight="#{style.weight}" font-style="#{style.style}" font-family="#{style.family}" opacity="#{style.opacity}">#{escape_xml(text)}</text>)
       end)
 
     case block do
@@ -2608,22 +2630,55 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> String.trim()
   end
 
+  defp title_case(title) when is_binary(title) do
+    minor_words =
+      MapSet.new(["a", "an", "and", "as", "at", "for", "in", "of", "on", "or", "the", "to"])
+
+    title
+    |> Markdown.plain_inline()
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.with_index()
+    |> Enum.map_join(" ", fn {word, index} ->
+      normalized = String.downcase(word)
+
+      if index > 0 and MapSet.member?(minor_words, normalized) do
+        normalized
+      else
+        String.capitalize(normalized)
+      end
+    end)
+  end
+
+  defp title_case(title), do: title
+
   defp pexels_background_markup(%Campaign{} = campaign, width, height) do
-    background = get_in(campaign.raw_payload || %{}, ["share_studio", "pexels_background"])
-    url = pexels_background_url(background, width, height)
+    pexels_background_markup(campaign, width, height, false)
+  end
 
-    with %URI{scheme: "https", host: "images.pexels.com"} <- URI.parse(url || ""),
-         {:ok, %{status: status, body: body}} when status in 200..299 and is_binary(body) <-
-           Req.get(url, receive_timeout: 10_000, retry: :transient) do
-      encoded = Base.encode64(body)
-
-      """
-      <image x="0" y="0" width="#{width}" height="#{height}" href="data:image/jpeg;base64,#{encoded}" preserveAspectRatio="xMidYMid slice" />
-      <rect width="#{width}" height="#{height}" fill="#020617" fill-opacity="0.58" />
-      """
+  defp pexels_background_markup(%Campaign{} = campaign, width, height, enabled?) do
+    if not enabled? do
+      ""
     else
-      _error -> ""
+      background = get_in(campaign.raw_payload || %{}, ["share_studio", "pexels_background"])
+      url = pexels_background_url(background, width, height)
+
+      with %URI{scheme: "https", host: "images.pexels.com"} <- URI.parse(url || ""),
+           {:ok, %{status: status, body: body}} when status in 200..299 and is_binary(body) <-
+             Req.get(url, receive_timeout: 10_000, retry: :transient) do
+        encoded = Base.encode64(body)
+
+        """
+        <image x="0" y="0" width="#{width}" height="#{height}" href="data:image/jpeg;base64,#{encoded}" preserveAspectRatio="xMidYMid slice" />
+        <rect width="#{width}" height="#{height}" fill="#020617" fill-opacity="0.58" />
+        """
+      else
+        _error -> ""
+      end
     end
+  end
+
+  defp pexels_background_selected?(%Campaign{} = campaign) do
+    is_map(get_in(campaign.raw_payload || %{}, ["share_studio", "pexels_background"]))
   end
 
   defp pexels_background_url(background, width, height) when is_map(background) do

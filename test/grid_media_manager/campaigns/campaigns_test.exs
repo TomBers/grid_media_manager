@@ -197,6 +197,53 @@ defmodule GridMediaManager.CampaignsTest do
     on_exit(fn -> File.rm(path) end)
   end
 
+  test "combines persisted browser frames into the curated video" do
+    if CarouselVideo.available?() do
+      assert {:ok, campaign} =
+               Campaigns.import_payload(simplified_payload(), "video-browser-frames")
+
+      slides = [
+        %{"kind" => "cover", "title" => "Opening", "body" => ""},
+        %{"kind" => "node_text", "title" => "Frame two", "body" => ""},
+        %{"kind" => "cta", "label" => "Learn more", "title" => "Continue", "body" => ""}
+      ]
+
+      frame =
+        Base.decode64!(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
+
+      frame_directory =
+        Path.join(
+          System.tmp_dir!(),
+          "grid-media-manager-test-frames-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(frame_directory)
+
+      frame_paths =
+        for index <- 1..length(slides), into: %{} do
+          path = Path.join(frame_directory, "#{campaign.id}-#{index}.png")
+          File.write!(path, frame)
+          {Integer.to_string(index), path}
+        end
+
+      on_exit(fn -> File.rm_rf(frame_directory) end)
+
+      assert {:ok, video_path} =
+               CarouselVideo.render_curated(
+                 campaign,
+                 "browser-frame-video",
+                 slides,
+                 "editorial_dark",
+                 frame_paths: frame_paths,
+                 force: true
+               )
+
+      assert File.stat!(video_path).size > 0
+    end
+  end
+
   test "builds one typed sequence for highlights and full nodes" do
     assert {:ok, campaign} =
              Campaigns.import_payload(simplified_payload(), "typed-slide-sequence")

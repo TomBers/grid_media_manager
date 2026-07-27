@@ -43,8 +43,24 @@ defmodule GridMediaManager.Social.TemplatesTest do
     body = Templates.body(campaign, asset, "linkedin", "highlight")
 
     assert body =~ quote
-    assert body =~ campaign.title
+    assert body =~ "What Is the Collective Subconscious?"
     refute body =~ "…"
+  end
+
+  test "capitalizes grid and node titles in generated captions" do
+    campaign = %{campaign() | title: "what can a brave new world teach us?"}
+
+    asset = %MediaAsset{
+      title: "why comfort can become a cage",
+      kind: "key_node_card",
+      text: "A short excerpt"
+    }
+
+    body = Templates.body(campaign, asset, "linkedin", "visual")
+    node_body = Templates.body(campaign, asset, "linkedin", "key_node")
+
+    assert body =~ "What Can a Brave New World Teach Us?"
+    assert node_body =~ "Why Comfort Can Become a Cage"
   end
 
   test "all generated suggestions stay within their platform limit without truncating source text" do
