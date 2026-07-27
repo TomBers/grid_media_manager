@@ -22,7 +22,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     %{id: "all", label: "All signals"},
     %{id: "question", label: "Questions"},
     %{id: "highlight", label: "Highlights"},
-    %{id: "key_node", label: "Key nodes"},
+    %{id: "key_node", label: "Longer answers"},
     %{id: "grid", label: "Overview"}
   ]
   @formats [
@@ -797,6 +797,22 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   <p class="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
                     The recommended question is preselected when available. Human highlights are surfaced next because they already carry an editorial signal.
                   </p>
+                  <div
+                    id="candidate-type-legend"
+                    class="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-base-content/60"
+                  >
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-sky-500/10 px-3 py-1.5 text-sky-700 dark:text-sky-200">
+                      <.icon name="hero-chat-bubble-left-right" class="size-3.5" />
+                      Questions · prompts
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-violet-500/10 px-3 py-1.5 text-violet-700 dark:text-violet-200">
+                      <.icon name="hero-bookmark" class="size-3.5" /> Highlights · selected passages
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-emerald-700 dark:text-emerald-200">
+                      <.icon name="hero-document-text" class="size-3.5" />
+                      Longer answers · multi-slide ideas
+                    </span>
+                  </div>
                 </div>
                 <p class="rounded-2xl bg-base-200 px-4 py-2 text-sm font-semibold text-base-content/65">
                   Choose up to {@max_selection}
@@ -1561,6 +1577,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     selected={@selected_output_asset_id == Integer.to_string(asset.id)}
                     preview_slide={Map.get(@carousel_preview_slides, asset.id, 1)}
                     wide={@output_asset_count == 1}
+                    video_cover_image_url={pexels_video_cover_url(@selected_pexels_background)}
                   />
                 </div>
               </div>
@@ -1684,7 +1701,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       >
         <span class="flex items-start justify-between gap-4">
           <span class="flex flex-wrap items-center gap-2">
-            <span class={candidate_type_class(@candidate.type)}>{@candidate.label}</span>
+            <span class={candidate_type_class(@candidate.type)}>
+              <.icon name={candidate_icon(@candidate.type)} class="size-3.5" />
+              {@candidate.label}
+            </span>
             <span
               :if={@candidate.recommended?}
               class="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-white"
@@ -1703,6 +1723,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         <p :if={@candidate.excerpt} class="mt-2 line-clamp-3 text-sm leading-6 text-base-content/58">
           {@candidate.excerpt}
         </p>
+        <div class="mt-4 flex flex-wrap items-center gap-2 text-[0.7rem] font-semibold text-base-content/50">
+          <span class="inline-flex items-center gap-1 rounded-full bg-base-200 px-2.5 py-1">
+            <.icon name="hero-bars-3-bottom-left" class="size-3.5" />
+            {@candidate.character_count} chars
+          </span>
+          <span class="inline-flex items-center gap-1 rounded-full bg-base-200 px-2.5 py-1">
+            <.icon name="hero-rectangle-stack" class="size-3.5" />
+            {@candidate.slide_count} {if(@candidate.slide_count == 1, do: "slide", else: "slides")}
+          </span>
+          <span class="text-base-content/40">{candidate_type_description(@candidate.type)}</span>
+        </div>
         <p class="mt-auto flex items-center gap-1.5 pt-4 text-xs font-medium text-base-content/45">
           <.icon name="hero-signal" class="size-3.5" /> {@candidate.signal}
         </p>
@@ -1736,6 +1767,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   attr :selected, :boolean, required: true
   attr :preview_slide, :integer, default: 1
   attr :wide, :boolean, default: false
+  attr :video_cover_image_url, :string, default: nil
 
   defp output_asset_card(assigns) do
     ~H"""
@@ -1751,7 +1783,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         playsinline
         preload="metadata"
         class={[
-          "aspect-[9/16] max-h-[34rem] w-full rounded-2xl border border-base-content/10 bg-slate-950 object-contain",
+          "h-[70vh] max-h-[42rem] w-auto max-w-full rounded-2xl border border-base-content/10 bg-slate-950 object-contain",
           @wide && "lg:col-start-1 lg:row-start-1"
         ]}
       >
@@ -1779,6 +1811,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         }
         data-style={@asset.style}
         data-cover-card-url={curated_carousel_cover_url(@asset)}
+        data-video-frame={if(@asset.kind == "curated_carousel_video", do: "true", else: "false")}
+        data-video-cover-image-url={@video_cover_image_url}
         data-logo-src="/images/rg_logo.webp"
         data-upload-url={"/api/campaigns/#{@asset.campaign_id}/curated-carousels/#{@asset.source_id}/browser-frames"}
         class={[
@@ -1859,19 +1893,31 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               <canvas
                 id={"canvas-curated-carousel-slide-#{@asset.id}-#{index}"}
                 width="1080"
-                height="1350"
+                height={if(@asset.kind == "curated_carousel_video", do: 1920, else: 1350)}
                 data-canvas-slide
                 data-slide-index={index}
                 phx-update="ignore"
                 aria-label={"Browser-rendered carousel slide #{index}"}
-                class="hidden aspect-[4/5] w-full object-cover"
+                class={[
+                  "hidden w-full object-cover",
+                  if(@asset.kind == "curated_carousel_video",
+                    do: "aspect-[9/16]",
+                    else: "aspect-[4/5]"
+                  )
+                ]}
               >
               </canvas>
               <img
                 src={url}
                 alt={"Carousel slide #{index}"}
                 loading="lazy"
-                class="aspect-[4/5] w-full object-cover transition group-hover:scale-105"
+                class={[
+                  "w-full object-cover transition group-hover:scale-105",
+                  if(@asset.kind == "curated_carousel_video",
+                    do: "aspect-[9/16]",
+                    else: "aspect-[4/5]"
+                  )
+                ]}
               />
               <span class="absolute bottom-1 right-1 rounded-full bg-black/65 px-1.5 py-0.5 text-[0.6rem] font-bold text-white">
                 {index}
@@ -2563,6 +2609,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp pexels_error_message(_reason), do: "Pexels search is unavailable right now."
 
+  defp pexels_video_cover_url(background) when is_map(background) do
+    background["portrait_url"] || background["original_url"] || background["landscape_url"]
+  end
+
+  defp pexels_video_cover_url(_background), do: nil
+
   defp platforms_for_mode("text"), do: Platforms.text_ids()
   defp platforms_for_mode("video"), do: Platforms.video_ids()
 
@@ -2908,19 +2960,19 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp candidate_type_class("question"),
     do:
-      "rounded-full bg-sky-500/10 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-200"
+      "inline-flex items-center gap-1.5 rounded-full bg-sky-500/10 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-200"
 
   defp candidate_type_class("highlight"),
     do:
-      "rounded-full bg-violet-500/10 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-200"
+      "inline-flex items-center gap-1.5 rounded-full bg-violet-500/10 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-200"
 
   defp candidate_type_class("key_node"),
     do:
-      "rounded-full bg-emerald-500/10 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-200"
+      "inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-200"
 
   defp candidate_type_class(_type),
     do:
-      "rounded-full bg-base-200 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-base-content/55"
+      "inline-flex items-center gap-1.5 rounded-full bg-base-200 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-base-content/55"
 
   defp selection_indicator_class(selected?) do
     [
@@ -2934,8 +2986,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp candidate_icon("question"), do: "hero-chat-bubble-left-right"
   defp candidate_icon("highlight"), do: "hero-bookmark"
-  defp candidate_icon("key_node"), do: "hero-cube-transparent"
+  defp candidate_icon("key_node"), do: "hero-document-text"
   defp candidate_icon(_type), do: "hero-squares-2x2"
+
+  defp candidate_type_description("question"), do: "Conversation starter"
+  defp candidate_type_description("highlight"), do: "Human-selected passage"
+  defp candidate_type_description("key_node"), do: "Structured reading sequence"
+  defp candidate_type_description("grid"), do: "Whole-grid introduction"
+  defp candidate_type_description(_type), do: "Shareable moment"
 
   defp selected_aspect_class("light"),
     do:

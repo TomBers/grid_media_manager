@@ -730,13 +730,17 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp short_video_slide_duration(slide) do
     label = slide |> get("label") |> to_string()
+    kind = slide |> get("kind") |> to_string()
     title = slide |> get("title") |> sanitize_text(nil)
     body = slide |> get("body") |> sanitize_text(nil)
+
+    duration_text =
+      if kind in ["quote", "highlight"], do: title, else: Enum.join([title, body], " ")
 
     cond do
       label == "Learn more" -> @short_min_duration
       title != "" and body == "" -> readable_duration(title)
-      true -> readable_duration(Enum.join([title, body], " "))
+      true -> readable_duration(duration_text)
     end
   end
 
@@ -934,9 +938,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
     titled? = is_binary(slide.title) and String.trim(slide.title) != ""
     cover_photo? = slide_index == 1 and pexels_background_selected?(campaign)
     body_start_y = if titled?, do: 480, else: 240
+    title_text = if slide_index == 1, do: title_case(slide.title), else: slide.title
 
     title_image_markup =
-      if cta? or not titled?, do: "", else: carousel_title_image_markup(slide.title, palette.text)
+      if cta? or not titled?, do: "", else: carousel_title_image_markup(title_text, palette.text)
 
     brand_header =
       if(cta?,
@@ -956,7 +961,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
     footer_font_size = single_line_font_size(footer, 820, 18, 8)
 
     body_markup =
-      if cta? do
+      if cta? or slide.kind in ["quote", "highlight"] do
         ""
       else
         fitted_markdown_body_markup(
@@ -1104,6 +1109,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
     cta? = slide.label in ["Explore", "Learn more"]
     text_only? = slide.title == "" and not cta?
     minimal? = cover? or text_only? or cta?
+    display_title = if cover?, do: title_case(slide.title), else: slide.title
     logo_markup = if cta?, do: rg_logo_markup(), else: ""
 
     brand_header =
@@ -1130,7 +1136,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
     title_layout =
       bounded_text_layout(
-        slide.title,
+        display_title,
         820,
         390,
         if(cover?,
@@ -1186,7 +1192,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end)
 
     body_markup =
-      if cta? do
+      if cta? or slide.kind in ["quote", "highlight"] do
         ""
       else
         fitted_markdown_body_markup(
@@ -1214,7 +1220,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
     """
     <svg xmlns="http://www.w3.org/2000/svg" width="#{@short_width}" height="#{@short_height}" viewBox="0 0 #{@short_width} #{@short_height}" role="img" aria-labelledby="title desc">
-      <title id="title">#{escape_xml(slide.title)} · #{escape_xml(campaign.title)} · RationalGrid Short</title>
+      <title id="title">#{escape_xml(display_title)} · #{escape_xml(campaign.title)} · RationalGrid Short</title>
       <desc id="desc">Vertical short-video frame #{slide_index} of #{slide_count}</desc>
       <defs>
         <linearGradient id="shortCanvas" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -2623,6 +2629,27 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> String.replace(~r/[^a-z0-9]+/u, " ")
     |> String.trim()
   end
+
+  defp title_case(title) when is_binary(title) do
+    minor_words =
+      MapSet.new(["a", "an", "and", "as", "at", "for", "in", "of", "on", "or", "the", "to"])
+
+    title
+    |> Markdown.plain_inline()
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.with_index()
+    |> Enum.map_join(" ", fn {word, index} ->
+      normalized = String.downcase(word)
+
+      if index > 0 and MapSet.member?(minor_words, normalized) do
+        normalized
+      else
+        String.capitalize(normalized)
+      end
+    end)
+  end
+
+  defp title_case(title), do: title
 
   defp pexels_background_markup(%Campaign{} = campaign, width, height) do
     pexels_background_markup(campaign, width, height, false)

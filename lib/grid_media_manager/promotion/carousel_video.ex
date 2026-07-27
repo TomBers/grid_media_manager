@@ -24,7 +24,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @frame_rate 30
   @render_timeout 300_000
   @render_timeout_per_second 5_000
-  @cache_version 19
+  @cache_version 21
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -162,7 +162,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
             token,
             slides,
             style,
-            selected_slide_indexes
+            selected_slide_indexes,
+            Keyword.get(opts, :frame_paths, %{})
           )
         )
 
@@ -173,6 +174,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       else
         video_slides = selected_slides(slides, selected_slide_indexes)
         durations = ShareCard.curated_carousel_short_video_durations(video_slides)
+        frame_paths = Keyword.get(opts, :frame_paths, %{})
 
         render_frame_video(
           ffmpeg,
@@ -181,7 +183,15 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
           output_path,
           fn index ->
             slide_index = Enum.at(selected_slide_indexes, index - 1)
-            ShareCard.curated_carousel_short_video_frame_png(campaign, slides, style, slide_index)
+
+            persisted_frame_or_render(frame_paths, slide_index, fn ->
+              ShareCard.curated_carousel_short_video_frame_png(
+                campaign,
+                slides,
+                style,
+                slide_index
+              )
+            end)
           end
         )
       end
@@ -409,10 +419,17 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     "#{digest}.mp4"
   end
 
-  defp curated_cache_filename(campaign, token, slides, style, selected_slide_indexes) do
+  defp curated_cache_filename(
+         campaign,
+         token,
+         slides,
+         style,
+         selected_slide_indexes,
+         frame_paths
+       ) do
     digest =
       {@cache_version, :curated, campaign.id, campaign.title, token, slides, style, @fade_seconds,
-       selected_slide_indexes, background_audio_signature()}
+       selected_slide_indexes, frame_paths, video_filter(), background_audio_signature()}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))
       |> Base.url_encode64(padding: false)
@@ -483,6 +500,19 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     indexes
     |> Enum.map(&Enum.at(slides, &1 - 1))
     |> Enum.reject(&is_nil/1)
+  end
+
+  defp persisted_frame_or_render(frame_paths, slide_index, render_fun) do
+    case Map.get(frame_paths, to_string(slide_index)) do
+      path when is_binary(path) ->
+        case File.read(path) do
+          {:ok, body} -> body
+          _error -> render_fun.()
+        end
+
+      _ ->
+        render_fun.()
+    end
   end
 
   defp ffmpeg_timeout(expected_duration) do

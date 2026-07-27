@@ -18,7 +18,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#open-post-review[href='/posts/review']", "Review proposed posts")
     assert has_element?(view, "#stage-curate")
     assert has_element?(view, "#studio-progress")
+    assert has_element?(view, "#candidate-type-legend", "Longer answers · multi-slide ideas")
     assert has_element?(view, "#content-candidates [id^='select-aspect-question-']")
+    assert has_element?(view, "#content-candidates", "chars")
+    assert has_element?(view, "#content-candidates", "slide")
     assert has_element?(view, "#selected-aspects", "If a drug like soma existed today...")
     assert has_element?(view, "#continue-to-design:not([disabled])")
 
@@ -36,7 +39,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
-    assert has_element?(view, "#content-candidates", "Answer question")
+    assert has_element?(view, "#content-candidates", "Question")
     assert has_element?(view, "#content-candidates", "What evidence would change your mind?")
     assert has_element?(view, "#content-candidates", "Found inside “The case for uncertainty”.")
 

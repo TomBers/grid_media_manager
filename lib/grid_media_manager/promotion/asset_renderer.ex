@@ -86,13 +86,15 @@ defmodule GridMediaManager.Promotion.AssetRenderer do
   def render(%Campaign{} = campaign, %MediaAsset{kind: "curated_carousel_video"} = asset) do
     metadata = asset.metadata || %{}
     slides = Map.get(metadata, "slides", [])
+    frame_paths = Map.get(metadata, "browser_frame_paths", %{})
 
     with {:ok, path} <-
            CarouselVideo.render_curated(
              campaign,
              asset.source_id,
              slides,
-             asset.style
+             asset.style,
+             frame_paths: frame_paths
            ) do
       File.read(path)
     end
