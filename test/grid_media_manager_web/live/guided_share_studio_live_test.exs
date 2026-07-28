@@ -73,6 +73,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#guided-style-minimal_dark", "Minimal dark")
     assert has_element?(view, "#content-mode-video")
     assert has_element?(view, "#content-mode-text")
+    assert has_element?(view, "#content-mode-long-form", "Longer post")
     assert has_element?(view, "#pexels-background-picker")
 
     view
@@ -124,6 +125,23 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
              Campaigns.list_post_drafts(campaign, platform: "x"),
              &(&1.media_asset_id == carousel.id)
            )
+  end
+
+  test "selects one longer answer for the long-form post mode", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-long-form")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
+
+    view |> element("#continue-to-design") |> render_click()
+    view |> element("#content-mode-long-form") |> render_click()
+
+    assert has_element?(view, "#story-package-default", "Longer post selected")
+
+    view |> element("#continue-to-generate") |> render_click()
+
+    assert has_element?(view, "#generate-platform-summary", "LinkedIn and Facebook")
+    assert has_element?(view, "#selected-aspects", "Longer answer")
+    assert has_element?(view, "#generate-story-package", "Generate longer post")
   end
 
   test "combines multiple selected moments into one carousel output", %{conn: conn} do

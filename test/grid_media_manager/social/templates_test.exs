@@ -179,6 +179,49 @@ defmodule GridMediaManager.Social.TemplatesTest do
     refute body =~ "The full grid shows"
   end
 
+  test "long-form posts keep the answer together and target LinkedIn and Facebook" do
+    campaign = campaign()
+
+    asset = %MediaAsset{
+      id: 1,
+      title: "Why comfort can become a cage",
+      kind: "long_form_post",
+      text: "The complete answer stays together in one post.",
+      node_id: "node-1"
+    }
+
+    drafts = Templates.draft_attrs_for_platforms(campaign, [asset], Platforms.ids())
+
+    assert Enum.map(drafts, & &1.platform) == Platforms.long_form_ids()
+    assert Enum.all?(drafts, &(&1.body =~ "The complete answer stays together in one post."))
+    assert Enum.all?(drafts, &(&1.body == "The complete answer stays together in one post."))
+    assert Enum.all?(drafts, fn draft -> Platforms.within_limit?(draft.body, draft.platform) end)
+  end
+
+  test "long-form copy uses LinkedIn and Facebook limits instead of the X limit" do
+    campaign = campaign()
+    answer = String.duplicate("A complete formatted paragraph.\n\n", 160)
+    asset = %MediaAsset{kind: "long_form_post", text: answer, node_id: "node-1"}
+
+    linkedin = Templates.body(campaign, asset, "linkedin", "long_form")
+    facebook = Templates.body(campaign, asset, "facebook", "long_form")
+
+    assert String.length(linkedin) > 280
+    assert Platforms.within_limit?(linkedin, "linkedin")
+    assert Platforms.within_limit?(facebook, "facebook")
+    assert facebook == String.trim(answer)
+  end
+
+  test "long-form posts never create blank drafts" do
+    campaign = campaign()
+    asset = %MediaAsset{id: 1, kind: "long_form_post", title: "Fallback answer title", text: ""}
+
+    drafts = Templates.draft_attrs_for_platforms(campaign, [asset], Platforms.long_form_ids())
+
+    assert Enum.all?(drafts, &(&1.body == "Fallback answer title"))
+    assert Enum.all?(drafts, &(&1.body != ""))
+  end
+
   defp campaign do
     %Campaign{
       id: 1,

@@ -644,6 +644,22 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
+  def generate_long_form_post(
+        %Campaign{} = campaign,
+        node_id,
+        style \\ ShareCard.default_style()
+      ) do
+    campaign = get_campaign!(campaign.id)
+
+    with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
+         attrs when is_map(attrs) <-
+           ShareCard.key_node_long_form_asset_attr(campaign, node, style) do
+      upsert_generated_asset_with_drafts(campaign, attrs)
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
   def generate_key_node_carousel(
         %Campaign{} = campaign,
         node_id,

@@ -25,12 +25,16 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
         |> put_png_cache_headers()
         |> send_resp(
           200,
-          ShareCard.node_image_png(
-            campaign,
-            node,
-            Map.get(params, "style"),
-            Map.get(params, "format", "landscape")
-          )
+          if params["cover"] == "title" do
+            ShareCard.node_title_card_image_png(campaign, node, Map.get(params, "style"))
+          else
+            ShareCard.node_image_png(
+              campaign,
+              node,
+              Map.get(params, "style"),
+              Map.get(params, "format", "landscape")
+            )
+          end
         )
     end
   end

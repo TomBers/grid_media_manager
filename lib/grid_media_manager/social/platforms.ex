@@ -49,6 +49,8 @@ defmodule GridMediaManager.Social.Platforms do
 
   def text_ids, do: @text_ids
 
+  def long_form_ids, do: ["linkedin", "facebook"]
+
   def video_ids, do: @video_ids
 
   def get(id) when is_binary(id), do: Enum.find(@platforms, &(&1.id == id))

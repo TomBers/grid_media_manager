@@ -163,6 +163,12 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> maybe_add_format_query(format)
   end
 
+  def node_title_card_image_path(%Campaign{} = campaign, node_id, style \\ @default_style) do
+    campaign
+    |> node_image_path(node_id, style, "portrait")
+    |> append_query(%{cover: "title", cover_version: title_card_version(campaign)})
+  end
+
   def curated_carousel_image_path(campaign, token, slide, style \\ @default_style)
 
   def curated_carousel_image_path(%Campaign{id: id} = campaign, token, slide, style) do
@@ -351,6 +357,26 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end
 
     rasterize_svg(svg)
+  end
+
+  def node_title_card_image_svg(%Campaign{} = campaign, _node, style \\ @default_style) do
+    slides = [
+      %{
+        "kind" => "cover",
+        "label" => "RationalGrid story",
+        "title" => campaign.title,
+        "body" => ""
+      }
+    ]
+
+    curated_carousel_image_svg(campaign, slides, style, 1)
+  end
+
+  def node_title_card_image_png(campaign, node, style \\ @default_style) when is_map(node) do
+    campaign
+    |> node_title_card_image_svg(node, style)
+    |> Image.from_svg!()
+    |> Image.write!(:memory, suffix: ".png")
   end
 
   def node_image_svg(campaign, node, style \\ @default_style)
@@ -1878,6 +1904,35 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end
   end
 
+  def key_node_long_form_asset_attr(%Campaign{} = campaign, node, style \\ @default_style) do
+    with attrs when is_map(attrs) <- key_node_asset_attr(campaign, node, style, "portrait") do
+      content =
+        node_reading_slides(campaign, node)
+        |> Enum.reject(&(&1.kind in ["node_title", "cta"]))
+        |> Enum.map(&Map.get(&1, :body, ""))
+        |> Enum.reject(&(String.trim(&1) == ""))
+        |> Enum.join("\n\n")
+        |> String.trim()
+        |> fallback(attrs.text |> to_string())
+        |> fallback(attrs.title |> to_string())
+
+      %{
+        attrs
+        | kind: "long_form_post",
+          url: node_title_card_image_path(campaign, attrs.node_id, style),
+          text: content,
+          recommended_platforms: Platforms.long_form_ids(),
+          source_type: "long_form_post",
+          metadata:
+            Map.merge(attrs.metadata || %{}, %{
+              "format" => "portrait",
+              "content_type" => "long_form",
+              "cover_type" => "title"
+            })
+      }
+    end
+  end
+
   def highlight_asset_attr(
         campaign,
         highlight,
@@ -2307,12 +2362,12 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   defp maybe_add_title_card_query(path, %Campaign{} = campaign) do
+    append_query(path, %{cover: title_card_version(campaign)})
+  end
+
+  defp title_card_version(%Campaign{} = campaign) do
     state = get_in(campaign.raw_payload || %{}, ["share_studio"]) || %{}
-
-    version =
-      :erlang.phash2({Map.get(state, "title_card_mode"), Map.get(state, "pexels_background")})
-
-    append_query(path, %{cover: version})
+    :erlang.phash2({Map.get(state, "title_card_mode"), Map.get(state, "pexels_background")})
   end
 
   defp maybe_add_quote_format_query(path, format) do

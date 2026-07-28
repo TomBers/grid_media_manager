@@ -15,7 +15,8 @@ defmodule GridMediaManager.Social.Templates do
   @base_angles ~w(question explainer discussion)
 
   def body(%Campaign{} = campaign, asset, platform, angle) do
-    body_for_platform(campaign, asset, canonical_platform(platform), angle)
+    platform = if angle == "long_form", do: platform, else: canonical_platform(platform)
+    body_for_platform(campaign, asset, platform, angle)
   end
 
   def draft_attrs(%Campaign{} = campaign, media_assets) when is_list(media_assets) do
@@ -78,6 +79,7 @@ defmodule GridMediaManager.Social.Templates do
   def angle_label("key_node"), do: "Key node"
   def angle_label("question_quote"), do: "Question quote"
   def angle_label("visual"), do: "Visual asset"
+  def angle_label("long_form"), do: "Long-form post"
 
   def angle_label(angle) when is_binary(angle) do
     angle |> String.replace("_", " ") |> String.capitalize()
@@ -213,6 +215,22 @@ defmodule GridMediaManager.Social.Templates do
     fit_to_platform(copy, platform, link)
   end
 
+  defp body_for_platform(
+         %Campaign{},
+         %MediaAsset{kind: "long_form_post"} = asset,
+         platform,
+         "long_form"
+       ) do
+    answer =
+      asset.text
+      |> fallback(asset.title)
+      |> to_string()
+      |> String.trim()
+      |> fallback(asset.title |> fallback("Long-form answer") |> to_string())
+
+    fit_long_form_to_platform(answer, platform)
+  end
+
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "visual") do
     link = asset_link(campaign, asset)
     title = caption_title(campaign.title)
@@ -328,6 +346,8 @@ defmodule GridMediaManager.Social.Templates do
   defp asset_angle(%MediaAsset{kind: kind}) when kind in ["key_node_card", "key_node_video"],
     do: "key_node"
 
+  defp asset_angle(%MediaAsset{kind: "long_form_post"}), do: "long_form"
+
   defp asset_angle(%MediaAsset{kind: kind})
        when kind in ["question_quote_card", "question_video"],
        do: "question_quote"
@@ -336,6 +356,8 @@ defmodule GridMediaManager.Social.Templates do
   defp asset_angle(%MediaAsset{}), do: "highlight"
 
   defp asset_platforms(%MediaAsset{mime_type: "video/mp4"}), do: Platforms.video_ids()
+
+  defp asset_platforms(%MediaAsset{kind: "long_form_post"}), do: Platforms.long_form_ids()
 
   defp asset_platforms(%MediaAsset{kind: kind})
        when kind in [
@@ -457,6 +479,24 @@ defmodule GridMediaManager.Social.Templates do
       else
         "Learn more at RationalGrid.ai"
       end
+    end
+  end
+
+  defp fit_long_form_to_platform(copy, platform) do
+    if Platforms.within_limit?(copy, platform) do
+      copy
+    else
+      limit = Platforms.max_chars(platform)
+
+      shortened =
+        copy
+        |> String.slice(0, max(limit - 1, 0))
+        |> String.trim_trailing()
+        |> Kernel.<>("…")
+
+      if Platforms.within_limit?(shortened, platform),
+        do: shortened,
+        else: String.slice(shortened, 0, limit)
     end
   end
 

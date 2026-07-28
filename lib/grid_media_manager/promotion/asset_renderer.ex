@@ -54,6 +54,14 @@ defmodule GridMediaManager.Promotion.AssetRenderer do
     end
   end
 
+  def render(%Campaign{} = campaign, %MediaAsset{kind: "long_form_post"} = asset) do
+    with node when is_map(node) <- ShareCard.find_key_node(campaign, asset.node_id) do
+      {:ok, ShareCard.node_title_card_image_png(campaign, node, asset.style)}
+    else
+      _value -> {:error, :source_not_found}
+    end
+  end
+
   def render(%Campaign{} = campaign, %MediaAsset{kind: "key_node_carousel_slide"} = asset) do
     with node when is_map(node) <- ShareCard.find_key_node(campaign, asset.node_id) do
       {:ok,

@@ -11,7 +11,7 @@ defmodule GridMediaManager.Studio.Workflow do
   alias GridMediaManager.Promotion.ShareCard
 
   @max_candidates_per_type 24
-  @formats ~w(landscape linkedin portrait carousel combined_carousel story_video)
+  @formats ~w(landscape linkedin portrait carousel combined_carousel story_video long_form)
 
   def candidates(%Campaign{} = campaign) do
     recommended_question = Campaigns.recommended_question(campaign)
@@ -86,6 +86,9 @@ defmodule GridMediaManager.Studio.Workflow do
 
         format == "story_video" ->
           generate_story_video(campaign, candidates, style)
+
+        format == "long_form" ->
+          generate_long_form_post(campaign, candidates, style)
 
         format == "portrait" ->
           generate_text_carousel(campaign, candidates, style)
@@ -190,6 +193,28 @@ defmodule GridMediaManager.Studio.Workflow do
       {:error, reason} ->
         candidate = List.first(candidates) || %{title: campaign.title}
         %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
+    end
+  end
+
+  defp generate_long_form_post(campaign, candidates, style) do
+    case Enum.filter(candidates, &(&1.type == "key_node")) do
+      [%{source_id: source_id} = candidate] ->
+        case Campaigns.generate_long_form_post(campaign, source_id, style) do
+          {:ok, asset} -> %{assets: [asset], errors: []}
+          {:error, reason} -> %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
+        end
+
+      [] ->
+        %{
+          assets: [],
+          errors: [%{candidate: List.first(candidates), reason: :requires_longer_answer}]
+        }
+
+      candidates ->
+        %{
+          assets: [],
+          errors: [%{candidate: List.first(candidates), reason: :one_longer_answer_required}]
+        }
     end
   end
 

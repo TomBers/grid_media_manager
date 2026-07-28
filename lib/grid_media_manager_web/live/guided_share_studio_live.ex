@@ -35,6 +35,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       icon: "hero-play-circle"
     },
     %{
+      id: "long_form",
+      label: "Long-form LinkedIn/Facebook post",
+      size: "One portrait cover + full answer",
+      description:
+        "Turn one longer answer into a single themed cover image and an editable post for LinkedIn and Facebook.",
+      icon: "hero-document-text"
+    },
+    %{
       id: "landscape",
       label: "Feed hook",
       size: "1200 × 630 · X",
@@ -104,11 +112,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         do: "video",
         else: "text"
 
-    restored_platforms =
-      if restored_assets == [],
-        do: Platforms.video_ids(),
-        else: platforms_for_assets(restored_assets)
-
     previous_packages = previous_output_packages(campaign)
     studio_state = Campaigns.guided_studio_state(campaign)
     selected_keys = restored_selected_keys(candidates, studio_state)
@@ -120,9 +123,20 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     restored_format = Map.get(studio_state, "selected_format")
 
     restored_format =
-      if restored_format in @formats,
-        do: restored_format,
-        else: if(restored_content_mode == "video", do: "story_video", else: "portrait")
+      if Enum.any?(@formats, &(&1.id == restored_format)) do
+        restored_format
+      else
+        case restored_content_mode do
+          "video" -> "story_video"
+          "long_form" -> "long_form"
+          _ -> "portrait"
+        end
+      end
+
+    restored_platforms =
+      if restored_assets == [],
+        do: platforms_for_mode(restored_content_mode),
+        else: platforms_for_assets(restored_assets)
 
     restored_style = ShareCard.normalize_style(Map.get(studio_state, "selected_style"))
 
@@ -265,7 +279,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     format = if format in Enum.map(@formats, & &1.id), do: format, else: "landscape"
 
     content_mode =
-      if format in ["story_video", "carousel", "combined_carousel"], do: "video", else: "text"
+      cond do
+        format == "long_form" -> "long_form"
+        format in ["story_video", "carousel", "combined_carousel"] -> "video"
+        true -> "text"
+      end
 
     {:noreply,
      socket
@@ -276,16 +294,31 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   def handle_event("select_content_mode", %{"mode" => mode}, socket)
-      when mode in ["video", "text"] do
-    selected_format = if mode == "video", do: "story_video", else: "portrait"
+      when mode in ["video", "text", "long_form"] do
+    selected_format =
+      case mode do
+        "video" -> "story_video"
+        "long_form" -> "long_form"
+        _ -> "portrait"
+      end
+
     selected_platforms = platforms_for_mode(mode)
 
-    {:noreply,
-     socket
-     |> assign(:content_mode, mode)
-     |> assign(:selected_format, selected_format)
-     |> assign(:selected_platforms, selected_platforms)
-     |> persist_studio_state()}
+    socket =
+      socket
+      |> assign(:content_mode, mode)
+      |> assign(:selected_format, selected_format)
+      |> assign(:selected_platforms, selected_platforms)
+      |> assign(:candidate_filter, if(mode == "long_form", do: "key_node", else: "all"))
+
+    socket =
+      if mode == "long_form" do
+        select_single_long_form_candidate(socket)
+      else
+        persist_studio_state(socket)
+      end
+
+    {:noreply, socket}
   end
 
   def handle_event("select_content_mode", _params, socket), do: {:noreply, socket}
@@ -368,11 +401,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       socket.assigns.all_candidates
       |> Workflow.selected_candidates(socket.assigns.selected_order)
       |> maybe_text_quote_candidates(socket.assigns.content_mode, socket.assigns.all_candidates)
+      |> maybe_long_form_candidates(socket.assigns.content_mode)
 
     format =
-      if socket.assigns.content_mode == "text",
-        do: "portrait",
-        else: socket.assigns.selected_format
+      case socket.assigns.content_mode do
+        "text" -> "portrait"
+        "long_form" -> "long_form"
+        _ -> socket.assigns.selected_format
+      end
 
     campaign = socket.assigns.campaign
     style = socket.assigns.selected_style
@@ -1183,15 +1219,19 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                       How should we make this package?
                     </h2>
                     <p class="mt-1 max-w-2xl text-sm leading-6 text-base-content/60">
-                      Video is automatic. Text creates one ordered image carousel with the RationalGrid CTA last.
+                      Video creates one vertical package. Short text creates an ordered image carousel, while a longer post keeps one answer together.
                     </p>
                   </div>
                   <span class="rounded-full bg-base-200 px-3 py-1 text-xs font-medium text-base-content/55">
-                    {if @content_mode == "video", do: "Automatic video", else: "Manual text set"}
+                    {cond do
+                      @content_mode == "video" -> "Automatic video"
+                      @content_mode == "long_form" -> "Long-form post"
+                      true -> "Short text set"
+                    end}
                   </span>
                 </div>
 
-                <div id="content-mode-picker" class="mt-5 grid gap-3 sm:grid-cols-2">
+                <div id="content-mode-picker" class="mt-5 grid gap-3 sm:grid-cols-3">
                   <button
                     id="content-mode-video"
                     type="button"
@@ -1237,12 +1277,39 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                         class="size-5 text-orange-500"
                       />
                     </span>
-                    <span class="mt-4 block text-base font-bold text-base-content">Text</span>
+                    <span class="mt-4 block text-base font-bold text-base-content">Short text</span>
                     <span class="mt-1 block text-sm font-semibold text-base-content/70">
                       Ordered multi-image carousel
                     </span>
                     <span class="mt-2 block text-xs leading-5 text-base-content/55">
                       Buffer-ready text cards for X, LinkedIn, and Facebook with the RationalGrid CTA last.
+                    </span>
+                  </button>
+
+                  <button
+                    id="content-mode-long-form"
+                    type="button"
+                    phx-click="select_content_mode"
+                    phx-value-mode="long_form"
+                    aria-pressed={@content_mode == "long_form"}
+                    class={content_mode_card_class(@content_mode == "long_form")}
+                  >
+                    <span class="flex items-start justify-between gap-3">
+                      <span class="grid size-11 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-950/15">
+                        <.icon name="hero-document-text" class="size-6" />
+                      </span>
+                      <.icon
+                        :if={@content_mode == "long_form"}
+                        name="hero-check-circle-solid"
+                        class="size-5 text-emerald-500"
+                      />
+                    </span>
+                    <span class="mt-4 block text-base font-bold text-base-content">Longer post</span>
+                    <span class="mt-1 block text-sm font-semibold text-base-content/70">
+                      One answer with a cover
+                    </span>
+                    <span class="mt-2 block text-xs leading-5 text-base-content/55">
+                      Choose one longer answer for a full LinkedIn and Facebook post with a themed cover image.
                     </span>
                   </button>
                 </div>
@@ -1255,16 +1322,22 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     <.icon name="hero-sparkles" class="size-5" />
                   </span>
                   <div>
-                    <%= if @content_mode == "video" do %>
-                      <p class="font-bold text-base-content">Automatic video selected</p>
-                      <p class="mt-1 text-sm leading-6 text-base-content/60">
-                        All selected moments will be woven into one vertical video. Channel copy is generated automatically and can be scheduled together.
-                      </p>
-                    <% else %>
-                      <p class="font-bold text-base-content">Manual text selected</p>
-                      <p class="mt-1 text-sm leading-6 text-base-content/60">
-                        One portrait image will be generated for each selected moment. Copy stays editable for manual publishing.
-                      </p>
+                    <%= cond do %>
+                      <% @content_mode == "video" -> %>
+                        <p class="font-bold text-base-content">Automatic video selected</p>
+                        <p class="mt-1 text-sm leading-6 text-base-content/60">
+                          All selected moments will be woven into one vertical video. Channel copy is generated automatically and can be scheduled together.
+                        </p>
+                      <% @content_mode == "long_form" -> %>
+                        <p class="font-bold text-base-content">Longer post selected</p>
+                        <p class="mt-1 text-sm leading-6 text-base-content/60">
+                          One longer answer will become a themed cover image and an editable LinkedIn and Facebook post.
+                        </p>
+                      <% true -> %>
+                        <p class="font-bold text-base-content">Short text selected</p>
+                        <p class="mt-1 text-sm leading-6 text-base-content/60">
+                          One portrait image will be generated for each selected moment. Copy stays editable for manual publishing.
+                        </p>
                     <% end %>
                   </div>
                 </div>
@@ -1373,18 +1446,20 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     {style_label(@card_styles, @selected_style)}
                   </p>
                   <p class="mt-1 text-xs text-white/55">
-                    {if(@content_mode == "video",
-                      do: "Combined story video",
-                      else: "Ordered image carousel"
-                    )}
+                    {cond do
+                      @content_mode == "video" -> "Combined story video"
+                      @content_mode == "long_form" -> "One cover image + longer post"
+                      true -> "Ordered image carousel"
+                    end}
                   </p>
                   <div class="mt-5 space-y-2 text-xs text-white/60">
                     <p class="flex items-center gap-2">
                       <.icon name="hero-check" class="size-4 text-emerald-400" />
-                      {if(@content_mode == "video",
-                        do: "Generate one combined vertical video",
-                        else: "Generate one ordered image carousel"
-                      )}
+                      {cond do
+                        @content_mode == "video" -> "Generate one combined vertical video"
+                        @content_mode == "long_form" -> "Generate one themed cover image"
+                        true -> "Generate one ordered image carousel"
+                      end}
                     </p>
                     <p class="flex items-center gap-2">
                       <.icon name="hero-check" class="size-4 text-emerald-400" /> Create channel copy
@@ -1462,6 +1537,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   {cond do
                     @generation_in_progress? -> "Generating package…"
                     @content_mode == "video" -> "Generate video package"
+                    @content_mode == "long_form" -> "Generate longer post"
                     true -> "Generate image carousel"
                   end}
                 </button>
@@ -1483,6 +1559,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     {cond do
                       @output_video_only? -> "Review the combined video and its copy."
                       @content_mode == "text" -> "Review the image carousel and edit its copy."
+                      @content_mode == "long_form" -> "Review the cover image and longer post."
                       true -> "Review the visuals and their copy together."
                     end}
                   </h2>
@@ -1588,26 +1665,31 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     02 · Associated copy
                   </p>
                   <h3 class="mt-2 text-xl font-semibold text-base-content">
-                    {if(@content_mode == "text",
-                      do: "Edit the copy for these images.",
-                      else: "Write the post for this visual."
-                    )}
+                    {cond do
+                      @content_mode == "text" -> "Edit the copy for these images."
+                      @content_mode == "long_form" -> "Edit the longer post."
+                      true -> "Write the post for this visual."
+                    end}
                   </h3>
                   <p class="mt-1 text-sm leading-6 text-base-content/60">
                     <%= if @content_mode == "text" do %>
                       Refine each caption, then schedule the X, LinkedIn, and Facebook posts together below.
                     <% else %>
-                      <%= if @selected_output_asset_id == "all" do %>
-                        Showing copy across all visuals. Select one above to focus on a single visual.
+                      <%= if @content_mode == "long_form" do %>
+                        The full answer is kept in one editable post with the themed cover image above. It will be scheduled to LinkedIn and Facebook.
                       <% else %>
-                        The drafts below belong to the visual selected above. The same reviewed copy will be posted to TikTok, Instagram, and YouTube.
+                        <%= if @selected_output_asset_id == "all" do %>
+                          Showing copy across all visuals. Select one above to focus on a single visual.
+                        <% else %>
+                          The drafts below belong to the visual selected above. The same reviewed copy will be posted to TikTok, Instagram, and YouTube.
+                        <% end %>
                       <% end %>
                     <% end %>
                   </p>
                 </div>
 
                 <div
-                  :if={@content_mode == "video"}
+                  :if={@content_mode in ["video", "long_form"]}
                   class="mt-4 flex items-center gap-2 rounded-2xl bg-sky-500/10 px-3 py-2.5 text-xs font-semibold text-sky-800 dark:text-sky-100"
                 >
                   <.icon name="hero-information-circle" class="size-4 shrink-0" />
@@ -1618,7 +1700,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </div>
 
                 <div
-                  :if={@content_mode == "video"}
+                  :if={@content_mode in ["video", "long_form"]}
                   id="guided-platform-summary"
                   class="mt-5 rounded-2xl border border-base-content/10 bg-base-200/50 px-4 py-3 text-sm font-semibold text-base-content"
                 >
@@ -1631,7 +1713,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </div>
 
                 <.form
-                  :if={@content_mode in ["video", "text"]}
+                  :if={@content_mode in ["video", "text", "long_form"]}
                   for={@bulk_schedule_form}
                   id="guided-bulk-schedule-form"
                   phx-submit="schedule_selected_drafts"
@@ -2153,6 +2235,20 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     selected_order = socket.assigns.selected_order
 
     cond do
+      socket.assigns.content_mode == "long_form" and candidate.type != "key_node" ->
+        {:noreply, put_flash(socket, :error, "Longer posts use one longer answer.")}
+
+      socket.assigns.content_mode == "long_form" ->
+        {selected_keys, selected_order} =
+          if MapSet.member?(selected_keys, candidate.key) do
+            {MapSet.delete(selected_keys, candidate.key),
+             List.delete(selected_order, candidate.key)}
+          else
+            {MapSet.new([candidate.key]), [candidate.key]}
+          end
+
+        {:noreply, update_selection(socket, selected_keys, selected_order, candidate)}
+
       MapSet.member?(selected_keys, candidate.key) ->
         selected_keys = MapSet.delete(selected_keys, candidate.key)
         selected_order = List.delete(selected_order, candidate.key)
@@ -2166,6 +2262,25 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         selected_keys = MapSet.put(selected_keys, candidate.key)
         selected_order = selected_order ++ [candidate.key]
         {:noreply, update_selection(socket, selected_keys, selected_order, candidate)}
+    end
+  end
+
+  defp select_single_long_form_candidate(socket) do
+    candidate =
+      socket.assigns.all_candidates
+      |> Workflow.filter_candidates("key_node")
+      |> List.first()
+
+    case candidate do
+      nil ->
+        socket
+        |> assign(:selected_keys, MapSet.new())
+        |> assign(:selected_order, [])
+        |> assign(:selected_count, 0)
+        |> persist_studio_state()
+
+      candidate ->
+        update_selection(socket, MapSet.new([candidate.key]), [candidate.key], candidate)
     end
   end
 
@@ -2591,7 +2706,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp pexels_orientation("linkedin"), do: "square"
 
   defp pexels_orientation(format)
-       when format in ["portrait", "carousel", "combined_carousel", "story_video"],
+       when format in ["portrait", "carousel", "combined_carousel", "story_video", "long_form"],
        do: "portrait"
 
   defp pexels_orientation(_format), do: "landscape"
@@ -2616,23 +2731,36 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp pexels_video_cover_url(_background), do: nil
 
   defp platforms_for_mode("text"), do: Platforms.text_ids()
+  defp platforms_for_mode("long_form"), do: Platforms.long_form_ids()
   defp platforms_for_mode("video"), do: Platforms.video_ids()
 
   defp platforms_for_assets(assets) do
-    has_video? = Enum.any?(assets, &video_asset?/1)
-    has_text? = Enum.any?(assets, &(not video_asset?(&1)))
+    assets
+    |> Enum.flat_map(fn asset ->
+      cond do
+        video_asset?(asset) ->
+          Platforms.video_ids()
 
-    cond do
-      has_video? and has_text? -> Platforms.text_ids() ++ Platforms.video_ids()
-      has_video? -> Platforms.video_ids()
-      true -> Platforms.text_ids()
-    end
+        is_list(asset.recommended_platforms) and asset.recommended_platforms != [] ->
+          asset.recommended_platforms
+
+        true ->
+          Platforms.text_ids()
+      end
+    end)
+    |> Enum.uniq()
+    |> then(fn platforms ->
+      Enum.filter(Platforms.ids(), &(&1 in platforms))
+    end)
   end
 
   defp destination_summary(platforms) do
     cond do
       platforms == Platforms.text_ids() ->
         "Text cards will be posted to X, LinkedIn, and Facebook with the same copy."
+
+      platforms == Platforms.long_form_ids() ->
+        "The longer answer and cover image will be posted to LinkedIn and Facebook."
 
       platforms == Platforms.video_ids() ->
         "The video will be posted to TikTok, Instagram, and YouTube with the same copy."
@@ -2647,6 +2775,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       platforms == Platforms.text_ids() ->
         "Publish X, LinkedIn, and Facebook posts at (UTC)"
 
+      platforms == Platforms.long_form_ids() ->
+        "Publish LinkedIn and Facebook posts at (UTC)"
+
       platforms == Platforms.video_ids() ->
         "Publish TikTok, Instagram, and YouTube posts at (UTC)"
 
@@ -2659,6 +2790,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     cond do
       platforms == Platforms.text_ids() ->
         "X, LinkedIn, and Facebook use the text Buffer accounts."
+
+      platforms == Platforms.long_form_ids() ->
+        "LinkedIn and Facebook use the text Buffer accounts."
 
       platforms == Platforms.video_ids() ->
         "TikTok, Instagram, and YouTube use the generated video asset."
@@ -2684,6 +2818,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp maybe_text_quote_candidates(candidates, _mode, _all_candidates), do: candidates
+
+  defp maybe_long_form_candidates(candidates, "long_form") do
+    Enum.filter(candidates, &(&1.type == "key_node")) |> Enum.take(1)
+  end
+
+  defp maybe_long_form_candidates(candidates, _mode), do: candidates
 
   defp quote_candidate?(%{type: type}) when type in ["question", "highlight", "key_node"],
     do: true

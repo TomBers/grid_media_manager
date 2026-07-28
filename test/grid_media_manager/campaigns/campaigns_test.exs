@@ -723,6 +723,53 @@ defmodule GridMediaManager.CampaignsTest do
       assert length(Enum.filter(assets, &(&1.kind == "key_node_card"))) == 4
     end
 
+    test "generates a long-form post with a themed cover and two text destinations" do
+      assert {:ok, campaign} =
+               Campaigns.import_payload(simplified_payload(), "long-form-post-package")
+
+      candidate =
+        campaign
+        |> Workflow.candidates()
+        |> Enum.find(&(&1.type == "key_node"))
+
+      assert %{assets: [asset], errors: []} =
+               Workflow.generate(campaign, [candidate],
+                 style: "warm_paper",
+                 format: "long_form"
+               )
+
+      assert asset.kind == "long_form_post"
+      assert asset.url =~ "format=portrait"
+      assert asset.url =~ "cover=title"
+      assert asset.style == "warm_paper"
+      assert asset.metadata["content_type"] == "long_form"
+      assert asset.recommended_platforms == Platforms.long_form_ids()
+      assert asset.text == "Long answer"
+
+      drafts = Campaigns.list_post_drafts(campaign, media_asset_id: asset.id)
+      assert Enum.sort(Enum.map(drafts, & &1.platform)) == Enum.sort(Platforms.long_form_ids())
+      assert Enum.all?(drafts, &(&1.angle == "long_form"))
+    end
+
+    test "falls back to the node title when a long-form answer is empty" do
+      payload = put_in(simplified_payload(), ["content", "first_answer", "content"], "")
+
+      assert {:ok, campaign} = Campaigns.import_payload(payload, "long-form-empty-answer")
+
+      candidate =
+        campaign
+        |> Workflow.candidates()
+        |> Enum.find(&(&1.type == "key_node"))
+
+      assert %{assets: [asset], errors: []} =
+               Workflow.generate(campaign, [candidate], format: "long_form")
+
+      assert asset.text == "What can a brave new world teach us?"
+
+      drafts = Campaigns.list_post_drafts(campaign, media_asset_id: asset.id)
+      assert Enum.all?(drafts, &(&1.body == asset.text))
+    end
+
     test "combines selected mixed candidates into one story carousel" do
       assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "combined-carousel")
 
