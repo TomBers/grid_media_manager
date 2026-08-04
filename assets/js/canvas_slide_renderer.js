@@ -264,7 +264,10 @@ function layoutBlocks(context, blocks, fontSize, palette, bodyWidth) {
   blocks.forEach(block => {
     const style = blockStyle(block, fontSize, palette)
     context.font = `${style.weight} ${style.size}px ${style.family}`
-    const indent = block.type === "list_item" || block.type === "blockquote" ? 30 : 0
+    const markerGap = Math.max(Math.round(style.size * 0.34), 16)
+    const indent = block.type === "list_item"
+      ? Math.max(Math.ceil(context.measureText(block.marker).width + markerGap), 52)
+      : 0
     const lines = wrapText(context, block.text, bodyWidth - indent)
     layout.push({block, style, indent, lines, y})
     y += lines.length * style.lineHeight + style.gap
@@ -288,16 +291,17 @@ function drawNode(context, slide, palette, frame) {
     context.fillStyle = style.color
     context.globalAlpha = block.type === "blockquote" ? 0.96 : 0.94
     lines.forEach((line, index) => {
-      const prefix = block.type === "list_item" && index === 0 ? `${block.marker}  ` : ""
       const quote = block.type === "blockquote" && index === 0 ? "“" : ""
       const closingQuote = block.type === "blockquote" && index === lines.length - 1 ? "”" : ""
-      context.fillText(`${prefix}${quote}${line}${closingQuote}`, frame.bodyX + indent, startY + y + index * style.lineHeight)
+      const baseline = startY + y + index * style.lineHeight
+
+      if (block.type === "list_item" && index === 0) {
+        context.fillText(block.marker, frame.bodyX, baseline)
+      }
+
+      context.fillText(`${quote}${line}${closingQuote}`, frame.bodyX + indent, baseline)
     })
     context.globalAlpha = 1
-    if (block.type === "blockquote") {
-      context.fillStyle = palette.accent
-      context.fillRect(frame.bodyX, startY + y - style.size, 5, lines.length * style.lineHeight)
-    }
     y += lines.length * style.lineHeight + style.gap
   })
 }
@@ -396,6 +400,7 @@ function drawImageCover(context, image, width, height) {
 function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverCard, videoCoverImage, video) {
   const context = canvas.getContext("2d")
   const palette = paletteFor(style)
+  const coverSlide = slideIndex === 1 && (slide.kind === "cover" || slide.kind === "node_title")
   const frame = {
     video,
     height: video ? VIDEO_HEIGHT : IMAGE_HEIGHT,
@@ -419,7 +424,7 @@ function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverCard
     return
   }
 
-  if (slide.kind === "cover" && video && videoCoverImage) {
+  if (coverSlide && video && videoCoverImage) {
     context.save()
     roundedRect(context, 54, 64, 972, 1792, 48)
     context.clip()
@@ -429,7 +434,7 @@ function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverCard
     context.restore()
   }
 
-  const coverPhoto = slide.kind === "cover" && video && videoCoverImage
+  const coverPhoto = coverSlide && video && videoCoverImage
   const coverTextColor = coverPhoto ? "#fff7ed" : palette.text
   const coverMutedColor = coverPhoto ? "rgba(255,247,237,0.82)" : palette.muted
   drawHeader(context, palette, frame, coverPhoto ? "#fff7ed" : palette.text)
@@ -548,7 +553,7 @@ export const CanvasSlideRenderer = {
       if (previewCanvas && mainPreview) mainPreview.src = previewCanvas.toDataURL("image/png")
 
       const status = this.root.querySelector("[data-browser-render-status]")
-      if (status) status.textContent = "Browser-rendered preview"
+      if (status && !this.uploadedFrameFingerprint) status.textContent = "Browser-rendered preview"
 
       if (this.root.dataset.videoPreviewId) {
         const fingerprint = `${this.root.dataset.slides}|${style}|${this.root.dataset.coverCardUrl || ""}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.videoCoverImageUrl || ""}`
@@ -584,6 +589,7 @@ export const CanvasSlideRenderer = {
       ? this.root.dataset.uploadUrl
       : `/api${this.root.dataset.uploadUrl}`
     this.uploadingFrames = true
+    if (automatic) this.uploadedFrameFingerprint = fingerprint
     uploadButton.disabled = true
     if (!automatic) uploadButton.textContent = "Saving browser frames…"
 
@@ -613,6 +619,7 @@ export const CanvasSlideRenderer = {
       this.uploadedFrameFingerprint = fingerprint
       this.reloadVideoFromBrowserFrames()
     } catch (_error) {
+      if (!automatic) this.uploadedFrameFingerprint = null
       if (status) status.textContent = "Could not save browser frames"
       uploadButton.textContent = "Retry browser render"
       uploadButton.disabled = false

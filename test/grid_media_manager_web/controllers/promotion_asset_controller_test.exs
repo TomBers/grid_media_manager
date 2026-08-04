@@ -149,8 +149,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     assert length(slides) >= 8
     assert length(video_slides) == length(durations)
-    assert Enum.all?(durations, &(&1 >= 4.5))
-    assert Enum.any?(durations, &(&1 > 10.0))
+    assert Enum.all?(durations, &(&1 == 3.0))
     assert hd(video_slides).title == node["title"]
     assert Enum.at(video_slides, 1).title == ""
     assert Enum.at(video_slides, 1).label == ""

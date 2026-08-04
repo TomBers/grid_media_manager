@@ -146,6 +146,78 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
     conn |> put_status(:bad_request) |> json(%{error: "A PNG frame is required"})
   end
 
+  def node_browser_frame(
+        conn,
+        %{
+          "id" => id,
+          "node_id" => node_id,
+          "slide" => slide,
+          "frame" => %Plug.Upload{} = upload
+        } = params
+      ) do
+    case Campaigns.get_campaign(id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "Campaign not found"})
+
+      campaign ->
+        with {:ok, body} <- File.read(upload.path),
+             true <- upload.content_type == "image/png",
+             true <- png_body?(body),
+             true <- byte_size(body) <= 12_000_000,
+             {:ok, _asset} <-
+               Campaigns.store_key_node_video_browser_frame(
+                 campaign,
+                 node_id,
+                 slide,
+                 body,
+                 asset_id: Map.get(params, "asset_id")
+               ) do
+          json(conn, %{saved: true, slide: slide})
+        else
+          false ->
+            conn |> put_status(:unprocessable_entity) |> json(%{error: "Invalid PNG frame"})
+
+          {:error, :not_found} ->
+            conn |> put_status(:not_found) |> json(%{error: "Node video not found"})
+
+          {:error, :invalid_slide} ->
+            conn |> put_status(:unprocessable_entity) |> json(%{error: "Invalid slide"})
+
+          {:error, _reason} ->
+            conn |> put_status(:unprocessable_entity) |> json(%{error: "Could not save frame"})
+        end
+    end
+  end
+
+  def node_browser_frame(conn, _params) do
+    conn |> put_status(:bad_request) |> json(%{error: "A PNG frame is required"})
+  end
+
+  def node_carousel_video_frame(
+        conn,
+        %{"id" => id, "node_id" => node_id, "slide" => slide} = params
+      ) do
+    campaign = Campaigns.get_campaign!(id)
+
+    case ShareCard.find_key_node(campaign, node_id) do
+      nil ->
+        send_resp(conn, 404, "Key node not found")
+
+      node ->
+        conn
+        |> put_png_cache_headers()
+        |> send_resp(
+          200,
+          ShareCard.node_short_video_frame_png(
+            campaign,
+            node,
+            Map.get(params, "style"),
+            slide
+          )
+        )
+    end
+  end
+
   def node_carousel_video(conn, %{"id" => id, "node_id" => node_id} = params) do
     campaign = Campaigns.get_campaign!(id)
 
@@ -154,7 +226,12 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
         send_resp(conn, 404, "Key node not found")
 
       node ->
-        case CarouselVideo.render(campaign, node, Map.get(params, "style")) do
+        asset = Campaigns.get_key_node_video_asset(campaign, node_id, Map.get(params, "style"))
+        frame_paths = get_in((asset && asset.metadata) || %{}, ["browser_frame_paths"]) || %{}
+
+        case CarouselVideo.render(campaign, node, Map.get(params, "style"),
+               frame_paths: frame_paths
+             ) do
           {:ok, path} ->
             conn
             |> put_resp_content_type("video/mp4")

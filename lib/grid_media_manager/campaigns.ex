@@ -86,10 +86,13 @@ defmodule GridMediaManager.Campaigns do
     |> Repo.all()
   end
 
-  def ensure_post_drafts_for_platforms(%Campaign{} = campaign, media_assets, platforms)
-      when is_list(media_assets) and is_list(platforms) do
+  def ensure_post_drafts_for_platforms(campaign, media_assets, platforms, opts \\ [])
+
+  def ensure_post_drafts_for_platforms(%Campaign{} = campaign, media_assets, platforms, opts)
+      when is_list(media_assets) and is_list(platforms) and is_list(opts) do
     campaign = Repo.get!(Campaign, campaign.id)
     platforms = Enum.filter(platforms, &(&1 in Platforms.ids()))
+    refresh? = Keyword.get(opts, :refresh, false)
 
     campaign
     |> Templates.draft_attrs_for_platforms(media_assets, platforms)
@@ -101,6 +104,11 @@ defmodule GridMediaManager.Campaigns do
           %PostDraft{}
           |> PostDraft.changeset(attrs)
           |> Repo.insert!()
+
+        %PostDraft{status: "draft"} = draft when refresh? ->
+          draft
+          |> PostDraft.changeset(%{body: attrs.body})
+          |> Repo.update!()
 
         %PostDraft{} ->
           :ok
@@ -129,6 +137,22 @@ defmodule GridMediaManager.Campaigns do
       source_type: "curated_carousel_video",
       source_id: token
     )
+  end
+
+  def get_key_node_video_asset(%Campaign{} = campaign, node_id) do
+    get_key_node_video_asset(campaign, node_id, nil)
+  end
+
+  def get_key_node_video_asset(%Campaign{id: campaign_id}, node_id, style) do
+    MediaAsset
+    |> where([asset], asset.campaign_id == ^campaign_id)
+    |> where([asset], asset.kind == "key_node_video")
+    |> where([asset], asset.source_type == "key_node_video")
+    |> where([asset], asset.source_id == ^to_string(node_id))
+    |> maybe_filter_asset_style(style)
+    |> order_by([asset], desc: asset.id)
+    |> limit(1)
+    |> Repo.one()
   end
 
   def get_post_draft!(id), do: Repo.get!(PostDraft, parse_integer(id))
@@ -483,6 +507,39 @@ defmodule GridMediaManager.Campaigns do
   def store_curated_carousel_browser_frame(_campaign, _token, _slide_index, _body),
     do: {:error, :invalid_frame}
 
+  def store_key_node_video_browser_frame(campaign, node_id, slide_index, body, opts \\ [])
+
+  def store_key_node_video_browser_frame(
+        %Campaign{} = campaign,
+        node_id,
+        slide_index,
+        body,
+        opts
+      )
+      when is_binary(body) and is_list(opts) do
+    with %MediaAsset{} = asset <-
+           key_node_browser_frame_asset(campaign, node_id, Keyword.get(opts, :asset_id)),
+         {:ok, slide_index} <- positive_integer(slide_index),
+         true <- browser_frame_asset_slide?(asset, slide_index),
+         {:ok, path} <-
+           persist_browser_frame(
+             campaign,
+             "node-#{node_id}-asset-#{asset.id}",
+             slide_index,
+             body
+           ),
+         {:ok, asset} <- update_key_node_browser_frame(asset, slide_index, path) do
+      {:ok, asset}
+    else
+      nil -> {:error, :not_found}
+      false -> {:error, :invalid_slide}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def store_key_node_video_browser_frame(_campaign, _node_id, _slide_index, _body, _opts),
+    do: {:error, :invalid_frame}
+
   def generate_curated_carousel_video(
         %Campaign{} = campaign,
         %MediaAsset{kind: "curated_carousel"} = carousel
@@ -510,11 +567,35 @@ defmodule GridMediaManager.Campaigns do
 
   defp browser_frame_slide?(campaign, token, slide_index) do
     case get_curated_carousel_asset(campaign, token) do
-      %MediaAsset{metadata: metadata} ->
-        slide_index in 1..length(Map.get(metadata || %{}, "slides", []))
+      %MediaAsset{} = asset ->
+        browser_frame_asset_slide?(asset, slide_index)
 
       _asset ->
         false
+    end
+  end
+
+  defp browser_frame_asset_slide?(%MediaAsset{metadata: metadata}, slide_index) do
+    metadata = metadata || %{}
+
+    slide_count =
+      max(length(Map.get(metadata, "slides", [])), Map.get(metadata, "slide_count", 0))
+
+    slide_count > 0 and slide_index in 1..slide_count
+  end
+
+  defp key_node_browser_frame_asset(campaign, node_id, nil),
+    do: get_key_node_video_asset(campaign, node_id)
+
+  defp key_node_browser_frame_asset(%Campaign{} = campaign, node_id, asset_id) do
+    with {:ok, asset_id} <- positive_integer(asset_id),
+         %MediaAsset{} = asset <- Repo.get(MediaAsset, asset_id),
+         true <- asset.campaign_id == campaign.id,
+         true <- asset.kind == "key_node_video",
+         true <- asset.source_id == to_string(node_id) do
+      asset
+    else
+      _value -> nil
     end
   end
 
@@ -570,6 +651,29 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
+  defp update_key_node_browser_frame(asset, slide_index, path) do
+    old_path = get_in(asset.metadata || %{}, ["browser_frame_paths", to_string(slide_index)])
+
+    metadata =
+      (asset.metadata || %{})
+      |> Map.get_and_update("browser_frame_paths", fn paths ->
+        paths = if is_map(paths), do: paths, else: %{}
+        {paths, Map.put(paths, to_string(slide_index), path)}
+      end)
+      |> elem(1)
+
+    result =
+      asset
+      |> MediaAsset.changeset(%{metadata: metadata})
+      |> Repo.update()
+
+    if match?({:ok, _asset}, result) and is_binary(old_path) and old_path != path do
+      File.rm(old_path)
+    end
+
+    result
+  end
+
   defp browser_frame_directory(campaign, token) do
     safe_token =
       token
@@ -584,6 +688,11 @@ defmodule GridMediaManager.Campaigns do
       safe_token
     ])
   end
+
+  defp maybe_filter_asset_style(query, style) when is_binary(style),
+    do: where(query, [asset], asset.style == ^ShareCard.normalize_style(style))
+
+  defp maybe_filter_asset_style(query, _style), do: query
 
   def generate_highlight_asset(
         %Campaign{} = campaign,

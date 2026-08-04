@@ -2,6 +2,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   use GridMediaManagerWeb, :live_view
 
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Campaigns.PostDraft
   alias GridMediaManager.Pexels.Client, as: Pexels
@@ -1656,6 +1657,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     :for={{id, asset} <- @streams.output_assets}
                     id={id}
                     asset={asset}
+                    campaign={@campaign}
                     selected={@selected_output_asset_id == Integer.to_string(asset.id)}
                     preview_slide={Map.get(@carousel_preview_slides, asset.id, 1)}
                     wide={@output_asset_count == 1}
@@ -1852,6 +1854,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   attr :id, :string, required: true
   attr :asset, MediaAsset, required: true
+  attr :campaign, Campaign, required: true
   attr :selected, :boolean, required: true
   attr :preview_slide, :integer, default: 1
   attr :wide, :boolean, default: false
@@ -1863,10 +1866,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       <video
         :if={video_asset?(@asset)}
         id={"guided-video-preview-#{@asset.id}"}
-        src={if(@asset.kind == "curated_carousel_video", do: nil, else: @asset.url)}
-        data-browser-frame-video-url={
-          if(@asset.kind == "curated_carousel_video", do: @asset.url, else: nil)
-        }
+        src={if(browser_canvas_video?(@asset), do: nil, else: @asset.url)}
+        data-browser-frame-video-url={if(browser_canvas_video?(@asset), do: @asset.url, else: nil)}
         controls
         playsinline
         preload="metadata"
@@ -1885,24 +1886,24 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         class={[asset_image_class(@asset), @wide && "lg:col-start-1 lg:row-start-1"]}
       />
       <div
-        :if={@asset.kind in ["curated_carousel", "curated_carousel_video"]}
+        :if={canvas_rendered_asset?(@asset)}
         id={"curated-carousel-slides-#{@asset.id}"}
-        data-slides={Jason.encode!(Map.get(@asset.metadata || %{}, "slides", []))}
+        data-slides={Jason.encode!(canvas_slides(@campaign, @asset))}
         data-selected-indexes={Jason.encode!(carousel_selected_slide_indexes(@asset))}
         data-preview-slide={@preview_slide}
         data-main-preview-id={"guided-output-preview-#{@asset.id}"}
         data-video-preview-id={
-          if(@asset.kind == "curated_carousel_video",
+          if(browser_canvas_video?(@asset),
             do: "guided-video-preview-#{@asset.id}",
             else: ""
           )
         }
         data-style={@asset.style}
         data-cover-card-url={curated_carousel_cover_url(@asset)}
-        data-video-frame={if(@asset.kind == "curated_carousel_video", do: "true", else: "false")}
+        data-video-frame={if(browser_canvas_video?(@asset), do: "true", else: "false")}
         data-video-cover-image-url={@video_cover_image_url}
         data-logo-src="/images/rg_logo.webp"
-        data-upload-url={"/api/campaigns/#{@asset.campaign_id}/curated-carousels/#{@asset.source_id}/browser-frames"}
+        data-upload-url={browser_frame_upload_url(@asset)}
         class={[
           "mt-4 space-y-4 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-3",
           @wide && "lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:mt-0"
@@ -1921,7 +1922,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
             <p class="text-xs font-bold uppercase tracking-[0.16em] text-orange-700 dark:text-orange-200">
               {if(@asset.kind == "curated_carousel",
                 do: "Choose the publishable images",
-                else: "Preview the video frames"
+                else: "Browser-rendered video frames"
               )}
             </p>
             <p
@@ -1931,10 +1932,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               Choose the images to publish. Click in the order you want, then refine it below. The RationalGrid CTA is always last.
             </p>
             <p
-              :if={@asset.kind == "curated_carousel_video"}
+              :if={browser_canvas_video?(@asset)}
               class="mt-1 text-xs leading-5 text-base-content/60"
             >
-              These are the ordered Canvas frames used to rebuild the video. Save them after reviewing the text.
+              These ordered Canvas frames are captured as PNGs and used to rebuild the video automatically.
             </p>
             <p
               data-browser-render-status
@@ -1981,14 +1982,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               <canvas
                 id={"canvas-curated-carousel-slide-#{@asset.id}-#{index}"}
                 width="1080"
-                height={if(@asset.kind == "curated_carousel_video", do: 1920, else: 1350)}
+                height={if(browser_canvas_video?(@asset), do: 1920, else: 1350)}
                 data-canvas-slide
                 data-slide-index={index}
                 phx-update="ignore"
                 aria-label={"Browser-rendered carousel slide #{index}"}
                 class={[
                   "hidden w-full object-cover",
-                  if(@asset.kind == "curated_carousel_video",
+                  if(browser_canvas_video?(@asset),
                     do: "aspect-[9/16]",
                     else: "aspect-[4/5]"
                   )
@@ -2001,7 +2002,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 loading="lazy"
                 class={[
                   "w-full object-cover transition group-hover:scale-105",
-                  if(@asset.kind == "curated_carousel_video",
+                  if(browser_canvas_video?(@asset),
                     do: "aspect-[9/16]",
                     else: "aspect-[4/5]"
                   )
@@ -2383,7 +2384,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     Campaigns.ensure_post_drafts_for_platforms(
       socket.assigns.campaign,
       assets,
-      selected_platforms
+      selected_platforms,
+      refresh: true
     )
 
     socket =
@@ -2893,9 +2895,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp positive_integer(_value), do: {:error, :invalid_index}
 
   defp carousel_selected_slide_indexes(%MediaAsset{
-         kind: "curated_carousel_video",
+         kind: kind,
          metadata: metadata
-       }) do
+       })
+       when kind in ["curated_carousel_video", "key_node_video"] do
     metadata = metadata || %{}
 
     case Map.get(metadata, "selected_slide_indexes") do
@@ -3223,7 +3226,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp output_asset_card_class(selected?, wide?, asset) do
     [
       "rounded-3xl border p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl",
-      (wide? and asset.kind in ["curated_carousel", "curated_carousel_video"]) &&
+      (wide? and canvas_rendered_asset?(asset)) &&
         "grid gap-4 lg:grid-cols-[minmax(18rem,28rem)_minmax(0,1fr)] lg:items-start",
       if(selected?,
         do: "border-orange-500/50 bg-orange-500/8 shadow-lg",
@@ -3257,13 +3260,53 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     end)
   end
 
+  defp curated_carousel_slide_urls(%MediaAsset{kind: "key_node_video"} = asset) do
+    metadata = asset.metadata || %{}
+    count = Map.get(metadata, "slide_count", 1)
+    query = URI.encode_query(%{style: asset.style})
+
+    Enum.map(1..count, fn index ->
+      {"/campaigns/#{asset.campaign_id}/nodes/#{asset.node_id}/carousel-frames/#{index}/image.png?#{query}",
+       index}
+    end)
+  end
+
   defp curated_carousel_cover_url(%MediaAsset{kind: kind} = asset)
-       when kind in ["curated_carousel", "curated_carousel_video"] do
+       when kind in ["curated_carousel", "curated_carousel_video", "key_node_video"] do
     curated_carousel_slide_urls(asset)
     |> Enum.find_value(fn {url, index} -> if(index == 1, do: url) end)
   end
 
   defp curated_carousel_cover_url(%MediaAsset{}), do: nil
+
+  defp canvas_rendered_asset?(%MediaAsset{kind: kind}),
+    do: kind in ["curated_carousel", "curated_carousel_video", "key_node_video"]
+
+  defp browser_canvas_video?(%MediaAsset{kind: kind}),
+    do: kind in ["curated_carousel_video", "key_node_video"]
+
+  defp browser_frame_upload_url(%MediaAsset{kind: "key_node_video"} = asset),
+    do:
+      "/api/campaigns/#{asset.campaign_id}/nodes/#{asset.node_id}/browser-frames?asset_id=#{asset.id}"
+
+  defp browser_frame_upload_url(%MediaAsset{} = asset),
+    do: "/api/campaigns/#{asset.campaign_id}/curated-carousels/#{asset.source_id}/browser-frames"
+
+  defp canvas_slides(campaign, %MediaAsset{kind: "key_node_video"} = asset) do
+    case Map.get(asset.metadata || %{}, "slides", []) do
+      [] ->
+        case ShareCard.find_key_node(campaign, asset.node_id) do
+          node when is_map(node) -> ShareCard.node_short_video_slides(campaign, node)
+          _node -> []
+        end
+
+      slides ->
+        slides
+    end
+  end
+
+  defp canvas_slides(_campaign, %MediaAsset{} = asset),
+    do: Map.get(asset.metadata || %{}, "slides", [])
 
   defp output_asset_preview_url(%MediaAsset{kind: "curated_carousel"} = asset, slide) do
     curated_carousel_slide_urls(asset)

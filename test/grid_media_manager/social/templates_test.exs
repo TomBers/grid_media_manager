@@ -194,7 +194,7 @@ defmodule GridMediaManager.Social.TemplatesTest do
 
     assert Enum.map(drafts, & &1.platform) == Platforms.long_form_ids()
     assert Enum.all?(drafts, &(&1.body =~ "The complete answer stays together in one post."))
-    assert Enum.all?(drafts, &(&1.body == "The complete answer stays together in one post."))
+    assert Enum.all?(drafts, &(&1.body =~ "https://rationalgrid.ai/g/collective?node=node-1"))
     assert Enum.all?(drafts, fn draft -> Platforms.within_limit?(draft.body, draft.platform) end)
   end
 
@@ -209,7 +209,8 @@ defmodule GridMediaManager.Social.TemplatesTest do
     assert String.length(linkedin) > 280
     assert Platforms.within_limit?(linkedin, "linkedin")
     assert Platforms.within_limit?(facebook, "facebook")
-    assert facebook == String.trim(answer)
+    assert facebook =~ String.trim(answer)
+    assert facebook =~ "https://rationalgrid.ai/g/collective?node=node-1"
   end
 
   test "long-form posts never create blank drafts" do
@@ -218,7 +219,8 @@ defmodule GridMediaManager.Social.TemplatesTest do
 
     drafts = Templates.draft_attrs_for_platforms(campaign, [asset], Platforms.long_form_ids())
 
-    assert Enum.all?(drafts, &(&1.body == "Fallback answer title"))
+    assert Enum.all?(drafts, &(&1.body =~ "Fallback answer title"))
+    assert Enum.all?(drafts, &(&1.body =~ "https://rationalgrid.ai/g/collective"))
     assert Enum.all?(drafts, &(&1.body != ""))
   end
 

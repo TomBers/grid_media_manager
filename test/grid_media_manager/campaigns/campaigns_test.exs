@@ -2,12 +2,14 @@ defmodule GridMediaManager.CampaignsTest do
   use GridMediaManager.DataCase, async: true
 
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.Promotion.SlideSequence
   alias GridMediaManager.RationalGrid.MediaPayload
   alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Studio.Workflow
+  alias GridMediaManager.Repo
 
   test "exposes distinct style presets for different editorial moods" do
     styles = ShareCard.styles()
@@ -166,9 +168,9 @@ defmodule GridMediaManager.CampaignsTest do
     attrs = CarouselVideo.curated_asset_attr(campaign, "video-token", slides, "editorial_dark")
 
     assert attrs.metadata["slide_count"] == 5
-    assert attrs.metadata["duration_seconds"] > 0
+    assert attrs.metadata["duration_seconds"] == 15.0
     refute Map.has_key?(attrs.metadata, "selected_slide_indexes")
-    assert attrs.url =~ "v=18"
+    assert attrs.url =~ "v=23"
   end
 
   test "stores browser-rendered carousel frames for the selected slide" do
@@ -188,6 +190,33 @@ defmodule GridMediaManager.CampaignsTest do
                2,
                png
              )
+
+    stored_asset = Campaigns.get_media_asset!(asset.id)
+    path = get_in(stored_asset.metadata, ["browser_frame_paths", "2"])
+
+    assert is_binary(path)
+    assert File.read!(path) == png
+    on_exit(fn -> File.rm(path) end)
+  end
+
+  test "stores browser-rendered frames for key-node videos" do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "node-browser-frame")
+
+    node = ShareCard.find_key_node(campaign, "1")
+    attrs = CarouselVideo.asset_attr(campaign, node, "editorial_dark")
+
+    asset =
+      %MediaAsset{}
+      |> MediaAsset.changeset(Map.put(attrs, :campaign_id, campaign.id))
+      |> Repo.insert!()
+
+    assert length(asset.metadata["slides"]) == asset.metadata["slide_count"]
+
+    png = <<137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0>>
+
+    assert {:ok, _updated_asset} =
+             Campaigns.store_key_node_video_browser_frame(campaign, "1", 2, png)
 
     stored_asset = Campaigns.get_media_asset!(asset.id)
     path = get_in(stored_asset.metadata, ["browser_frame_paths", "2"])
@@ -319,6 +348,29 @@ defmodule GridMediaManager.CampaignsTest do
     assert Campaigns.pexels_background(campaign) == nil
   end
 
+  test "uses light text for light image-backed short covers" do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "light-image-text")
+
+    photo = %{
+      id: 42,
+      alt: "A mountain view",
+      photographer: "Ada Example",
+      photographer_url: "https://www.pexels.com/@ada-example",
+      pexels_url: "https://www.pexels.com/photo/42",
+      avg_color: "#334155",
+      landscape_url: "https://example.com/landscape.jpeg",
+      portrait_url: "https://example.com/portrait.jpeg",
+      original_url: "https://example.com/original.jpeg"
+    }
+
+    assert {:ok, campaign} = Campaigns.set_pexels_background(campaign, photo)
+
+    node = %{"id" => "node-1", "title" => "A light-backed cover", "content" => "An explanation."}
+    svg = ShareCard.node_short_video_frame_svg(campaign, node, "minimal_academic", 1)
+
+    assert svg =~ ~s(fill="#ffffff")
+  end
+
   test "renders Markdown structure in key-node media" do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "markdown-media")
 
@@ -344,7 +396,8 @@ defmodule GridMediaManager.CampaignsTest do
 
     assert svg =~ "The Shared Blueprint"
     assert svg =~ "font-style=\"italic\""
-    assert svg =~ "•  The Hero:"
+    assert svg =~ ">•</text>"
+    assert svg =~ ">The Hero: A recurring pattern.</text>"
     assert svg =~ "important language"
     assert svg =~ "useful source"
     refute svg =~ "**"
@@ -353,6 +406,29 @@ defmodule GridMediaManager.CampaignsTest do
     slides = ShareCard.carousel_slides(campaign, node)
     assert Enum.any?(slides, &(&1.title == "The Shared Blueprint"))
     assert Enum.any?(slides, &String.contains?(&1.body, "• The Hero:"))
+
+    video_slides = ShareCard.node_short_video_slides(campaign, node)
+
+    quote_index =
+      Enum.find_index(video_slides, fn slide ->
+        Enum.any?(Map.get(slide, :blocks, []), &(&1.type == :blockquote))
+      end)
+
+    list_index =
+      Enum.find_index(video_slides, fn slide ->
+        Enum.any?(Map.get(slide, :blocks, []), &(&1.type == :list_item))
+      end)
+
+    quote_frame =
+      ShareCard.node_short_video_frame_svg(campaign, node, "minimal_light", quote_index + 1)
+
+    list_frame =
+      ShareCard.node_short_video_frame_svg(campaign, node, "minimal_light", list_index + 1)
+
+    refute quote_frame =~ ~s(rx="2.5")
+    assert list_frame =~ ~s(x="540.0" y=)
+    assert list_frame =~ ~s(x="604.0" y=)
+    assert list_frame =~ ">•</text>"
   end
 
   describe "import_payload/2" do
@@ -767,7 +843,8 @@ defmodule GridMediaManager.CampaignsTest do
       assert asset.text == "What can a brave new world teach us?"
 
       drafts = Campaigns.list_post_drafts(campaign, media_asset_id: asset.id)
-      assert Enum.all?(drafts, &(&1.body == asset.text))
+      assert Enum.all?(drafts, &String.starts_with?(&1.body, asset.text))
+      assert Enum.all?(drafts, &String.contains?(&1.body, campaign.grid_url))
     end
 
     test "combines selected mixed candidates into one story carousel" do

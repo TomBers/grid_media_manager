@@ -27,10 +27,9 @@ defmodule GridMediaManager.Promotion.ShareCard do
   @short_body_area_bottom 1_690
   @short_body_max_y 1_650
   @short_body_font_size 58
-  @short_min_duration 4.5
-  @short_words_per_second 3.0
-  @short_pause_duration 1.5
+  @short_frame_duration 3.0
   @carousel_reading_max_characters 360
+  @title_card_cache_version 2
 
   @quote_area_left 112
   @quote_area_top 146
@@ -751,32 +750,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   defp short_video_slide_durations(slides) do
-    Enum.map(slides, &short_video_slide_duration/1)
-  end
-
-  defp short_video_slide_duration(slide) do
-    label = slide |> get("label") |> to_string()
-    kind = slide |> get("kind") |> to_string()
-    title = slide |> get("title") |> sanitize_text(nil)
-    body = slide |> get("body") |> sanitize_text(nil)
-
-    duration_text =
-      if kind in ["quote", "highlight"], do: title, else: Enum.join([title, body], " ")
-
-    cond do
-      label == "Learn more" -> @short_min_duration
-      title != "" and body == "" -> readable_duration(title)
-      true -> readable_duration(duration_text)
-    end
-  end
-
-  defp readable_duration(text) do
-    word_count = text |> String.split(~r/\s+/, trim: true) |> length()
-
-    max(
-      @short_min_duration,
-      Float.round(word_count / @short_words_per_second + @short_pause_duration, 2)
-    )
+    Enum.map(slides, fn _slide -> @short_frame_duration end)
   end
 
   defp short_video_block_lines(block) do
@@ -959,7 +933,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   defp carousel_slide_image_svg(campaign, slide, style, slide_index, slide_count) do
-    palette = quote_palette(style)
+    palette = palette_for_image_background(campaign, style)
     cta? = slide.label == "Learn more"
     titled? = is_binary(slide.title) and String.trim(slide.title) != ""
     cover_photo? = slide_index == 1 and pexels_background_selected?(campaign)
@@ -1129,7 +1103,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   defp short_video_frame_svg(campaign, slide, style, slide_index, slide_count) do
-    palette = quote_palette(style)
+    palette = palette_for_image_background(campaign, style)
     cover? = slide_index == 1
     cover_photo? = cover? and pexels_background_selected?(campaign)
     cta? = slide.label in ["Explore", "Learn more"]
@@ -1988,7 +1962,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         "platform" => "shorts",
         "width" => 1080,
         "height" => 1920,
-        "duration_seconds" => 6.0,
+        "duration_seconds" => 3.0,
         "question_kind" => get(question, "kind")
       }
     }
@@ -2015,7 +1989,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         "platform" => "shorts",
         "width" => 1080,
         "height" => 1920,
-        "duration_seconds" => 6.0
+        "duration_seconds" => 3.0
       }
     }
   end
@@ -2367,7 +2341,11 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp title_card_version(%Campaign{} = campaign) do
     state = get_in(campaign.raw_payload || %{}, ["share_studio"]) || %{}
-    :erlang.phash2({Map.get(state, "title_card_mode"), Map.get(state, "pexels_background")})
+
+    :erlang.phash2(
+      {@title_card_cache_version, Map.get(state, "title_card_mode"),
+       Map.get(state, "pexels_background")}
+    )
   end
 
   defp maybe_add_quote_format_query(path, format) do
@@ -2591,7 +2569,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
       font_size: font_size,
       line_gap: round(font_size * 1.38),
       gap: 7,
-      indent: 38,
+      indent: 64,
       weight: 550,
       style: "normal",
       family: @ui_font_family,
@@ -2630,19 +2608,14 @@ defmodule GridMediaManager.Promotion.ShareCard do
       end)
 
     case block do
-      %{type: :blockquote} ->
-        last_y = first_y + max(length(lines) - 1, 0) * style.line_gap
-
-        ~s(<rect x="#{opts.x}" y="#{first_y - style.font_size}" width="5" height="#{last_y - first_y + style.line_gap}" rx="2.5" fill="#{opts.palette.accent_a}" opacity="0.72" />) <>
+      %{type: :list_item, marker: marker} ->
+        ~s(<text x="#{opts.x}" y="#{first_y}" fill="#{style.color}" font-size="#{style.font_size}" font-weight="#{style.weight}" font-family="#{style.family}" opacity="#{style.opacity}">#{escape_xml(marker)}</text>) <>
           text_markup
 
       _ ->
         text_markup
     end
   end
-
-  defp markdown_line(%{type: :list_item, marker: marker}, line, 0, x, _indent),
-    do: {x, "#{marker}  #{line}"}
 
   defp markdown_line(%{type: :list_item}, line, _index, x, indent),
     do: {x + indent, line}
@@ -2755,6 +2728,23 @@ defmodule GridMediaManager.Promotion.ShareCard do
     colors
     |> Map.merge(palette_effects(style))
     |> Map.put(:panel_end, panel_end_color(colors, style))
+  end
+
+  defp palette_for_image_background(%Campaign{} = campaign, style) do
+    palette = quote_palette(style)
+
+    if style in ["minimal_light", "minimal_academic"] and pexels_background_selected?(campaign) do
+      Map.merge(palette, %{
+        label: "#ffffff",
+        muted: "#f8fafc",
+        secondary_text: "#f8fafc",
+        text: "#ffffff",
+        text_stroke: "#020617",
+        text_stroke_opacity: "0.36"
+      })
+    else
+      palette
+    end
   end
 
   defp panel_end_color(colors, style) when style in ["minimal_light", "minimal_dark"],

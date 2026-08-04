@@ -16,7 +16,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   @width 1080
   @height 1920
-  @static_seconds 6.0
+  @static_seconds 3.0
   @fade_seconds 0.25
   @audio_fade_seconds 0.5
   @audio_volume 0.18
@@ -24,7 +24,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @frame_rate 30
   @render_timeout 300_000
   @render_timeout_per_second 5_000
-  @cache_version 21
+  @cache_version 23
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -33,6 +33,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     style = ShareCard.normalize_style(style)
     node_id = node |> value("id") |> to_string()
     node_title = node |> value("title") |> present_string() |> fallback("Key node")
+    slides = ShareCard.node_short_video_slides(campaign, node)
     durations = ShareCard.node_short_video_durations(campaign, node)
     slide_count = length(durations)
 
@@ -54,7 +55,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
         "height" => @height,
         "slide_count" => slide_count,
         "duration_seconds" => duration_seconds(durations),
-        "background_audio" => background_audio_available?()
+        "background_audio" => background_audio_available?(),
+        "slides" => slides
       }
     }
   end
@@ -123,16 +125,17 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   def render(%Campaign{} = campaign, node, style, opts) when is_map(node) and is_list(opts) do
     style = ShareCard.normalize_style(style)
     force? = Keyword.get(opts, :force, false)
+    frame_paths = Keyword.get(opts, :frame_paths, %{})
 
     with ffmpeg when is_binary(ffmpeg) <- ffmpeg_path(),
          {:ok, cache_dir} <- ensure_cache_dir() do
-      output_path = Path.join(cache_dir, cache_filename(campaign, node, style))
+      output_path = Path.join(cache_dir, cache_filename(campaign, node, style, frame_paths))
       if force?, do: File.rm(output_path)
 
       if not force? and valid_video_file?(output_path) do
         {:ok, output_path}
       else
-        render_video(ffmpeg, campaign, node, style, cache_dir, output_path)
+        render_video(ffmpeg, campaign, node, style, frame_paths, cache_dir, output_path)
       end
     else
       nil -> {:error, :ffmpeg_not_found}
@@ -239,11 +242,13 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   def background_audio_available?, do: is_binary(background_audio_path())
 
-  defp render_video(ffmpeg, campaign, node, style, cache_dir, output_path) do
+  defp render_video(ffmpeg, campaign, node, style, frame_paths, cache_dir, output_path) do
     durations = ShareCard.node_short_video_durations(campaign, node)
 
     render_frame_video(ffmpeg, durations, cache_dir, output_path, fn index ->
-      ShareCard.node_short_video_frame_png(campaign, node, style, index)
+      persisted_frame_or_render(frame_paths, index, fn ->
+        ShareCard.node_short_video_frame_png(campaign, node, style, index)
+      end)
     end)
   end
 
@@ -408,9 +413,9 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     end
   end
 
-  defp cache_filename(campaign, node, style) do
+  defp cache_filename(campaign, node, style, frame_paths) do
     digest =
-      {@cache_version, campaign.id, campaign.title, node, style, @fade_seconds,
+      {@cache_version, campaign.id, campaign.title, node, style, @fade_seconds, frame_paths,
        background_audio_signature()}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))

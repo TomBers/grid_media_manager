@@ -34,6 +34,10 @@ defmodule GridMediaManagerWeb.Router do
         PromotionAssetController,
         :node_carousel_video
 
+    get "/campaigns/:id/nodes/:node_id/carousel-frames/:slide/image.png",
+        PromotionAssetController,
+        :node_carousel_video_frame
+
     get "/campaigns/:id/questions/:question_id/share-card.png",
         PromotionAssetController,
         :question_card
@@ -61,6 +65,10 @@ defmodule GridMediaManagerWeb.Router do
     post "/campaigns/:id/curated-carousels/:token/browser-frames",
          PromotionAssetController,
          :browser_frame
+
+    post "/campaigns/:id/nodes/:node_id/browser-frames",
+         PromotionAssetController,
+         :node_browser_frame
   end
 
   # Other scopes may use custom stacks.

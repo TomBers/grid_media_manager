@@ -216,7 +216,7 @@ defmodule GridMediaManager.Social.Templates do
   end
 
   defp body_for_platform(
-         %Campaign{},
+         %Campaign{} = campaign,
          %MediaAsset{kind: "long_form_post"} = asset,
          platform,
          "long_form"
@@ -228,7 +228,7 @@ defmodule GridMediaManager.Social.Templates do
       |> String.trim()
       |> fallback(asset.title |> fallback("Long-form answer") |> to_string())
 
-    fit_long_form_to_platform(answer, platform)
+    fit_long_form_to_platform(answer, platform, asset_link(campaign, asset))
   end
 
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "visual") do
@@ -482,21 +482,25 @@ defmodule GridMediaManager.Social.Templates do
     end
   end
 
-  defp fit_long_form_to_platform(copy, platform) do
-    if Platforms.within_limit?(copy, platform) do
-      copy
+  defp fit_long_form_to_platform(copy, platform, link) do
+    cta = cta_line(link)
+    full_copy = copy <> "\n\n" <> cta
+
+    if Platforms.within_limit?(full_copy, platform) do
+      full_copy
     else
       limit = Platforms.max_chars(platform)
+      available = max(limit - String.length(cta) - 3, 0)
 
       shortened =
         copy
-        |> String.slice(0, max(limit - 1, 0))
+        |> String.slice(0, available)
         |> String.trim_trailing()
         |> Kernel.<>("…")
 
-      if Platforms.within_limit?(shortened, platform),
-        do: shortened,
-        else: String.slice(shortened, 0, limit)
+      shortened_copy = shortened <> "\n\n" <> cta
+
+      if Platforms.within_limit?(shortened_copy, platform), do: shortened_copy, else: cta
     end
   end
 

@@ -109,8 +109,11 @@ defmodule GridMediaManager.Promotion.AssetRenderer do
   end
 
   def render(%Campaign{} = campaign, %MediaAsset{kind: "key_node_video"} = asset) do
+    frame_paths = Map.get(asset.metadata || %{}, "browser_frame_paths", %{})
+
     with node when is_map(node) <- ShareCard.find_key_node(campaign, asset.node_id),
-         {:ok, path} <- CarouselVideo.render(campaign, node, asset.style) do
+         {:ok, path} <-
+           CarouselVideo.render(campaign, node, asset.style, frame_paths: frame_paths) do
       File.read(path)
     else
       nil -> {:error, :source_not_found}
