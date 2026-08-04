@@ -656,6 +656,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     <Layouts.app flash={@flash}>
       <div
         id="guided-share-studio"
+        phx-hook="PreserveScrollPosition"
         class="relative isolate min-h-screen overflow-hidden px-4 py-8 sm:px-6 lg:px-8 lg:py-10"
       >
         <div class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[34rem] bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.17),transparent_38%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.13),transparent_36%)]" />
@@ -868,7 +869,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </button>
               </div>
 
-              <div id="content-candidates" phx-update="stream" class="mt-5 space-y-5">
+              <div
+                id="content-candidates"
+                phx-update="stream"
+                class="mt-5 space-y-5"
+              >
                 <div
                   id="empty-content-candidates"
                   class="hidden rounded-3xl border border-dashed border-base-content/20 bg-base-200/40 p-8 text-center text-sm text-base-content/55 only:block"
@@ -907,8 +912,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               </div>
             </div>
 
-            <aside class="xl:sticky xl:top-24 xl:self-start">
-              <div class="rounded-[2rem] border border-base-content/10 bg-base-content p-5 text-base-100 shadow-2xl shadow-base-content/15 md:p-6">
+            <aside id="story-queue" class="self-start">
+              <div class="fixed top-32 right-[max(1rem,calc((100vw-80rem)/2))] z-40 max-h-[calc(100vh-2rem)] w-[22rem] overflow-y-auto rounded-[2rem] border border-base-content/10 bg-base-content p-5 text-base-100 shadow-2xl shadow-base-content/15 md:p-6">
                 <div class="flex items-center justify-between gap-3">
                   <div>
                     <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-300">
@@ -1775,6 +1780,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     <article id={@id} class={candidate_card_class(@candidate.selected?)}>
       <button
         id={"select-aspect-#{@candidate.dom_id}"}
+        phx-hook="PreventSelectionScroll"
         type="button"
         phx-click="toggle_aspect"
         phx-value-key={@candidate.key}
@@ -2284,24 +2290,29 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     end
   end
 
-  defp update_selection(socket, selected_keys, selected_order, _candidate) do
+  defp update_selection(socket, selected_keys, selected_order, candidate) do
     candidates = socket.assigns.all_candidates
     visible_candidates = Workflow.filter_candidates(candidates, socket.assigns.candidate_filter)
+    groups = candidate_groups(visible_candidates, selected_keys, candidates)
+    selected_group_id = candidate_group_dom_id(candidate_group_key(candidate))
+    selected_group = Enum.find(groups, &(&1.dom_id == selected_group_id))
 
     socket
     |> assign(:selected_keys, selected_keys)
     |> assign(:selected_order, selected_order)
     |> assign(:selected_count, MapSet.size(selected_keys))
-    |> stream(
-      :candidate_groups,
-      candidate_groups(visible_candidates, selected_keys, candidates),
-      reset: true
-    )
+    |> update_candidate_group_stream(selected_group, groups)
     |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_order),
       reset: true
     )
     |> persist_studio_state()
   end
+
+  defp update_candidate_group_stream(socket, nil, groups),
+    do: stream(socket, :candidate_groups, groups, reset: true)
+
+  defp update_candidate_group_stream(socket, group, _groups),
+    do: stream_insert(socket, :candidate_groups, group)
 
   defp persist_studio_state(socket) do
     state = %{
@@ -3090,7 +3101,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp candidate_card_class(selected?) do
     [
-      "min-h-60 rounded-3xl border p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl",
+      "min-h-60 rounded-3xl border p-5 hover:-translate-y-0.5 hover:shadow-xl",
       if(selected?,
         do: "border-orange-500/50 bg-orange-500/8 shadow-lg shadow-orange-950/5",
         else: "border-base-content/10 bg-base-100 hover:border-base-content/20"

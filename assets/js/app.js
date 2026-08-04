@@ -60,6 +60,48 @@ Hooks.CopyToClipboard = {
   },
 }
 
+Hooks.PreserveScrollPosition = {
+  mounted() {
+    this.el.addEventListener("click", event => {
+      if (!event.target.closest("#content-candidates button")) return
+
+      const scrollY = window.scrollY
+      const restore = () => window.scrollTo({top: scrollY, left: window.scrollX, behavior: "instant"})
+
+      window.requestAnimationFrame(() => {
+        restore()
+        window.requestAnimationFrame(() => {
+          restore()
+          window.setTimeout(restore, 40)
+        })
+      })
+    }, true)
+  },
+
+  beforeUpdate() {
+    this.scrollY = window.scrollY
+  },
+
+  updated() {
+    if (typeof this.scrollY === "number") {
+      const scrollY = this.scrollY
+      window.requestAnimationFrame(() => {
+        window.scrollTo({top: scrollY, left: window.scrollX, behavior: "instant"})
+      })
+      window.setTimeout(() => {
+        window.scrollTo({top: scrollY, left: window.scrollX, behavior: "instant"})
+      }, 0)
+    }
+  },
+}
+
+Hooks.PreventSelectionScroll = {
+  mounted() {
+    this.el.addEventListener("mousedown", event => event.preventDefault())
+    this.el.addEventListener("click", () => this.el.blur())
+  },
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
