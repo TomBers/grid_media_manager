@@ -14,7 +14,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   @default_style "editorial_dark"
   @carousel_reading_max_characters 360
-  @short_frame_duration 3.0
 
   @styles [
     %{
@@ -216,14 +215,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   def node_short_video_slides(%Campaign{} = campaign, node),
     do: node_reading_slides(campaign, node)
-
-  def node_short_video_durations(%Campaign{} = campaign, node) do
-    Enum.map(node_short_video_slides(campaign, node), fn _slide -> @short_frame_duration end)
-  end
-
-  def curated_carousel_short_video_durations(slides) when is_list(slides) do
-    Enum.map(slides, fn _slide -> @short_frame_duration end)
-  end
 
   def curated_carousel_selected_slide_indexes(slides, selection \\ nil) when is_list(slides) do
     slide_count = length(slides)

@@ -16,14 +16,17 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   @width 1080
   @height 1920
-  @seconds_per_frame 3.0
+  @minimum_frame_seconds 4.5
+  @maximum_frame_seconds 14.0
+  @words_per_second 3.0
+  @reading_buffer_seconds 1.75
   @audio_fade_seconds 0.5
   @audio_volume 0.18
   @audio_bitrate "160k"
   @frame_rate 30
   @render_timeout 300_000
   @render_timeout_per_second 5_000
-  @cache_version 24
+  @cache_version 25
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -60,6 +63,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       slides
       |> video_metadata()
       |> Map.put("selected_slide_indexes", indexes)
+      |> Map.put("duration_seconds", slides |> slide_durations(indexes) |> duration_seconds())
 
     %{
       title: "#{campaign.title} · Story Short",
@@ -81,10 +85,46 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     durations |> Enum.sum() |> Float.round(2)
   end
 
-  def duration_seconds(slide_count) when is_integer(slide_count) and slide_count > 0,
-    do: Float.round(slide_count * @seconds_per_frame, 2)
-
   def duration_seconds(_value), do: 0.0
+
+  @doc """
+  Gives a slide enough screen time for its visible text to be read comfortably.
+
+  Durations grow with the word count and are bounded so very short slides do not
+  flash past while unusually long slides cannot make a video unreasonably long.
+  """
+  def slide_duration(slide) when is_map(slide) do
+    word_count =
+      [value(slide, "label"), value(slide, "title"), value(slide, "body")]
+      |> Enum.filter(&is_binary/1)
+      |> Enum.join(" ")
+      |> String.split(~r/\s+/u, trim: true)
+      |> length()
+
+    (@reading_buffer_seconds + word_count / @words_per_second)
+    |> max(@minimum_frame_seconds)
+    |> min(@maximum_frame_seconds)
+    |> Float.round(2)
+  end
+
+  def slide_duration(_slide), do: @minimum_frame_seconds
+
+  def slide_durations(slides) when is_list(slides), do: Enum.map(slides, &slide_duration/1)
+
+  def slide_durations(slides, indexes) when is_list(slides) and is_list(indexes) do
+    Enum.map(indexes, fn index ->
+      slides
+      |> Enum.at(index - 1)
+      |> slide_duration()
+    end)
+  end
+
+  def asset_duration_seconds(%MediaAsset{metadata: metadata}, indexes) when is_list(indexes) do
+    (metadata || %{})
+    |> Map.get("slides", [])
+    |> slide_durations(indexes)
+    |> duration_seconds()
+  end
 
   def background_audio_available?, do: is_binary(background_audio_path())
 
@@ -97,13 +137,12 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     with true <- Enum.all?(artifacts, &valid_artifact?/1),
          ffmpeg when is_binary(ffmpeg) <- ffmpeg_path(),
          {:ok, cache_dir} <- ensure_cache_dir() do
-      output_path = Path.join(cache_dir, cache_filename(asset, indexes, artifacts))
+      durations = asset_frame_durations(asset, indexes)
+      output_path = Path.join(cache_dir, cache_filename(asset, indexes, artifacts, durations))
 
       if valid_video_file?(output_path) do
         {:ok, output_path}
       else
-        durations = Enum.map(indexes, fn _index -> @seconds_per_frame end)
-
         encode_frames(ffmpeg, durations, cache_dir, output_path, fn position ->
           artifacts
           |> Enum.at(position - 1)
@@ -121,12 +160,15 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   def render_artifacts(%MediaAsset{}, _indexes), do: {:error, :artifact_not_ready}
 
   defp video_metadata(slides) do
+    frame_durations = slide_durations(slides)
+
     %{
       "format" => "short_video",
       "width" => @width,
       "height" => @height,
       "slide_count" => length(slides),
-      "duration_seconds" => duration_seconds(length(slides)),
+      "duration_seconds" => duration_seconds(frame_durations),
+      "frame_durations" => frame_durations,
       "background_audio" => background_audio_available?(),
       "slides" => slides
     }
@@ -287,11 +329,18 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     end
   end
 
-  defp cache_filename(asset, indexes, artifacts) do
+  defp asset_frame_durations(%MediaAsset{metadata: metadata}, indexes) do
+    (metadata || %{})
+    |> Map.get("slides", [])
+    |> slide_durations(indexes)
+  end
+
+  defp cache_filename(asset, indexes, artifacts, durations) do
     signature = Enum.map(artifacts, &Map.take(&1, ["sha256", "byte_size"]))
 
     digest =
-      {@cache_version, asset.id, indexes, signature, video_filter(), background_audio_signature()}
+      {@cache_version, asset.id, indexes, signature, durations, video_filter(),
+       background_audio_signature()}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))
       |> Base.url_encode64(padding: false)

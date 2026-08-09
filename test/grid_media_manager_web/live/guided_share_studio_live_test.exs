@@ -54,6 +54,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
   test "steps through curation and design to generate a multi-asset package", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-package")
 
+    assert {:ok, campaign} =
+             Campaigns.set_pexels_background(campaign, %{
+               id: 42,
+               alt: "A calm backdrop",
+               photographer: "A photographer",
+               photographer_url: "https://www.pexels.com/@photographer",
+               pexels_url: "https://www.pexels.com/photo/42",
+               portrait_url: "https://images.example/portrait.jpg",
+               original_url: "https://images.example/original.jpg"
+             })
+
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
     view
@@ -105,6 +116,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     last_slide = carousel.metadata["slide_count"]
     assert carousel.metadata["selected_slide_indexes"] == Enum.to_list(1..last_slide)
     assert has_element?(view, "#curated-carousel-order-#{carousel.id}")
+
+    assert has_element?(
+             view,
+             "#curated-carousel-slides-#{carousel.id}[data-cover-image-url='https://images.example/portrait.jpg']"
+           )
 
     view
     |> element("#curated-carousel-slide-#{carousel.id}-2")

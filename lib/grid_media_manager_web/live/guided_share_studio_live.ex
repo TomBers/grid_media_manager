@@ -7,6 +7,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   alias GridMediaManager.Campaigns.PostDraft
   alias GridMediaManager.Pexels.Client, as: Pexels
   alias GridMediaManager.Promotion.ArtifactStore
+  alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.Social.Buffer
   alias GridMediaManager.Social.Platforms
@@ -1682,7 +1683,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     selected={@selected_output_asset_id == Integer.to_string(asset.id)}
                     preview_slide={Map.get(@carousel_preview_slides, asset.id, 1)}
                     wide={@output_asset_count == 1}
-                    video_cover_image_url={pexels_video_cover_url(@selected_pexels_background)}
+                    cover_image_url={
+                      pexels_cover_url(
+                        @selected_pexels_background,
+                        @title_card_mode
+                      )
+                    }
                   />
                 </div>
               </div>
@@ -1879,7 +1885,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   attr :selected, :boolean, required: true
   attr :preview_slide, :integer, default: 1
   attr :wide, :boolean, default: false
-  attr :video_cover_image_url, :string, default: nil
+  attr :cover_image_url, :string, default: nil
 
   defp output_asset_card(assigns) do
     slides = canvas_slides(assigns.campaign, assigns.asset)
@@ -1941,7 +1947,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         }
         data-style={@asset.style}
         data-video-frame={if(browser_canvas_video?(@asset), do: "true", else: "false")}
-        data-video-cover-image-url={@video_cover_image_url}
+        data-cover-image-url={@cover_image_url}
         data-logo-src="/images/rg_logo.webp"
         data-upload-url={client_artifact_upload_url(@asset)}
         data-asset-id={@asset.id}
@@ -2825,11 +2831,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp pexels_error_message(_reason), do: "Pexels search is unavailable right now."
 
-  defp pexels_video_cover_url(background) when is_map(background) do
+  defp pexels_cover_url(background, "pexels") when is_map(background) do
     background["portrait_url"] || background["original_url"] || background["landscape_url"]
   end
 
-  defp pexels_video_cover_url(_background), do: nil
+  defp pexels_cover_url(_background, _mode), do: nil
 
   defp platforms_for_mode("text"), do: Platforms.text_ids()
   defp platforms_for_mode("long_form"), do: Platforms.long_form_ids()
@@ -3419,14 +3425,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     "Carousel · #{length(selected)} images · CTA final"
   end
 
-  defp asset_kind_label(%MediaAsset{kind: "curated_carousel_video", metadata: metadata}),
-    do: "Story Short · #{Map.get(metadata, "duration_seconds")}s · 1080 × 1920"
+  defp asset_kind_label(%MediaAsset{kind: "curated_carousel_video"} = asset),
+    do: "Story Short · #{video_duration_seconds(asset)}s · 1080 × 1920"
 
   defp asset_kind_label(%MediaAsset{kind: "key_node_carousel_slide", metadata: metadata}),
     do: "Carousel · slide #{Map.get(metadata, "slide_index")}"
 
-  defp asset_kind_label(%MediaAsset{kind: "key_node_video", metadata: metadata}),
-    do: "Short video · #{Map.get(metadata, "duration_seconds")}s · 1080 × 1920"
+  defp asset_kind_label(%MediaAsset{kind: "key_node_video"} = asset),
+    do: "Short video · #{video_duration_seconds(asset)}s · 1080 × 1920"
 
   defp asset_kind_label(%MediaAsset{kind: "question_video"}),
     do: "Question Short · 6s · 1080 × 1920"
@@ -3448,6 +3454,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp asset_kind_label(%MediaAsset{kind: kind}),
     do: kind |> String.replace("_", " ") |> String.capitalize()
+
+  defp video_duration_seconds(%MediaAsset{} = asset) do
+    CarouselVideo.asset_duration_seconds(asset, carousel_selected_slide_indexes(asset))
+  end
 
   defp video_asset?(%MediaAsset{mime_type: "video/mp4"}), do: true
   defp video_asset?(_asset), do: false

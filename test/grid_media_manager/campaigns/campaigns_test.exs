@@ -4,6 +4,7 @@ defmodule GridMediaManager.CampaignsTest do
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Promotion.ArtifactStore
+  alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.Repo
   alias GridMediaManager.Social.Platforms
@@ -123,6 +124,14 @@ defmodule GridMediaManager.CampaignsTest do
 
     assert video.metadata["selected_slide_indexes"] ==
              carousel.metadata["selected_slide_indexes"]
+
+    assert video.metadata["frame_durations"] ==
+             CarouselVideo.slide_durations(video.metadata["slides"])
+
+    assert video.metadata["duration_seconds"] ==
+             video.metadata["slides"]
+             |> CarouselVideo.slide_durations(video.metadata["selected_slide_indexes"])
+             |> CarouselVideo.duration_seconds()
   end
 
   test "stores selected browser artifacts and rejects unselected frames" do

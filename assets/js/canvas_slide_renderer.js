@@ -502,7 +502,7 @@ function drawImageCover(context, image, width, height) {
   context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight)
 }
 
-function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, videoCoverImage, video) {
+function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverImage, video) {
   const context = canvas.getContext("2d")
   const palette = paletteFor(style)
   const coverSlide = slideIndex === 1 && (slide.kind === "cover" || slide.kind === "node_title")
@@ -524,17 +524,24 @@ function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, videoCove
     return
   }
 
-  if (coverSlide && video && videoCoverImage) {
+  if (coverSlide && coverImage) {
     context.save()
-    roundedRect(context, 54, 64, 972, 1792, 48)
+    roundedRect(
+      context,
+      54,
+      frame.video ? 64 : 54,
+      972,
+      frame.video ? 1792 : 1242,
+      frame.video ? 48 : 44
+    )
     context.clip()
-    drawImageCover(context, videoCoverImage, WIDTH, frame.height)
+    drawImageCover(context, coverImage, WIDTH, frame.height)
     context.fillStyle = "rgba(2, 6, 23, 0.58)"
     context.fillRect(0, 0, WIDTH, frame.height)
     context.restore()
   }
 
-  const coverPhoto = coverSlide && video && videoCoverImage
+  const coverPhoto = coverSlide && coverImage
   const coverTextColor = coverPhoto ? "#fff7ed" : palette.text
   const coverMutedColor = coverPhoto ? "rgba(255,247,237,0.82)" : palette.muted
   drawHeader(context, palette, frame, coverPhoto ? "#fff7ed" : palette.text)
@@ -605,7 +612,14 @@ export const CanvasSlideRenderer = {
     this.rootObserver = new MutationObserver(() => this.renderAll())
     this.rootObserver.observe(this.root, {
       attributes: true,
-      attributeFilter: ["data-slides", "data-selected-indexes", "data-preview-slide"],
+      attributeFilter: [
+        "data-slides",
+        "data-selected-indexes",
+        "data-preview-slide",
+        "data-style",
+        "data-video-frame",
+        "data-cover-image-url",
+      ],
       childList: true,
       subtree: true,
     })
@@ -634,8 +648,8 @@ export const CanvasSlideRenderer = {
       const style = this.root.dataset.style || "editorial_dark"
       const video = this.root.dataset.videoFrame === "true"
       const logo = await loadImage(this.root.dataset.logoSrc || "/images/rg_logo.webp")
-      const videoCoverImage = video && this.root.dataset.videoCoverImageUrl
-        ? await loadImage(this.root.dataset.videoCoverImageUrl)
+      const coverImage = this.root.dataset.coverImageUrl
+        ? await loadImage(this.root.dataset.coverImageUrl)
         : null
       const targets = this.root.querySelectorAll("[data-canvas-slide]")
 
@@ -644,7 +658,7 @@ export const CanvasSlideRenderer = {
         const slide = slides[index - 1]
         const canvas = target
         if (!slide || !canvas) return
-        drawSlide(canvas, slide, index, slides.length, style, logo, videoCoverImage, video)
+        drawSlide(canvas, slide, index, slides.length, style, logo, coverImage, video)
       })
 
       const previewIndex = Number(this.root.dataset.previewSlide || 1)
@@ -655,7 +669,7 @@ export const CanvasSlideRenderer = {
       if (previewCanvas && mainPreview) copyCanvas(previewCanvas, mainPreview)
 
       const status = this.root.querySelector("[data-browser-render-status]")
-      const fingerprint = `${this.root.dataset.slides}|${style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.videoCoverImageUrl || ""}|${this.root.dataset.selectedIndexes || ""}`
+      const fingerprint = `${this.root.dataset.slides}|${style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.coverImageUrl || ""}|${this.root.dataset.selectedIndexes || ""}`
       if (this.root.dataset.artifactsReady === "true" && !this.uploadedFrameFingerprint) {
         this.uploadedFrameFingerprint = fingerprint
       }
@@ -678,6 +692,8 @@ export const CanvasSlideRenderer = {
       if (this.root.dataset.videoPreviewId) {
         if (this.uploadedFrameFingerprint !== fingerprint && !this.uploadingFrames) {
           await this.uploadFrames({automatic: true, fingerprint})
+        } else {
+          this.loadVideoFallback()
         }
       }
     } catch (_error) {
@@ -699,7 +715,7 @@ export const CanvasSlideRenderer = {
     const uploadButton = this.root.querySelector("[data-browser-render-upload]")
     if (!uploadButton) return
     const automatic = options.automatic === true
-    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.videoCoverImageUrl || ""}|${this.root.dataset.selectedIndexes || ""}`
+    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.coverImageUrl || ""}|${this.root.dataset.selectedIndexes || ""}`
     const targets = this.root.querySelectorAll("[data-canvas-slide]")
     const selectedIndexes = JSON.parse(this.root.dataset.selectedIndexes || "[]").map(Number)
     const frameIndexes = Array.from(targets)

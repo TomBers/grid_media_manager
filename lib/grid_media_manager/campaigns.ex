@@ -145,6 +145,7 @@ defmodule GridMediaManager.Campaigns do
         (asset.metadata || %{})
         |> Map.put("slides", List.replace_at(slides, slide_index - 1, updated_slide))
         |> invalidate_rendered_media()
+        |> refresh_video_timing(asset)
 
       asset
       |> MediaAsset.changeset(%{metadata: metadata})
@@ -1209,6 +1210,21 @@ defmodule GridMediaManager.Campaigns do
     |> Map.drop(["artifacts", "browser_frame_paths"])
     |> invalidate_published_media()
   end
+
+  defp refresh_video_timing(metadata, %MediaAsset{mime_type: "video/mp4"} = asset) do
+    slides = Map.get(metadata, "slides", [])
+    indexes = media_asset_slide_indexes(%{asset | metadata: metadata})
+    frame_durations = CarouselVideo.slide_durations(slides)
+
+    metadata
+    |> Map.put("frame_durations", frame_durations)
+    |> Map.put(
+      "duration_seconds",
+      slides |> CarouselVideo.slide_durations(indexes) |> CarouselVideo.duration_seconds()
+    )
+  end
+
+  defp refresh_video_timing(metadata, %MediaAsset{}), do: metadata
 
   defp put_single_slide(attrs, kind) when is_map(attrs) do
     slide = %{
