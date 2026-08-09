@@ -18,7 +18,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   @steps [
     %{id: "curate", label: "Curate", description: "Find the signal"},
     %{id: "design", label: "Design", description: "Shape the media"},
-    %{id: "generate", label: "Generate", description: "Create the package"},
     %{id: "review", label: "Review", description: "Refine and approve"}
   ]
   @candidate_filters [
@@ -74,8 +73,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     restored_asset_ids = MapSet.new(restored_assets, & &1.id)
     default_step = if restored_assets == [], do: "curate", else: "review"
 
+    requested_step = if(params["step"] == "generate", do: "design", else: params["step"])
+
     restored_step =
-      if params["step"] in Enum.map(@steps, & &1.id), do: params["step"], else: default_step
+      if requested_step in Enum.map(@steps, & &1.id), do: requested_step, else: default_step
 
     restored_asset_filter = restore_asset_filter(params, restored_asset_ids)
     restored_video_only? = restored_assets != [] and Enum.all?(restored_assets, &video_asset?/1)
@@ -236,10 +237,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   def handle_event("continue_to_design", _params, socket) do
     {:noreply, move_to_step(socket, "design")}
-  end
-
-  def handle_event("continue_to_generate", _params, socket) do
-    {:noreply, move_to_step(socket, "generate")}
   end
 
   def handle_event("go_to_step", %{"step" => step}, socket) do
@@ -727,7 +724,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
             </div>
 
             <div class="border-t border-base-content/10 bg-base-200/35 px-4 py-4 sm:px-6 lg:px-10">
-              <ol id="studio-progress" class="grid grid-cols-2 gap-2 lg:grid-cols-4">
+              <ol id="studio-progress" class="grid grid-cols-3 gap-2">
                 <li :for={stage <- @steps}>
                   <button
                     id={"progress-step-#{stage.id}"}
@@ -966,7 +963,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
           <section
             :if={@step == "design"}
             id="stage-design"
-            class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]"
+            class="space-y-6"
           >
             <div class="space-y-6">
               <div class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 backdrop-blur md:p-7">
@@ -1348,150 +1345,21 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   </div>
                 </div>
               </div>
-            </div>
-
-            <aside class="xl:sticky xl:top-24 xl:self-start">
-              <div class="rounded-[2rem] border border-base-content/10 bg-base-100/90 p-5 shadow-xl shadow-base-content/5 md:p-6">
-                <p class="text-xs font-bold uppercase tracking-[0.2em] text-base-content/45">
-                  Package brief
-                </p>
-                <h2 class="mt-2 text-xl font-semibold text-base-content">
-                  {@selected_count} story moments
-                </h2>
-                <div id="selected-aspects" phx-update="stream" class="mt-4 space-y-2">
-                  <.selected_aspect
-                    :for={{id, candidate} <- @streams.selected_aspects}
-                    id={id}
-                    candidate={candidate}
-                    theme="light"
-                  />
-                </div>
-                <dl class="mt-5 space-y-3 border-t border-base-content/10 pt-5 text-sm">
-                  <div class="flex items-center justify-between gap-4">
-                    <dt class="text-base-content/55">Visual style</dt>
-                    <dd class="font-semibold text-base-content">
-                      {style_label(@card_styles, @selected_style)}
-                    </dd>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <dt class="text-base-content/55">Package</dt>
-                    <dd class="font-semibold text-base-content">
-                      {format_label(@formats, @selected_format)}
-                    </dd>
-                  </div>
-                </dl>
-                <div class="mt-5 grid grid-cols-2 gap-2">
-                  <button
-                    id="back-to-curate"
-                    type="button"
-                    phx-click="go_to_step"
-                    phx-value-step="curate"
-                    class="rounded-2xl border border-base-content/15 px-4 py-3 text-sm font-semibold text-base-content/65 transition hover:bg-base-200"
-                  >
-                    Back
-                  </button>
-                  <button
-                    id="continue-to-generate"
-                    type="button"
-                    phx-click="continue_to_generate"
-                    class="inline-flex items-center justify-center rounded-2xl bg-base-content px-4 py-3 text-sm font-bold text-base-100 shadow-lg transition hover:-translate-y-0.5"
-                  >
-                    Continue <.icon name="hero-arrow-right" class="ml-1.5 size-4" />
-                  </button>
-                </div>
-              </div>
-            </aside>
-          </section>
-
-          <section
-            :if={@step == "generate"}
-            id="stage-generate"
-            class="rounded-[2rem] border border-base-content/10 bg-base-100/90 p-6 shadow-2xl shadow-base-content/5 md:p-10"
-          >
-            <div class="mx-auto max-w-4xl">
-              <div class="text-center">
-                <span class="mx-auto grid size-16 place-items-center rounded-3xl bg-orange-500/10 text-orange-600 shadow-inner dark:text-orange-300">
-                  <.icon name="hero-sparkles" class="size-8" />
-                </span>
-                <p class="mt-5 text-xs font-bold uppercase tracking-[0.2em] text-orange-600 dark:text-orange-300">
-                  03 · Production run
-                </p>
-                <h2 class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
-                  Ready to create the package.
-                </h2>
-                <p class="mx-auto mt-3 max-w-2xl text-sm leading-6 text-base-content/60">
-                  Editable slide content is prepared from the source grid. Your browser then lays out the finished visuals, while the associated channel copy stays editable for review.
-                </p>
-              </div>
-
-              <div class="mt-8 grid gap-5 md:grid-cols-[1fr_18rem]">
-                <div class="rounded-3xl border border-base-content/10 bg-base-200/35 p-5">
-                  <div class="flex items-center justify-between gap-3">
-                    <h3 class="font-semibold text-base-content">Production queue</h3>
-                    <span class="rounded-full bg-base-100 px-3 py-1 text-xs font-semibold text-base-content/55">
-                      {@selected_count} moments
-                    </span>
-                  </div>
-                  <div
-                    id="selected-aspects"
-                    phx-update="stream"
-                    class="mt-4 grid gap-2 sm:grid-cols-2"
-                  >
-                    <.selected_aspect
-                      :for={{id, candidate} <- @streams.selected_aspects}
-                      id={id}
-                      candidate={candidate}
-                      theme="light"
-                    />
-                  </div>
-                </div>
-
-                <div class="rounded-3xl bg-base-content p-5 text-base-100">
-                  <p class="text-xs font-bold uppercase tracking-[0.15em] text-white/45">Recipe</p>
-                  <p class="mt-3 text-sm font-semibold">
-                    {style_label(@card_styles, @selected_style)}
-                  </p>
-                  <p class="mt-1 text-xs text-white/55">
-                    {cond do
-                      @content_mode == "video" -> "Combined story video"
-                      @content_mode == "long_form" -> "One cover image + longer post"
-                      true -> "Ordered image carousel"
-                    end}
-                  </p>
-                  <div class="mt-5 space-y-2 text-xs text-white/60">
-                    <p class="flex items-center gap-2">
-                      <.icon name="hero-check" class="size-4 text-emerald-400" />
-                      {cond do
-                        @content_mode == "video" -> "Generate one combined vertical video"
-                        @content_mode == "long_form" -> "Generate one themed cover image"
-                        true -> "Generate one ordered image carousel"
-                      end}
-                    </p>
-                    <p class="flex items-center gap-2">
-                      <.icon name="hero-check" class="size-4 text-emerald-400" /> Create channel copy
-                    </p>
-                    <p class="flex items-center gap-2">
-                      <.icon name="hero-check" class="size-4 text-emerald-400" />
-                      Preserve source links
-                    </p>
-                  </div>
-                </div>
-              </div>
 
               <div
-                id="generate-platform-picker"
-                class="mt-5 rounded-3xl border border-sky-500/20 bg-sky-500/5 p-5"
+                id="design-platform-picker"
+                class="rounded-[2rem] border border-sky-500/20 bg-sky-500/5 p-5 shadow-xl shadow-base-content/5 md:p-7"
               >
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p class="text-xs font-bold uppercase tracking-[0.15em] text-sky-700 dark:text-sky-200">
                       Destinations
                     </p>
-                    <h3 class="mt-1 font-semibold text-base-content">
+                    <h2 class="mt-1 text-xl font-semibold text-base-content">
                       Where should this package go?
-                    </h3>
-                    <p class="mt-1 text-xs text-base-content/60">
-                      Pick one or more channels. You can add or remove destinations later.
+                    </h2>
+                    <p class="mt-1 text-sm text-base-content/60">
+                      Pick one or more channels. You can change these later in review.
                     </p>
                   </div>
                   <span class="rounded-full bg-base-100 px-3 py-1.5 text-xs font-bold text-base-content/60">
@@ -1499,12 +1367,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   </span>
                 </div>
                 <div
-                  id="generate-platform-summary"
+                  id="design-platform-summary"
                   class="mt-4 rounded-2xl bg-base-100 px-4 py-3 text-sm font-semibold text-base-content"
                 >
                   {destination_summary(@selected_platforms)}
                 </div>
-                <div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   <button
                     :for={platform <- platforms_for_mode(@content_mode)}
                     id={"toggle-platform-#{platform}"}
@@ -1527,50 +1395,93 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   </button>
                 </div>
               </div>
-
-              <p
-                :if={@generation_error}
-                id="generation-error"
-                class="mt-5 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200"
-              >
-                {@generation_error}
-              </p>
-
-              <p
-                :if={@generation_in_progress?}
-                id="generation-progress"
-                class="mt-5 rounded-2xl border border-orange-500/20 bg-orange-500/10 px-4 py-3 text-sm text-orange-800 dark:text-orange-100"
-              >
-                Preparing editable slides and channel copy…
-              </p>
-
-              <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
-                <button
-                  id="back-to-design"
-                  type="button"
-                  phx-click="go_to_step"
-                  phx-value-step="design"
-                  class="rounded-2xl border border-base-content/15 px-5 py-3.5 text-sm font-semibold text-base-content/65 transition hover:bg-base-200"
-                >
-                  Adjust design
-                </button>
-                <button
-                  id="generate-story-package"
-                  type="button"
-                  phx-click="generate_package"
-                  disabled={@generation_in_progress?}
-                  class="inline-flex items-center justify-center rounded-2xl bg-orange-500 px-7 py-3.5 text-sm font-bold text-white shadow-xl shadow-orange-950/20 transition hover:-translate-y-0.5 hover:bg-orange-400 phx-click-loading:cursor-wait phx-click-loading:opacity-60"
-                >
-                  <.icon name="hero-bolt" class="mr-2 size-5" />
-                  {cond do
-                    @generation_in_progress? -> "Generating package…"
-                    @content_mode == "video" -> "Generate video package"
-                    @content_mode == "long_form" -> "Generate longer post"
-                    true -> "Generate image carousel"
-                  end}
-                </button>
-              </div>
             </div>
+
+            <aside id="package-brief">
+              <div class="rounded-[2rem] border border-base-content/10 bg-base-100/90 p-5 shadow-xl shadow-base-content/5 md:p-6">
+                <p class="text-xs font-bold uppercase tracking-[0.2em] text-base-content/45">
+                  Package brief
+                </p>
+                <h2 class="mt-2 text-xl font-semibold text-base-content">
+                  {@selected_count} story moments
+                </h2>
+                <div
+                  id="selected-aspects"
+                  phx-update="stream"
+                  class="mt-4 grid gap-2 md:grid-cols-2"
+                >
+                  <.selected_aspect
+                    :for={{id, candidate} <- @streams.selected_aspects}
+                    id={id}
+                    candidate={candidate}
+                    theme="light"
+                  />
+                </div>
+                <dl class="mt-5 space-y-3 border-t border-base-content/10 pt-5 text-sm">
+                  <div class="flex items-center justify-between gap-4">
+                    <dt class="text-base-content/55">Visual style</dt>
+                    <dd class="font-semibold text-base-content">
+                      {style_label(@card_styles, @selected_style)}
+                    </dd>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <dt class="text-base-content/55">Package</dt>
+                    <dd class="font-semibold text-base-content">
+                      {format_label(@formats, @selected_format)}
+                    </dd>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <dt class="text-base-content/55">Destinations</dt>
+                    <dd class="text-right font-semibold text-base-content">
+                      {length(@selected_platforms)} selected
+                    </dd>
+                  </div>
+                </dl>
+
+                <p
+                  :if={@generation_error}
+                  id="generation-error"
+                  class="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200"
+                >
+                  {@generation_error}
+                </p>
+
+                <p
+                  :if={@generation_in_progress?}
+                  id="generation-progress"
+                  class="mt-4 rounded-2xl border border-orange-500/20 bg-orange-500/10 px-3 py-2 text-xs text-orange-800 dark:text-orange-100"
+                >
+                  Creating editable slides and channel copy…
+                </p>
+
+                <div class="mt-5 grid grid-cols-2 gap-2">
+                  <button
+                    id="back-to-curate"
+                    type="button"
+                    phx-click="go_to_step"
+                    phx-value-step="curate"
+                    class="rounded-2xl border border-base-content/15 px-4 py-3 text-sm font-semibold text-base-content/65 transition hover:bg-base-200"
+                  >
+                    Back
+                  </button>
+                  <button
+                    id="create-story-package"
+                    type="button"
+                    phx-click="generate_package"
+                    disabled={@generation_in_progress?}
+                    class="inline-flex items-center justify-center rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-orange-950/20 transition hover:-translate-y-0.5 hover:bg-orange-400 phx-click-loading:cursor-wait phx-click-loading:opacity-60 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <.icon name="hero-bolt" class="mr-1.5 size-4" />
+                    {cond do
+                      @generation_in_progress? -> "Creating…"
+                      @content_mode == "video" -> "Create video"
+                      @content_mode == "long_form" -> "Create post"
+                      true -> "Create carousel"
+                    end}
+                  </button>
+                </div>
+              </div>
+            </aside>
           </section>
 
           <section :if={@step == "review"} id="stage-review" class="space-y-6">
@@ -1581,7 +1492,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </span>
                 <div>
                   <p class="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-200">
-                    04 · Package created
+                    03 · Package created
                   </p>
                   <h2 class="mt-1 text-xl font-semibold text-base-content">
                     {cond do
@@ -3153,14 +3064,13 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp step_error("design"), do: "Choose at least one story moment before designing the package."
-  defp step_error("generate"), do: "Choose at least one story moment before generating."
-  defp step_error("review"), do: "Generate a package before opening review."
+  defp step_error("review"), do: "Create a package before opening review."
   defp step_error(_step), do: "That stage is not available yet."
 
   defp step_available?(_current_step, "curate", _selected_count, _output_count), do: true
 
-  defp step_available?(_current_step, step, selected_count, _output_count)
-       when step in ["design", "generate"], do: selected_count > 0
+  defp step_available?(_current_step, "design", selected_count, _output_count),
+    do: selected_count > 0
 
   defp step_available?(_current_step, "review", _selected_count, output_count),
     do: output_count > 0

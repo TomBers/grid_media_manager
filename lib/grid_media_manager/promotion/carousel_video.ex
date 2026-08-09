@@ -11,6 +11,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Promotion.ArtifactStore
+  alias GridMediaManager.Promotion.SeamlessAudioLoop
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.Social.Platforms
 
@@ -26,7 +27,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @frame_rate 30
   @render_timeout 300_000
   @render_timeout_per_second 5_000
-  @cache_version 25
+  @cache_version 26
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -257,9 +258,17 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       "-i",
       manifest_path
     ] ++
-      audio_input_args(audio_path) ++
+      SeamlessAudioLoop.input_args(audio_path) ++
       ["-vf", video_filter(), "-map", "0:v:0"] ++
-      if(audio?, do: ["-map", "1:a:0", "-af", audio_filter(duration)], else: ["-an"]) ++
+      if(audio?,
+        do: [
+          "-map",
+          "1:a:0",
+          "-af",
+          SeamlessAudioLoop.filter(duration, @audio_volume, @audio_fade_seconds)
+        ],
+        else: ["-an"]
+      ) ++
       [
         "-c:v",
         "libx264",
@@ -282,18 +291,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     "scale=#{@width}:#{@height}:force_original_aspect_ratio=decrease," <>
       "pad=#{@width}:#{@height}:(ow-iw)/2:(oh-ih)/2," <>
       "setsar=1,format=yuv420p,fps=#{@frame_rate}"
-  end
-
-  defp audio_input_args(path) when is_binary(path), do: ["-stream_loop", "-1", "-i", path]
-  defp audio_input_args(_path), do: []
-
-  defp audio_filter(duration) do
-    fade_out_start = max(duration - @audio_fade_seconds, 0.0)
-
-    "apad=pad_dur=#{decimal(duration)},atrim=duration=#{decimal(duration)},asetpts=PTS-STARTPTS," <>
-      "volume=#{decimal(@audio_volume)}," <>
-      "afade=t=in:st=0:d=#{decimal(@audio_fade_seconds)}," <>
-      "afade=t=out:st=#{decimal(fade_out_start)}:d=#{decimal(@audio_fade_seconds)}"
   end
 
   defp run_ffmpeg(executable, args, expected_duration) do

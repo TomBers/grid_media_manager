@@ -20,55 +20,37 @@ defmodule GridMediaManager.Promotion.ShareCard do
       id: "minimal_light",
       label: "Minimal light",
       description: "Black on white · quiet and universal",
-      category: "Foundation"
+      category: "Clean"
     },
     %{
       id: "minimal_dark",
       label: "Minimal dark",
       description: "White on black · focused and high contrast",
-      category: "Foundation"
+      category: "Monochrome"
     },
     %{
       id: "editorial_dark",
       label: "Editorial dark",
-      description: "Premium dark · quotes and explainers",
-      category: "Social"
-    },
-    %{
-      id: "gradient_poster",
-      label: "Gradient poster",
-      description: "High-energy color · hooks and launches",
-      category: "Social"
-    },
-    %{
-      id: "minimal_academic",
-      label: "Academic slate",
-      description: "Cool light editorial · thoughtful explainers",
-      category: "Social"
+      description: "Indigo and rose · premium editorial depth",
+      category: "Editorial"
     },
     %{
       id: "warm_paper",
       label: "Warm editorial",
       description: "Amber cinematic · reflective excerpts",
-      category: "Social"
+      category: "Warm"
     },
     %{
       id: "signal_red",
       label: "Signal red",
       description: "High urgency · debate prompts and bold hooks",
-      category: "Social"
+      category: "Bold"
     },
     %{
       id: "deep_ocean",
       label: "Deep ocean",
       description: "Analytical dark · complex explainers",
-      category: "Social"
-    },
-    %{
-      id: "newsprint",
-      label: "Newsprint",
-      description: "Tactile print · quotes and cultural topics",
-      category: "Social"
+      category: "Analytical"
     }
   ]
 

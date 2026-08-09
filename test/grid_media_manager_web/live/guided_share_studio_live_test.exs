@@ -44,8 +44,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#content-candidates", "Found inside “The case for uncertainty”.")
 
     view |> element("#continue-to-design") |> render_click()
-    view |> element("#continue-to-generate") |> render_click()
-    view |> element("#generate-story-package") |> render_click()
+    view |> element("#create-story-package") |> render_click()
     await_generation(view)
 
     assert Enum.any?(Campaigns.list_media_assets(campaign), &(&1.kind == "curated_carousel"))
@@ -86,6 +85,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#content-mode-text")
     assert has_element?(view, "#content-mode-long-form", "Longer post")
     assert has_element?(view, "#pexels-background-picker")
+    assert has_element?(view, "#package-brief")
+    assert has_element?(view, "#studio-progress > li:nth-child(3)")
+    refute has_element?(view, "#studio-progress > li:nth-child(4)")
+    refute has_element?(view, "#progress-step-generate")
+    assert has_element?(view, "#guided-style-picker > button:nth-child(6)")
+    refute has_element?(view, "#guided-style-picker > button:nth-child(7)")
 
     view
     |> element("#guided-style-warm_paper")
@@ -94,13 +99,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     view |> element("#content-mode-text") |> render_click()
 
     view
-    |> element("#continue-to-generate")
-    |> render_click()
-
-    assert has_element?(view, "#stage-generate")
-
-    view
-    |> element("#generate-story-package")
+    |> element("#create-story-package")
     |> render_click()
 
     await_generation(view)
@@ -152,11 +151,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     assert has_element?(view, "#story-package-default", "Longer post selected")
 
-    view |> element("#continue-to-generate") |> render_click()
-
-    assert has_element?(view, "#generate-platform-summary", "LinkedIn and Facebook")
+    assert has_element?(view, "#design-platform-summary", "LinkedIn and Facebook")
     assert has_element?(view, "#selected-aspects", "Longer answer")
-    assert has_element?(view, "#generate-story-package", "Generate longer post")
+    assert has_element?(view, "#create-story-package", "Create post")
   end
 
   test "combines multiple selected moments into one carousel output", %{conn: conn} do
@@ -169,8 +166,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     view |> element("#continue-to-design") |> render_click()
     assert has_element?(view, "#content-mode-video")
     view |> element("#content-mode-video") |> render_click()
-    view |> element("#continue-to-generate") |> render_click()
-    view |> element("#generate-story-package") |> render_click()
+    view |> element("#create-story-package") |> render_click()
     await_generation(view)
 
     assets = Campaigns.list_media_assets(campaign)
@@ -189,8 +185,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     view |> element("#continue-to-design") |> render_click()
     view |> element("#content-mode-text") |> render_click()
-    view |> element("#continue-to-generate") |> render_click()
-    view |> element("#generate-story-package") |> render_click()
+    view |> element("#create-story-package") |> render_click()
     await_generation(view)
 
     [asset] = Campaigns.list_media_assets(campaign)
@@ -218,8 +213,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     view |> element("#continue-to-design") |> render_click()
     view |> element("#content-mode-text") |> render_click()
-    view |> element("#continue-to-generate") |> render_click()
-    view |> element("#generate-story-package") |> render_click()
+    view |> element("#create-story-package") |> render_click()
     await_generation(view)
 
     [asset] = Campaigns.list_media_assets(campaign)

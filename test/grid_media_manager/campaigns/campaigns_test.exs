@@ -39,6 +39,7 @@ defmodule GridMediaManager.CampaignsTest do
   test "exposes distinct editorial styles while keeping content renderer-agnostic" do
     styles = ShareCard.styles()
 
+    assert length(styles) == 6
     assert Enum.map(styles, & &1.id) |> Enum.uniq() |> length() == length(styles)
     assert Enum.any?(styles, &(&1.id == "minimal_light"))
     assert Enum.any?(styles, &(&1.id == "editorial_dark"))
