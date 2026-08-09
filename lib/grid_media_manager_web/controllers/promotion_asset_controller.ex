@@ -42,10 +42,13 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
         conn,
         %{"id" => id, "index" => index, "artifact" => %Plug.Upload{} = upload}
       ) do
+    renderer_version = conn |> get_req_header("x-canvas-renderer-version") |> List.first()
+
     with asset when not is_nil(asset) <- Campaigns.get_media_asset(id),
          true <- upload.content_type == "image/png",
          {:ok, body} <- File.read(upload.path),
-         {:ok, asset} <- Campaigns.store_client_artifact(asset, index, body) do
+         {:ok, asset} <-
+           Campaigns.store_client_artifact(asset, index, body, renderer_version) do
       conn
       |> put_status(:created)
       |> json(%{
@@ -62,6 +65,11 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
 
       {:error, :invalid_slide} ->
         conn |> put_status(:unprocessable_entity) |> json(%{error: "Invalid slide"})
+
+      {:error, :stale_renderer} ->
+        conn
+        |> put_status(:conflict)
+        |> json(%{error: "Refresh the page before saving this media"})
 
       {:error, reason} ->
         conn

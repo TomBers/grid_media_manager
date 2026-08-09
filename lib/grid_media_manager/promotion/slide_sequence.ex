@@ -50,7 +50,7 @@ defmodule GridMediaManager.Promotion.SlideSequence do
         "kind" => if(type == "highlight", do: "highlight", else: "quote"),
         "label" => Map.get(candidate, :label) || humanize(type),
         "title" => candidate.title,
-        "body" => Map.get(candidate, :excerpt) || ""
+        "body" => ""
       }
     ]
   end

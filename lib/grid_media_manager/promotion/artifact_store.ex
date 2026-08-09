@@ -10,10 +10,18 @@ defmodule GridMediaManager.Promotion.ArtifactStore do
   alias GridMediaManager.Campaigns.MediaAsset
 
   @png_signature <<137, 80, 78, 71, 13, 10, 26, 10>>
+  @renderer_version 2
 
-  def put_png(%MediaAsset{} = asset, index, body)
+  def renderer_version, do: @renderer_version
+
+  def current_renderer_version?(version), do: to_string(version) == to_string(@renderer_version)
+
+  def put_png(asset, index, body, renderer_version \\ @renderer_version)
+
+  def put_png(%MediaAsset{} = asset, index, body, renderer_version)
       when is_integer(index) and index > 0 and is_binary(body) do
     with :ok <- validate_png(body),
+         true <- current_renderer_version?(renderer_version),
          directory <- asset_directory(asset),
          :ok <- File.mkdir_p(directory),
          digest <- sha256(body),
@@ -24,12 +32,17 @@ defmodule GridMediaManager.Promotion.ArtifactStore do
          "path" => path,
          "mime_type" => "image/png",
          "byte_size" => byte_size(body),
-         "sha256" => digest
+         "sha256" => digest,
+         "renderer_version" => @renderer_version
        }}
+    else
+      false -> {:error, :stale_renderer}
+      {:error, reason} -> {:error, reason}
     end
   end
 
-  def put_png(%MediaAsset{}, _index, _body), do: {:error, :invalid_artifact}
+  def put_png(%MediaAsset{}, _index, _body, _renderer_version),
+    do: {:error, :invalid_artifact}
 
   def read(%MediaAsset{} = asset, index) when is_integer(index) and index > 0 do
     with %{"path" => path} <- artifact(asset, index),
@@ -57,9 +70,12 @@ defmodule GridMediaManager.Promotion.ArtifactStore do
   end
 
   def artifact(%MediaAsset{metadata: metadata}, index) when is_map(metadata) do
-    metadata
-    |> Map.get("artifacts", %{})
-    |> Map.get(to_string(index))
+    artifact = metadata |> Map.get("artifacts", %{}) |> Map.get(to_string(index))
+
+    case artifact do
+      %{"renderer_version" => @renderer_version} -> artifact
+      _stale_or_missing -> nil
+    end
   end
 
   def artifact(%MediaAsset{}, _index), do: nil

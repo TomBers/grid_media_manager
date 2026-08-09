@@ -20,7 +20,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#stage-curate")
     assert has_element?(view, "#studio-progress")
     assert has_element?(view, "#content-candidates [id^='select-aspect-question-']")
-    assert has_element?(view, "#content-candidates", "slide")
+    assert has_element?(view, "#content-candidates", "Story thread")
     assert has_element?(view, "#content-candidates", "Best opener")
     assert has_element?(view, "#story-queue", "0 of 6 moments selected")
     refute has_element?(view, "#selected-aspects", "If a drug like soma existed today...")
@@ -31,12 +31,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#selected-aspects", "If a drug like soma existed today...")
     assert has_element?(view, "#continue-to-design:not([disabled])")
 
-    view
-    |> element("#candidate-filter-highlight")
-    |> render_click()
+    view |> element("#candidate-filter-selected") |> render_click()
 
-    assert has_element?(view, "#select-aspect-highlight-123")
-    refute has_element?(view, "#content-candidates [id^='select-aspect-question-']")
+    assert has_element?(view, "#content-candidates [id^='select-aspect-question-']")
+    refute has_element?(view, "#select-aspect-highlight-123")
   end
 
   test "labels questions extracted from answer bodies with their source", %{conn: conn} do
@@ -55,6 +53,73 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     await_generation(view)
 
     assert Enum.any?(Campaigns.list_media_assets(campaign), &(&1.kind == "curated_carousel"))
+  end
+
+  test "orders signals as question and answer threads using the node stream", %{conn: conn} do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(cognitive_order_payload(), "guided-cognitive-order")
+
+    assert {:ok, campaign} =
+             Campaigns.save_guided_studio_state(campaign, %{
+               "selected_keys" => ["key_node:3"]
+             })
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
+
+    assert has_element?(view, "#candidate-group-node-1 + #candidate-group-node-3")
+    assert has_element?(view, "#candidate-group-node-1", "Story thread 1")
+    assert has_element?(view, "#candidate-group-node-3", "Story thread 2")
+
+    assert has_element?(
+             view,
+             "#candidate-group-node-3 [href='#candidate-group-node-1']",
+             "Continues from Story thread 1"
+           )
+
+    assert has_element?(
+             view,
+             "#candidate-group-node-1",
+             "Origin question"
+           )
+
+    assert has_element?(
+             view,
+             "#candidate-group-node-1 article:nth-of-type(1)#candidate-key-node-2",
+             "Answer"
+           )
+
+    assert has_element?(
+             view,
+             "#candidate-group-node-3 [id^='select-aspect-question-']"
+           )
+
+    assert has_element?(
+             view,
+             "#candidate-group-node-3 article:nth-of-type(1)#candidate-key-node-4",
+             "Answer"
+           )
+
+    assert has_element?(
+             view,
+             "#candidate-group-node-3 article:nth-of-type(2)#candidate-highlight-41",
+             "Highlight"
+           )
+
+    refute has_element?(view, "#candidate-key-node-3")
+    assert has_element?(view, "#story-queue", "1 of 6 moments selected")
+
+    assert has_element?(view, "#thread-body-node-3")
+    view |> element("#toggle-thread-control-node-3") |> render_click()
+    refute has_element?(view, "#thread-body-node-3")
+    assert has_element?(view, "#toggle-thread-control-node-3[aria-label='Expand Story thread 2']")
+    view |> element("#toggle-thread-control-node-3") |> render_click()
+    assert has_element?(view, "#thread-body-node-3")
+
+    view |> element("#candidate-filter-with_highlights") |> render_click()
+    refute has_element?(view, "#candidate-group-node-1")
+    assert has_element?(view, "#candidate-group-node-3", "What evidence would change")
+    assert has_element?(view, "#candidate-key-node-4")
+    assert has_element?(view, "#candidate-highlight-41")
   end
 
   test "steps through curation and design to generate a multi-asset package", %{conn: conn} do
@@ -156,8 +221,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     |> element("#curated-carousel-slide-#{carousel.id}-2")
     |> render_click()
 
+    assert Enum.at(carousel.metadata["slides"], 1)["kind"] in ["quote", "highlight"]
     assert has_element?(view, "#guided-output-preview-#{carousel.id}")
     assert has_element?(view, "#curated-carousel-slides-#{carousel.id}[data-preview-slide='2']")
+    assert has_element?(view, "#asset-slide-form-#{carousel.id}-2", "Main text")
+    refute has_element?(view, "#asset-slide-body-#{carousel.id}-2")
 
     view
     |> element("#move-curated-carousel-slide-down-#{carousel.id}-1")
@@ -311,6 +379,56 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
         "edges" => []
       },
       "highlights" => []
+    }
+  end
+
+  defp cognitive_order_payload do
+    %{
+      "metadata" => %{
+        "title" => "How does a line of reasoning develop?",
+        "slug" => "line-of-reasoning-guided",
+        "url" => "https://rationalgrid.ai/g/line-of-reasoning-guided",
+        "node_count" => 4,
+        "tags" => ["Reasoning"]
+      },
+      "graph" => %{
+        "nodes" => [
+          %{
+            "id" => "4",
+            "class" => "answer",
+            "content" => "# A second answer\n\nThe evidence changes the conclusion."
+          },
+          %{
+            "id" => "1",
+            "class" => "origin",
+            "content" => "How does a line of reasoning develop?"
+          },
+          %{
+            "id" => "3",
+            "class" => "question",
+            "content" => "What evidence would change the conclusion?"
+          },
+          %{
+            "id" => "2",
+            "class" => "answer",
+            "content" =>
+              "# A first answer\n\nStart with the assumptions. What evidence would change the conclusion?"
+          }
+        ],
+        "edges" => [
+          %{"data" => %{"id" => "34", "source" => "3", "target" => "4"}},
+          %{"data" => %{"id" => "23", "source" => "2", "target" => "3"}},
+          %{"data" => %{"id" => "12", "source" => "1", "target" => "2"}}
+        ]
+      },
+      "highlights" => [
+        %{
+          "id" => 41,
+          "node_id" => "4",
+          "text" => "The evidence changes the conclusion.",
+          "note" => "The key turn in the reasoning."
+        }
+      ]
     }
   end
 

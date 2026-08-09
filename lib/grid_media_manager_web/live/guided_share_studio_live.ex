@@ -21,11 +21,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     %{id: "review", label: "Review", description: "Refine and approve"}
   ]
   @candidate_filters [
-    %{id: "all", label: "All signals"},
-    %{id: "question", label: "Questions"},
-    %{id: "highlight", label: "Highlights"},
-    %{id: "key_node", label: "Longer answers"},
-    %{id: "grid", label: "Overview"}
+    %{id: "all", label: "All threads"},
+    %{id: "with_highlights", label: "With highlights"},
+    %{id: "selected", label: "Selected threads"}
   ]
   @formats [
     %{
@@ -93,6 +91,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     selected_order =
       restored_selected_order(candidates, selected_keys, studio_state)
 
+    expanded_thread_ids = initial_expanded_thread_ids(candidates, selected_keys)
+
     restored_content_mode = Map.get(studio_state, "content_mode", restored_content_mode)
     restored_format = Map.get(studio_state, "selected_format")
 
@@ -136,6 +136,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:selected_keys, selected_keys)
       |> assign(:selected_order, selected_order)
       |> assign(:selected_count, MapSet.size(selected_keys))
+      |> assign(:expanded_thread_ids, expanded_thread_ids)
       |> assign(:step, restored_step)
       |> assign(:selected_style, restored_style)
       |> assign(:content_mode, restored_content_mode)
@@ -171,9 +172,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> stream(
         :candidate_groups,
         candidate_groups(
-          Workflow.filter_candidates(candidates, restored_filter),
+          visible_thread_candidates(candidates, restored_filter, selected_keys),
           selected_keys,
-          candidates
+          candidates,
+          expanded_thread_ids
         )
       )
       |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_order))
@@ -209,17 +211,64 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   def handle_event("filter_candidates", %{"filter" => filter}, socket) do
     filter = if filter in Enum.map(@candidate_filters, & &1.id), do: filter, else: "all"
 
-    candidates = Workflow.filter_candidates(socket.assigns.all_candidates, filter)
+    candidates =
+      visible_thread_candidates(
+        socket.assigns.all_candidates,
+        filter,
+        socket.assigns.selected_keys
+      )
 
     {:noreply,
      socket
      |> assign(:candidate_filter, filter)
      |> stream(
        :candidate_groups,
-       candidate_groups(candidates, socket.assigns.selected_keys, socket.assigns.all_candidates),
+       candidate_groups(
+         candidates,
+         socket.assigns.selected_keys,
+         socket.assigns.all_candidates,
+         socket.assigns.expanded_thread_ids
+       ),
        reset: true
      )
      |> persist_studio_state()}
+  end
+
+  def handle_event("toggle_thread", %{"thread" => thread_id}, socket) do
+    valid_thread_ids =
+      socket.assigns.all_candidates
+      |> Enum.map(&candidate_group_key/1)
+      |> Enum.reject(&(&1 == "grid"))
+      |> Enum.map(&candidate_group_dom_id/1)
+      |> MapSet.new()
+
+    if MapSet.member?(valid_thread_ids, thread_id) do
+      expanded_thread_ids =
+        toggle_map_set_member(socket.assigns.expanded_thread_ids, thread_id)
+
+      visible_candidates =
+        visible_thread_candidates(
+          socket.assigns.all_candidates,
+          socket.assigns.candidate_filter,
+          socket.assigns.selected_keys
+        )
+
+      group =
+        visible_candidates
+        |> candidate_groups(
+          socket.assigns.selected_keys,
+          socket.assigns.all_candidates,
+          expanded_thread_ids
+        )
+        |> Enum.find(&(&1.dom_id == thread_id))
+
+      {:noreply,
+       socket
+       |> assign(:expanded_thread_ids, expanded_thread_ids)
+       |> update_candidate_group_stream(group, [])}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("toggle_aspect", %{"key" => key}, socket) do
@@ -858,42 +907,176 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               <div
                 id="content-candidates"
                 phx-update="stream"
-                class="mt-5 space-y-5"
+                class="mt-5 flex flex-col gap-4"
               >
                 <div
                   id="empty-content-candidates"
                   class="hidden rounded-3xl border border-dashed border-base-content/20 bg-base-200/40 p-8 text-center text-sm text-base-content/55 only:block"
                 >
-                  No moments of this type were found in the imported grid payload.
+                  No story threads match this view.
                 </div>
                 <section
                   :for={{id, group} <- @streams.candidate_groups}
                   id={id}
-                  class="rounded-3xl border border-base-content/10 bg-base-200/45 p-3 md:p-4"
+                  class={candidate_group_class(group.kind, group.selected_count)}
                 >
-                  <div class="flex items-center justify-between gap-3 px-2 pb-3">
-                    <div class="min-w-0">
-                      <p class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-orange-600 dark:text-orange-300">
-                        {group.label}
-                      </p>
-                      <h3 class="mt-1 truncate text-base font-semibold text-base-content">
-                        {group.title}
-                      </h3>
+                  <%= if group.kind == "overview" do %>
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div class="flex min-w-0 items-start gap-4">
+                        <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-base-content text-base-100 shadow-lg shadow-base-content/10">
+                          <.icon name="hero-squares-2x2" class="size-5" />
+                        </span>
+                        <div class="min-w-0">
+                          <p class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-base-content/45">
+                            {group.label}
+                          </p>
+                          <h3 class="mt-1 text-base font-semibold leading-6 text-base-content">
+                            {group.title}
+                          </h3>
+                          <p class="mt-1 text-sm leading-6 text-base-content/55">
+                            Add a whole-grid title card before the conversation begins.
+                          </p>
+                        </div>
+                      </div>
+                      <.signal_select_button
+                        :if={group.prompt_candidate}
+                        candidate={group.prompt_candidate}
+                        action="opening"
+                      />
                     </div>
-                    <span class="shrink-0 rounded-full bg-base-100 px-2.5 py-1 text-xs font-semibold text-base-content/55">
-                      {length(group.candidates)} {if(length(group.candidates) == 1,
-                        do: "option",
-                        else: "options"
-                      )}
-                    </span>
-                  </div>
-                  <div class="grid gap-3 md:grid-cols-2">
-                    <.candidate_card
-                      :for={candidate <- group.candidates}
-                      id={"candidate-#{candidate.dom_id}"}
-                      candidate={candidate}
-                    />
-                  </div>
+                  <% else %>
+                    <a
+                      :if={group.continues_from_dom_id}
+                      id={"thread-continuation-#{group.dom_id}"}
+                      href={"#candidate-group-#{group.continues_from_dom_id}"}
+                      class="mx-4 mt-4 inline-flex items-center gap-1.5 rounded-full bg-sky-500/10 px-3 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-500/15 dark:text-sky-200 md:mx-5"
+                    >
+                      <.icon name="hero-arrow-up-left" class="size-3.5" />
+                      Continues from {group.continues_from_label}
+                    </a>
+                    <div class="flex items-start gap-3 p-4 md:p-5">
+                      <button
+                        id={"toggle-thread-#{group.dom_id}"}
+                        type="button"
+                        phx-click="toggle_thread"
+                        phx-value-thread={group.dom_id}
+                        disabled={not group.expandable?}
+                        aria-expanded={if(group.expandable?, do: group.expanded?, else: nil)}
+                        aria-controls={
+                          if(group.expandable?, do: "thread-body-#{group.dom_id}", else: nil)
+                        }
+                        class="group min-w-0 flex-1 text-left disabled:cursor-default"
+                      >
+                        <span class="flex flex-wrap items-center gap-2">
+                          <span class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-orange-600 dark:text-orange-300">
+                            {group.label}
+                          </span>
+                          <span
+                            :if={group.prompt_candidate}
+                            class={candidate_type_class(group.prompt_candidate.type)}
+                          >
+                            <.icon
+                              name={candidate_icon(group.prompt_candidate.type)}
+                              class="size-3.5"
+                            />
+                            {group.prompt_candidate.label}
+                          </span>
+                          <span
+                            :if={group.prompt_candidate && group.prompt_candidate.recommended?}
+                            class="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2 py-1 text-[0.62rem] font-bold uppercase tracking-wide text-white"
+                          >
+                            <.icon name="hero-sparkles-mini" class="size-3" /> Best opener
+                          </span>
+                          <span
+                            :if={group.selected_count > 0}
+                            class="rounded-full bg-orange-500/10 px-2 py-0.5 text-[0.65rem] font-bold text-orange-700 dark:text-orange-200"
+                          >
+                            {group.selected_count} selected
+                          </span>
+                        </span>
+                        <span class="mt-1.5 block text-lg font-semibold leading-7 text-base-content text-balance">
+                          {group.title}
+                        </span>
+                        <span
+                          :if={
+                            group.prompt_candidate && group.prompt_candidate.type == "question" &&
+                              group.prompt_candidate.excerpt
+                          }
+                          class="mt-1 block text-sm leading-6 text-base-content/55"
+                        >
+                          {group.prompt_candidate.excerpt}
+                        </span>
+                        <span class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-base-content/50">
+                          <span :if={group.answer_count > 0}>
+                            {group.answer_count} {if(group.answer_count == 1,
+                              do: "answer",
+                              else: "answers"
+                            )}
+                          </span>
+                          <span :if={group.highlight_count > 0}>
+                            {group.highlight_count} {if(group.highlight_count == 1,
+                              do: "highlight",
+                              else: "highlights"
+                            )}
+                          </span>
+                          <span :if={group.follow_up_count > 0}>
+                            {group.follow_up_count} follow-up {if(group.follow_up_count == 1,
+                              do: "question",
+                              else: "questions"
+                            )}
+                          </span>
+                        </span>
+                      </button>
+
+                      <div class="flex shrink-0 items-center gap-2">
+                        <.signal_select_button
+                          :if={group.prompt_candidate}
+                          candidate={group.prompt_candidate}
+                          action="prompt"
+                        />
+                        <button
+                          :if={group.expandable?}
+                          id={"toggle-thread-control-#{group.dom_id}"}
+                          type="button"
+                          phx-click="toggle_thread"
+                          phx-value-thread={group.dom_id}
+                          aria-label={
+                            if(group.expanded?,
+                              do: "Collapse #{group.label}",
+                              else: "Expand #{group.label}"
+                            )
+                          }
+                          aria-expanded={group.expanded?}
+                          aria-controls={"thread-body-#{group.dom_id}"}
+                          class="grid size-9 place-items-center rounded-xl bg-base-200 text-base-content/45"
+                        >
+                          <.icon
+                            name="hero-chevron-down"
+                            class={
+                              if(group.expanded?,
+                                do: "size-4 rotate-180 transition duration-200",
+                                else: "size-4 transition duration-200"
+                              )
+                            }
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div
+                      :if={group.expanded? && group.expandable?}
+                      id={"thread-body-#{group.dom_id}"}
+                      class="border-t border-base-content/10 bg-base-100/55 px-4 py-5 md:px-6"
+                    >
+                      <div class="space-y-3 border-l-2 border-base-content/10 pl-4 md:pl-6">
+                        <.thread_candidate
+                          :for={candidate <- group.body_candidates}
+                          id={"candidate-#{candidate.dom_id}"}
+                          candidate={candidate}
+                        />
+                      </div>
+                    </div>
+                  <% end %>
                 </section>
               </div>
             </div>
@@ -1684,12 +1867,46 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     """
   end
 
+  attr :candidate, :map, required: true
+  attr :action, :string, default: "prompt"
+
+  defp signal_select_button(assigns) do
+    action_label = if(assigns.action == "opening", do: "opening", else: "prompt")
+    assigns = assign(assigns, :action_label, action_label)
+
+    ~H"""
+    <button
+      id={"select-aspect-#{@candidate.dom_id}"}
+      phx-hook="PreventSelectionScroll"
+      type="button"
+      phx-click="toggle_aspect"
+      phx-value-key={@candidate.key}
+      aria-pressed={@candidate.selected?}
+      class={signal_select_button_class(@candidate.selected?)}
+    >
+      <.icon
+        name={if(@candidate.selected?, do: "hero-check", else: "hero-plus")}
+        class="size-4"
+      />
+      {if(@candidate.selected?, do: "Added", else: "Add #{@action_label}")}
+    </button>
+    """
+  end
+
   attr :id, :string, required: true
   attr :candidate, :map, required: true
 
-  defp candidate_card(assigns) do
+  defp thread_candidate(assigns) do
+    role_label =
+      if(assigns.candidate.type == "question",
+        do: "Follow-up question",
+        else: assigns.candidate.label
+      )
+
+    assigns = assign(assigns, :role_label, role_label)
+
     ~H"""
-    <article id={@id} class={candidate_card_class(@candidate.selected?)}>
+    <article id={@id} class={thread_candidate_class(@candidate)}>
       <button
         id={"select-aspect-#{@candidate.dom_id}"}
         phx-hook="PreventSelectionScroll"
@@ -1697,39 +1914,47 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         phx-click="toggle_aspect"
         phx-value-key={@candidate.key}
         aria-pressed={@candidate.selected?}
-        class="flex h-full w-full flex-col text-left"
+        class="flex w-full items-start gap-3 text-left md:gap-4"
       >
-        <span class="flex items-start justify-between gap-4">
+        <span class={thread_candidate_icon_class(@candidate.type)}>
+          <.icon name={candidate_icon(@candidate.type)} class="size-4" />
+        </span>
+        <span class="min-w-0 flex-1">
           <span class="flex flex-wrap items-center gap-2">
-            <span class={candidate_type_class(@candidate.type)}>
-              <.icon name={candidate_icon(@candidate.type)} class="size-3.5" />
-              {@candidate.label}
-            </span>
+            <span class={candidate_type_class(@candidate.type)}>{@role_label}</span>
             <span
               :if={@candidate.recommended?}
-              class="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-white"
+              class="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2 py-1 text-[0.62rem] font-bold uppercase tracking-wide text-white"
             >
               <.icon name="hero-sparkles-mini" class="size-3" /> Best opener
             </span>
           </span>
-          <span class={selection_indicator_class(@candidate.selected?)}>
-            <.icon
-              name={if(@candidate.selected?, do: "hero-check", else: "hero-plus")}
-              class="size-4"
-            />
+          <span class="mt-2 block text-sm font-semibold leading-6 text-base-content md:text-base">
+            {@candidate.title}
+          </span>
+          <span
+            :if={@candidate.excerpt}
+            class="mt-1 block line-clamp-3 text-sm leading-6 text-base-content/55"
+          >
+            {@candidate.excerpt}
+          </span>
+          <span class="mt-2 flex flex-wrap items-center gap-2 text-[0.68rem] font-semibold text-base-content/45">
+            <span class="inline-flex items-center gap-1">
+              <.icon name="hero-rectangle-stack" class="size-3.5" />
+              {@candidate.slide_count} {if(@candidate.slide_count == 1,
+                do: "slide",
+                else: "slides"
+              )}
+            </span>
+            <span>{candidate_type_description(@candidate.type)}</span>
           </span>
         </span>
-        <h3 class="mt-3 text-base font-semibold leading-6 text-base-content">{@candidate.title}</h3>
-        <p :if={@candidate.excerpt} class="mt-1.5 line-clamp-2 text-sm leading-6 text-base-content/58">
-          {@candidate.excerpt}
-        </p>
-        <div class="mt-3 flex flex-wrap items-center gap-2 text-[0.7rem] font-semibold text-base-content/50">
-          <span class="inline-flex items-center gap-1 rounded-full bg-base-200 px-2.5 py-1">
-            <.icon name="hero-rectangle-stack" class="size-3.5" />
-            {@candidate.slide_count} {if(@candidate.slide_count == 1, do: "slide", else: "slides")}
-          </span>
-          <span class="text-base-content/40">{candidate_type_description(@candidate.type)}</span>
-        </div>
+        <span class={selection_indicator_class(@candidate.selected?)}>
+          <.icon
+            name={if(@candidate.selected?, do: "hero-check", else: "hero-plus")}
+            class="size-4"
+          />
+        </span>
       </button>
     </article>
     """
@@ -1772,6 +1997,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       assigns
       |> assign(:canvas_slides, slides)
       |> assign(:preview_slide, preview_slide)
+      |> assign(:slide_supports_body?, slide_supports_body?(slide))
       |> assign(:artifacts_ready?, client_artifacts_ready?(assigns.asset))
       |> assign(
         :slide_form,
@@ -1827,6 +2053,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         data-logo-src="/images/rg_logo.webp"
         data-upload-url={client_artifact_upload_url(@asset)}
         data-asset-id={@asset.id}
+        data-renderer-version={ArtifactStore.renderer_version()}
         data-artifacts-ready={if(@artifacts_ready?, do: "true", else: "false")}
         class={[
           "mt-4 space-y-4 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-3",
@@ -1966,11 +2193,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
             id={"asset-slide-title-#{@asset.id}-#{@preview_slide}"}
             field={@slide_form[:title]}
             type="textarea"
-            label="Headline"
+            label={if(@slide_supports_body?, do: "Headline", else: "Main text")}
             rows="3"
             phx-debounce="300"
           />
           <.input
+            :if={@slide_supports_body?}
             id={"asset-slide-body-#{@asset.id}-#{@preview_slide}"}
             field={@slide_form[:body]}
             type="textarea"
@@ -1978,7 +2206,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
             rows="6"
             phx-debounce="300"
           />
-          <p class="-mt-1 text-xs leading-5 text-base-content/50">
+          <p :if={@slide_supports_body?} class="-mt-1 text-xs leading-5 text-base-content/50">
             Use blank lines, <span class="font-semibold">## headings</span>, <span class="font-semibold">- lists</span>, or <span class="font-semibold">&gt; quotes</span>. Capitalization is preserved exactly as entered.
           </p>
         </.form>
@@ -2225,15 +2453,22 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp update_selection(socket, selected_keys, selected_order, candidate) do
     candidates = socket.assigns.all_candidates
-    visible_candidates = Workflow.filter_candidates(candidates, socket.assigns.candidate_filter)
-    groups = candidate_groups(visible_candidates, selected_keys, candidates)
     selected_group_id = candidate_group_dom_id(candidate_group_key(candidate))
+    expanded_thread_ids = MapSet.put(socket.assigns.expanded_thread_ids, selected_group_id)
+
+    visible_candidates =
+      visible_thread_candidates(candidates, socket.assigns.candidate_filter, selected_keys)
+
+    groups =
+      candidate_groups(visible_candidates, selected_keys, candidates, expanded_thread_ids)
+
     selected_group = Enum.find(groups, &(&1.dom_id == selected_group_id))
 
     socket
     |> assign(:selected_keys, selected_keys)
     |> assign(:selected_order, selected_order)
     |> assign(:selected_count, MapSet.size(selected_keys))
+    |> assign(:expanded_thread_ids, expanded_thread_ids)
     |> update_candidate_group_stream(selected_group, groups)
     |> stream(:selected_aspects, Workflow.selected_candidates(candidates, selected_order),
       reset: true
@@ -2267,12 +2502,29 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     keys = Map.get(state, "selected_keys")
 
     if is_list(keys) and keys != [] do
-      valid_keys = MapSet.new(candidates, & &1.key)
-      keys |> Enum.filter(&MapSet.member?(valid_keys, &1)) |> MapSet.new()
+      candidates_by_key = Map.new(candidates, &{&1.key, &1})
+
+      keys
+      |> Enum.map(&restored_candidate_key(&1, candidates, candidates_by_key))
+      |> Enum.reject(&is_nil/1)
+      |> MapSet.new()
     else
       Workflow.default_selection(candidates)
     end
   end
+
+  defp restored_candidate_key(key, _candidates, candidates_by_key)
+       when is_map_key(candidates_by_key, key),
+       do: key
+
+  defp restored_candidate_key("key_node:" <> node_id, candidates, _candidates_by_key) do
+    case Enum.find(candidates, &(&1.type == "question" and &1.node_id == node_id)) do
+      %{key: key} -> key
+      nil -> nil
+    end
+  end
+
+  defp restored_candidate_key(_key, _candidates, _candidates_by_key), do: nil
 
   defp restored_selected_order(candidates, selected_keys, state) do
     order = Map.get(state, "selected_keys", [])
@@ -2312,7 +2564,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp rehydrate_step(socket, "curate") do
     visible_candidates =
-      Workflow.filter_candidates(socket.assigns.all_candidates, socket.assigns.candidate_filter)
+      visible_thread_candidates(
+        socket.assigns.all_candidates,
+        socket.assigns.candidate_filter,
+        socket.assigns.selected_keys
+      )
 
     stream(
       socket,
@@ -2320,7 +2576,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       candidate_groups(
         visible_candidates,
         socket.assigns.selected_keys,
-        socket.assigns.all_candidates
+        socket.assigns.all_candidates,
+        socket.assigns.expanded_thread_ids
       ),
       reset: true
     )
@@ -2658,14 +2915,54 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     Enum.map(candidates, &Map.put(&1, :selected?, MapSet.member?(selected_keys, &1.key)))
   end
 
-  defp candidate_groups(candidates, selected_keys, all_candidates) do
+  defp initial_expanded_thread_ids(candidates, _selected_keys) do
+    candidates
+    |> Enum.map(&candidate_group_key/1)
+    |> Enum.reject(&(&1 == "grid"))
+    |> Enum.map(&candidate_group_dom_id/1)
+    |> MapSet.new()
+  end
+
+  defp visible_thread_candidates(candidates, "with_highlights", _selected_keys) do
+    highlighted_groups =
+      candidates
+      |> Enum.filter(&(&1.type == "highlight"))
+      |> MapSet.new(&candidate_group_key/1)
+
+    Enum.filter(candidates, &MapSet.member?(highlighted_groups, candidate_group_key(&1)))
+  end
+
+  defp visible_thread_candidates(candidates, "selected", selected_keys) do
+    selected_groups =
+      candidates
+      |> Enum.filter(&MapSet.member?(selected_keys, &1.key))
+      |> MapSet.new(&candidate_group_key/1)
+
+    Enum.filter(candidates, &MapSet.member?(selected_groups, candidate_group_key(&1)))
+  end
+
+  defp visible_thread_candidates(candidates, _filter, _selected_keys), do: candidates
+
+  defp toggle_map_set_member(set, value) do
+    if MapSet.member?(set, value), do: MapSet.delete(set, value), else: MapSet.put(set, value)
+  end
+
+  defp candidate_groups(candidates, selected_keys, all_candidates, expanded_thread_ids) do
     candidates = candidate_items(candidates, selected_keys)
-    node_titles = Map.new(all_candidates, &{&1.source_id, &1.title})
+
+    all_group_keys =
+      all_candidates
+      |> Enum.map(&candidate_group_key/1)
+      |> Enum.uniq()
+
+    thread_numbers =
+      all_group_keys
+      |> Enum.filter(&String.starts_with?(&1, "node:"))
+      |> Enum.with_index(1)
+      |> Map.new()
 
     group_keys =
-      all_candidates
-      |> Enum.filter(&(&1.type == "key_node"))
-      |> Enum.map(&candidate_group_key/1)
+      all_group_keys
       |> Enum.filter(fn group_key ->
         Enum.any?(candidates, fn candidate -> candidate_group_key(candidate) == group_key end)
       end)
@@ -2677,28 +2974,86 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
          |> Enum.uniq()
          |> Enum.reject(&(&1 in group_keys)))
 
-    Enum.map(group_keys, fn group_key ->
+    group_keys
+    |> Enum.sort_by(&candidate_group_display_order(&1, thread_numbers))
+    |> Enum.map(fn group_key ->
       group_candidates = Enum.filter(candidates, &(candidate_group_key(&1) == group_key))
-      node_candidate = Enum.find(group_candidates, &(&1.type == "key_node"))
-      node_id = group_node_id(group_key)
 
-      ordered_candidates =
-        case node_candidate do
+      all_group_candidates =
+        Enum.filter(all_candidates, &(candidate_group_key(&1) == group_key))
+
+      node_id = group_node_id(group_key)
+      prompt_candidate = candidate_group_prompt(group_candidates, group_key, node_id)
+
+      continues_from_thread_id =
+        prompt_candidate && prompt_candidate.continues_from_thread_id
+
+      body_candidates =
+        case prompt_candidate do
           nil -> group_candidates
-          node -> [node | Enum.reject(group_candidates, &(&1.key == node.key))]
+          prompt -> Enum.reject(group_candidates, &(&1.key == prompt.key))
         end
 
       %{
         dom_id: candidate_group_dom_id(group_key),
-        label: if(node_id, do: "Node package", else: "Other moments"),
-        title: node_candidate_title(node_candidate, node_id, node_titles),
-        candidates: ordered_candidates
+        kind: candidate_group_kind(group_key),
+        label: candidate_group_label(group_key, thread_numbers),
+        title: candidate_group_title(all_group_candidates, node_id),
+        continues_from_label: continuation_thread_label(continues_from_thread_id, thread_numbers),
+        continues_from_dom_id: continuation_thread_dom_id(continues_from_thread_id),
+        prompt_candidate: prompt_candidate,
+        body_candidates: body_candidates,
+        expandable?: body_candidates != [],
+        selected_count: Enum.count(group_candidates, & &1.selected?),
+        answer_count: Enum.count(all_group_candidates, &answer_candidate?/1),
+        highlight_count: Enum.count(all_group_candidates, &(&1.type == "highlight")),
+        follow_up_count:
+          Enum.count(all_group_candidates, fn candidate ->
+            candidate.type == "question" and
+              (is_nil(prompt_candidate) or candidate.key != prompt_candidate.key)
+          end),
+        option_count: length(all_group_candidates),
+        expanded?: MapSet.member?(expanded_thread_ids, candidate_group_dom_id(group_key))
       }
     end)
   end
 
-  defp candidate_group_key(%{node_id: node_id}) when is_binary(node_id) and node_id != "",
-    do: "node:#{node_id}"
+  defp candidate_group_prompt(candidates, "grid", _node_id), do: List.first(candidates)
+
+  defp candidate_group_prompt(candidates, "node:" <> _thread_id, node_id) do
+    Enum.find(candidates, fn candidate ->
+      candidate.node_id == node_id and
+        (candidate.type == "question" or candidate.node_class in ["origin", "question", "user"])
+    end)
+  end
+
+  defp candidate_group_prompt(_candidates, _group_key, _node_id), do: nil
+
+  defp continuation_thread_label(nil, _thread_numbers), do: nil
+
+  defp continuation_thread_label(thread_id, thread_numbers) do
+    case Map.get(thread_numbers, "node:#{thread_id}") do
+      nil -> nil
+      thread_number -> "Story thread #{thread_number}"
+    end
+  end
+
+  defp continuation_thread_dom_id(nil), do: nil
+  defp continuation_thread_dom_id(thread_id), do: candidate_group_dom_id("node:#{thread_id}")
+
+  defp answer_candidate?(candidate),
+    do: candidate.type == "key_node" and candidate.node_class == "answer"
+
+  defp candidate_group_display_order("grid", _thread_numbers), do: {0, 0}
+
+  defp candidate_group_display_order("node:" <> _node_id = group_key, thread_numbers),
+    do: {1, Map.get(thread_numbers, group_key, 0)}
+
+  defp candidate_group_display_order(_group_key, _thread_numbers), do: {2, 0}
+
+  defp candidate_group_key(%{thread_id: thread_id})
+       when is_binary(thread_id) and thread_id != "",
+       do: "node:#{thread_id}"
 
   defp candidate_group_key(%{type: "grid"}), do: "grid"
   defp candidate_group_key(_candidate), do: "other"
@@ -2713,13 +3068,36 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     |> then(&if(&1 == "", do: "other", else: &1))
   end
 
-  defp node_candidate_title(%{title: title}, _node_id, _node_titles), do: title
+  defp candidate_group_kind("grid"), do: "overview"
+  defp candidate_group_kind("node:" <> _node_id), do: "thread"
+  defp candidate_group_kind(_group_key), do: "other"
 
-  defp node_candidate_title(nil, node_id, node_titles) when is_binary(node_id) do
-    Map.get(node_titles, node_id, "Node #{node_id}")
+  defp candidate_group_label("node:" <> _node_id = group_key, thread_numbers),
+    do: "Story thread #{Map.fetch!(thread_numbers, group_key)}"
+
+  defp candidate_group_label("grid", _thread_numbers), do: "Optional opening"
+  defp candidate_group_label(_group_key, _thread_numbers), do: "Other moments"
+
+  defp candidate_group_title(candidates, node_id) when is_binary(node_id) do
+    prompt =
+      Enum.find(candidates, fn candidate ->
+        candidate.node_id == node_id and
+          (candidate.type == "question" or candidate.node_class in ["origin", "question", "user"])
+      end)
+
+    answer =
+      Enum.find(candidates, fn candidate ->
+        candidate.type == "key_node" and candidate.node_class == "answer"
+      end)
+
+    case prompt || answer || List.first(candidates) do
+      %{title: title} -> title
+      nil -> "Story thread #{node_id}"
+    end
   end
 
-  defp node_candidate_title(nil, _node_id, _node_titles), do: "Other moments"
+  defp candidate_group_title([%{title: title} | _candidates], _node_id), do: title
+  defp candidate_group_title([], _node_id), do: "Other moments"
 
   defp pexels_orientation(_format), do: "portrait"
 
@@ -3112,15 +3490,54 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     ]
   end
 
-  defp candidate_card_class(selected?) do
+  defp candidate_group_class(kind, selected_count) do
     [
-      "rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-lg",
-      if(selected?,
-        do: "border-orange-500/50 bg-orange-500/8 shadow-lg shadow-orange-950/5",
-        else: "border-base-content/10 bg-base-100 hover:border-base-content/20"
+      "overflow-hidden rounded-3xl border transition",
+      kind == "overview" && "bg-base-200/45 p-4 md:p-5",
+      kind != "overview" && "bg-base-200/35",
+      if(selected_count > 0,
+        do: "border-orange-500/35 shadow-lg shadow-orange-950/5",
+        else: "border-base-content/10"
       )
     ]
   end
+
+  defp signal_select_button_class(selected?) do
+    [
+      "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition hover:-translate-y-0.5",
+      if(selected?,
+        do: "border-orange-500 bg-orange-500 text-white shadow-md shadow-orange-950/15",
+        else:
+          "border-base-content/15 bg-base-100 text-base-content/60 hover:border-orange-500/40 hover:text-orange-700"
+      )
+    ]
+  end
+
+  defp thread_candidate_class(candidate) do
+    [
+      "rounded-2xl border p-3.5 transition hover:-translate-y-0.5 hover:shadow-md md:p-4",
+      candidate.type == "highlight" && "border-violet-500/15 bg-violet-500/5 md:ml-6",
+      candidate.type == "question" && "border-sky-500/15 bg-sky-500/5 md:ml-6",
+      candidate.type == "key_node" && "border-emerald-500/15 bg-emerald-500/5",
+      candidate.type == "grid" && "border-base-content/10 bg-base-100",
+      candidate.selected? && "ring-2 ring-orange-500/45 shadow-md shadow-orange-950/5"
+    ]
+  end
+
+  defp thread_candidate_icon_class("question"),
+    do:
+      "grid size-9 shrink-0 place-items-center rounded-xl bg-sky-500/10 text-sky-700 dark:text-sky-200"
+
+  defp thread_candidate_icon_class("highlight"),
+    do:
+      "grid size-9 shrink-0 place-items-center rounded-xl bg-violet-500/10 text-violet-700 dark:text-violet-200"
+
+  defp thread_candidate_icon_class("key_node"),
+    do:
+      "grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
+
+  defp thread_candidate_icon_class(_type),
+    do: "grid size-9 shrink-0 place-items-center rounded-xl bg-base-200 text-base-content/55"
 
   defp candidate_type_class("question"),
     do:
@@ -3316,6 +3733,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp slide_value(slide, key) when is_map(slide) do
     atom_key = if(key == "title", do: :title, else: :body)
     Map.get(slide, key) || Map.get(slide, atom_key) || ""
+  end
+
+  defp slide_supports_body?(slide) when is_map(slide) do
+    kind = Map.get(slide, "kind") || Map.get(slide, :kind)
+    kind not in ["quote", "highlight"]
   end
 
   defp asset_image_class(_asset),

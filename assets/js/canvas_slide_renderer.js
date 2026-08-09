@@ -414,28 +414,35 @@ function drawCover(context, slide, palette, frame, textColor = palette.text) {
 }
 
 function drawQuote(context, slide, palette, frame) {
-  const sizes = [72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32]
+  const sizes = frame.video
+    ? [104, 96, 88, 80, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28]
+    : [88, 80, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28]
   const quoteText = cleanInlineMarkdown(slide.title)
+  const availableHeight = frame.bodyMaxY - frame.bodyStartY
+  const accentGap = frame.video ? 64 : 52
+  const accentHeight = 8
+  const maximumQuoteHeight = availableHeight - accentGap - accentHeight
   let quote = null
 
   for (const size of sizes) {
     context.font = `700 ${size}px ${QUOTE_FONT}`
     const lines = wrapText(context, quoteText, frame.bodyWidth)
-    if (lines.length * size * 1.18 <= 560) {
+    if (lines.length * size * 1.18 <= maximumQuoteHeight) {
       quote = {size, lines, lineHeight: size * 1.18}
       break
     }
   }
 
-  quote ||= {size: 32, lines: [quoteText], lineHeight: 38}
+  if (!quote) {
+    const size = sizes.at(-1)
+    context.font = `700 ${size}px ${QUOTE_FONT}`
+    quote = {size, lines: wrapText(context, quoteText, frame.bodyWidth), lineHeight: size * 1.18}
+  }
+
   const quoteHeight = quote.lines.length * quote.lineHeight
-  const quoteAreaStart = frame.video ? 290 : 290
-  const quoteAreaHeight = frame.video ? 560 : 560
-  const contentHeight = quoteHeight + (frame.video ? 172 : 80)
-  const contentStart = frame.video
-    ? quoteAreaStart + Math.max(Math.floor((frame.bodyMaxY - quoteAreaStart - contentHeight) / 2), 0)
-    : quoteAreaStart
-  const quoteStartY = contentStart + (frame.video ? quote.size : Math.floor((quoteAreaHeight - quoteHeight) / 2) + quote.size)
+  const contentHeight = quoteHeight + accentGap + accentHeight
+  const contentStart = frame.bodyStartY + Math.max(Math.floor((availableHeight - contentHeight) / 2), 0)
+  const quoteStartY = contentStart + quote.size
   context.fillStyle = palette.text
   context.font = `700 ${quote.size}px ${QUOTE_FONT}`
   quote.lines.forEach((line, index) => {
@@ -444,23 +451,7 @@ function drawQuote(context, slide, palette, frame) {
     context.fillText(`${opening}${line}${closing}`, frame.bodyX, quoteStartY + index * quote.lineHeight)
   })
   context.fillStyle = palette.accent
-  const bodyStart = frame.video ? contentStart + quoteHeight + 92 : 930
-  context.fillRect(frame.bodyX, bodyStart - 72, 240, 8)
-
-  if (cleanInlineMarkdown(slide.body)) {
-    const body = supportingLayout(
-      context,
-      slide.body,
-      frame.bodyWidth,
-      Math.max(frame.bodyMaxY - bodyStart, 80),
-      {sizes: frame.video ? [32, 30, 28, 26, 24, 22, 20] : [28, 26, 24, 22, 20, 18]}
-    )
-    context.fillStyle = palette.secondary
-    context.font = `${body.weight} ${body.size}px ${body.family}`
-    body.lines.forEach((line, index) => {
-      context.fillText(line, frame.bodyX, bodyStart + index * body.lineHeight)
-    })
-  }
+  context.fillRect(frame.bodyX, contentStart + quoteHeight + accentGap, 240, accentHeight)
 }
 
 function drawCta(context, slide, palette, logo, frame) {
@@ -741,7 +732,11 @@ export const CanvasSlideRenderer = {
         const csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute("content")
         const response = await fetch(`${uploadUrl}/${index}`, {
           method: "POST",
-          headers: {accept: "application/json", "x-csrf-token": csrfToken || ""},
+          headers: {
+            accept: "application/json",
+            "x-csrf-token": csrfToken || "",
+            "x-canvas-renderer-version": this.root.dataset.rendererVersion || "",
+          },
           body: form,
         })
         if (!response.ok) throw new Error(`Frame ${index} failed`)

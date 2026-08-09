@@ -40,7 +40,9 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
     upload = %Plug.Upload{path: upload_path, filename: "slide.png", content_type: "image/png"}
 
     conn =
-      post(conn, ~p"/api/media-assets/#{asset.id}/artifacts/1", %{"artifact" => upload})
+      conn
+      |> put_req_header("x-canvas-renderer-version", "2")
+      |> post(~p"/api/media-assets/#{asset.id}/artifacts/1", %{"artifact" => upload})
 
     assert %{"saved" => true, "index" => "1"} = json_response(conn, 201)
 

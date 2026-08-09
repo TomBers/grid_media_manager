@@ -18,6 +18,19 @@ defmodule GridMediaManager.Promotion.CarouselVideoTest do
     assert CarouselVideo.slide_duration(detailed) <= 14.0
   end
 
+  test "does not count hidden supporting copy on quote frames" do
+    quote = %{
+      "kind" => "highlight",
+      "label" => "Highlight",
+      "title" => "A concise quotation",
+      "body" => String.duplicate("This supporting subtitle is not rendered. ", 10)
+    }
+
+    without_subtitle = Map.put(quote, "body", "")
+
+    assert CarouselVideo.slide_duration(quote) == CarouselVideo.slide_duration(without_subtitle)
+  end
+
   test "calculates an asset duration from its selected slide order" do
     slides = [
       %{"kind" => "cover", "title" => "Short", "body" => ""},

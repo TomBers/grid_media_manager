@@ -146,6 +146,13 @@ defmodule GridMediaManager.CampaignsTest do
 
     assert {:error, :invalid_slide} = Campaigns.store_client_artifact(asset, 1, @png)
     assert {:ok, asset} = Campaigns.store_client_artifact(asset, 2, @png)
+
+    assert ArtifactStore.artifact(asset, 2)["renderer_version"] ==
+             ArtifactStore.renderer_version()
+
+    stale_metadata = put_in(asset.metadata, ["artifacts", "2", "renderer_version"], 1)
+    refute ArtifactStore.ready?(%{asset | metadata: stale_metadata}, [2])
+
     refute ArtifactStore.ready?(asset, Campaigns.media_asset_slide_indexes(asset))
     assert {:ok, asset} = Campaigns.store_client_artifact(asset, last_index, @png)
     assert ArtifactStore.ready?(asset, Campaigns.media_asset_slide_indexes(asset))

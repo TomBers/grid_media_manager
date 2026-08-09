@@ -27,7 +27,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @frame_rate 30
   @render_timeout 300_000
   @render_timeout_per_second 5_000
-  @cache_version 26
+  @cache_version 27
   @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
 
   def available?, do: is_binary(ffmpeg_path())
@@ -95,8 +95,17 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   flash past while unusually long slides cannot make a video unreasonably long.
   """
   def slide_duration(slide) when is_map(slide) do
+    kind = value(slide, "kind")
+
+    visible_values =
+      if kind in ["quote", "highlight"] do
+        [value(slide, "label"), value(slide, "title")]
+      else
+        [value(slide, "label"), value(slide, "title"), value(slide, "body")]
+      end
+
     word_count =
-      [value(slide, "label"), value(slide, "title"), value(slide, "body")]
+      visible_values
       |> Enum.filter(&is_binary/1)
       |> Enum.join(" ")
       |> String.split(~r/\s+/u, trim: true)
@@ -245,6 +254,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   defp ffmpeg_args(manifest_path, audio_path, output_path, durations) do
     audio? = is_binary(audio_path)
     duration = duration_seconds(durations)
+    audio_filter = if(audio?, do: audio_filter(audio_path, duration))
 
     [
       "-y",
@@ -262,10 +272,10 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       ["-vf", video_filter(), "-map", "0:v:0"] ++
       if(audio?,
         do: [
+          "-filter_complex",
+          audio_filter,
           "-map",
-          "1:a:0",
-          "-af",
-          SeamlessAudioLoop.filter(duration, @audio_volume, @audio_fade_seconds)
+          "[#{SeamlessAudioLoop.output_label()}]"
         ],
         else: ["-an"]
       ) ++
@@ -285,6 +295,25 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       ] ++
       if(audio?, do: ["-c:a", "aac", "-b:a", @audio_bitrate], else: []) ++
       ["-movflags", "+faststart", "-f", "mp4", output_path]
+  end
+
+  defp audio_filter(audio_path, output_duration) do
+    case SeamlessAudioLoop.source_duration(audio_path) do
+      {:ok, source_duration} ->
+        SeamlessAudioLoop.filter(
+          source_duration,
+          output_duration,
+          @audio_volume,
+          @audio_fade_seconds
+        )
+
+      {:error, _reason} ->
+        SeamlessAudioLoop.fallback_filter(
+          output_duration,
+          @audio_volume,
+          @audio_fade_seconds
+        )
+    end
   end
 
   defp video_filter do

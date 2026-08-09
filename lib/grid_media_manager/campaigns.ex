@@ -156,9 +156,15 @@ defmodule GridMediaManager.Campaigns do
   end
 
   def store_client_artifact(%MediaAsset{} = asset, slide_index, body) when is_binary(body) do
+    store_client_artifact(asset, slide_index, body, ArtifactStore.renderer_version())
+  end
+
+  def store_client_artifact(%MediaAsset{} = asset, slide_index, body, renderer_version)
+      when is_binary(body) do
     with {:ok, slide_index} <- positive_integer(slide_index),
          true <- slide_index in media_asset_slide_indexes(asset),
-         {:ok, artifact} <- ArtifactStore.put_png(asset, slide_index, body) do
+         {:ok, artifact} <-
+           ArtifactStore.put_png(asset, slide_index, body, renderer_version) do
       old_path = get_in(asset.metadata || %{}, ["artifacts", to_string(slide_index), "path"])
 
       metadata =
