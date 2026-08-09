@@ -87,8 +87,7 @@ defmodule GridMediaManager.Application do
 
     cond do
       length == 0 -> "not set"
-      length <= 8 -> "set (#{length} chars)"
-      true -> "set (#{length} chars, ending …#{String.slice(value, -4, 4)})"
+      true -> "set (#{length} chars)"
     end
   end
 

@@ -337,10 +337,12 @@ defmodule GridMediaManager.Studio.Workflow do
       if source_id && is_binary(title) && String.trim(title) != "" do
         node_class = map_value(node, "class") || "node"
         reading_slides = ShareCard.node_reading_slides(campaign, node)
-        content_slides = Enum.reject(reading_slides, &(&1.kind in ["node_title", "cta"]))
+
+        content_slides =
+          Enum.reject(reading_slides, &(Map.get(&1, "kind") in ["node_title", "cta"]))
 
         character_count =
-          [title | Enum.map(content_slides, &Map.get(&1, :body, ""))]
+          [title | Enum.map(content_slides, &Map.get(&1, "body", ""))]
           |> Enum.join(" ")
           |> String.length()
 

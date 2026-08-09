@@ -6,9 +6,10 @@ defmodule GridMediaManager.Social.PostReview do
   so three channel drafts appear as one item in the editorial review queue.
   """
 
+  alias GridMediaManager.Campaigns
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
-  alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.Promotion.ArtifactStore
   alias GridMediaManager.Social.Platforms
 
   @text_hour 15
@@ -26,7 +27,8 @@ defmodule GridMediaManager.Social.PostReview do
 
   def pending?(%{reviewable_ids: ids}), do: ids != []
 
-  def queueable?(draft), do: draft.status in ["draft", "copied", "failed"]
+  def queueable?(draft),
+    do: draft.status in ["draft", "copied", "approved", "scheduled", "published", "failed"]
 
   def valid_for_asset?(draft) do
     case draft.media_asset do
@@ -51,12 +53,14 @@ defmodule GridMediaManager.Social.PostReview do
     asset = Enum.find_value(drafts, & &1.media_asset)
     copy_variants = copy_variants(drafts)
     campaign = campaign_for(drafts)
+    preview_images = preview_images(asset, campaign)
 
     package = %{
       id: "post-review-package-#{List.first(drafts).campaign_id}-#{List.first(drafts).id}",
       drafts: drafts,
       asset: asset,
-      preview_images: preview_images(asset, campaign),
+      preview_images: preview_images,
+      artifacts_ready?: artifacts_ready?(asset),
       campaign: campaign,
       campaign_id: List.first(drafts).campaign_id,
       kind: kind,
@@ -66,7 +70,7 @@ defmodule GridMediaManager.Social.PostReview do
       statuses: Enum.map(drafts, & &1.status) |> Enum.uniq(),
       status: package_status(drafts),
       reviewable_ids: Enum.filter(drafts, &reviewable_draft?/1) |> Enum.map(& &1.id),
-      deletable_ids: Enum.filter(drafts, &queueable?/1) |> Enum.map(& &1.id),
+      deletable_ids: Enum.filter(drafts, &deletable_draft?/1) |> Enum.map(& &1.id),
       suggested_for: suggested_for,
       suggested?: is_nil(scheduled_for)
     }
@@ -85,7 +89,7 @@ defmodule GridMediaManager.Social.PostReview do
     end
   end
 
-  defp preview_images(%MediaAsset{kind: "curated_carousel"} = asset, %Campaign{} = campaign) do
+  defp preview_images(%MediaAsset{kind: "curated_carousel"} = asset, %Campaign{}) do
     metadata = asset.metadata || %{}
     slide_count = Map.get(metadata, "slide_count", 0)
 
@@ -98,13 +102,24 @@ defmodule GridMediaManager.Social.PostReview do
     Enum.map(indexes, fn index ->
       %{
         index: index,
-        url: ShareCard.curated_carousel_image_path(campaign, asset.source_id, index, asset.style)
+        url: Campaigns.media_asset_artifact_url(asset, index)
       }
     end)
   end
 
-  defp preview_images(%MediaAsset{} = asset, _campaign), do: [%{index: 1, url: asset.url}]
+  defp preview_images(%MediaAsset{mime_type: "video/mp4", id: id}, _campaign),
+    do: [%{index: 1, url: "/media-assets/#{id}/artifact.mp4"}]
+
+  defp preview_images(%MediaAsset{} = asset, _campaign),
+    do: [%{index: 1, url: Campaigns.media_asset_artifact_url(asset)}]
+
   defp preview_images(nil, _campaign), do: []
+
+  defp artifacts_ready?(%MediaAsset{} = asset) do
+    ArtifactStore.ready?(asset, Campaigns.media_asset_slide_indexes(asset))
+  end
+
+  defp artifacts_ready?(nil), do: false
 
   defp package_kind(drafts) do
     draft_kind(List.first(drafts))
@@ -118,6 +133,7 @@ defmodule GridMediaManager.Social.PostReview do
   end
 
   defp reviewable_draft?(draft), do: draft.status in ["draft", "copied"]
+  defp deletable_draft?(draft), do: draft.status in ["draft", "copied", "failed"]
 
   defp copy_variants(drafts) do
     drafts

@@ -35,7 +35,7 @@ defmodule GridMediaManager.Promotion.SlideSequence do
       node when is_map(node) ->
         ShareCard.node_reading_slides(campaign, node)
         |> Enum.drop(1)
-        |> Enum.reject(&(&1.label == "Learn more"))
+        |> Enum.reject(&(Map.get(&1, "label") == "Learn more"))
         |> Enum.map(&persisted_slide/1)
 
       _ ->
@@ -57,13 +57,13 @@ defmodule GridMediaManager.Promotion.SlideSequence do
 
   defp candidate_slides(_campaign, candidate), do: [fallback_slide(candidate)]
 
-  defp persisted_slide(%{label: label, title: title, body: body, blocks: blocks}) do
+  defp persisted_slide(slide) when is_map(slide) do
     %{
       "kind" => "node_text",
-      "label" => label,
-      "title" => title,
-      "body" => body,
-      "blocks" => Enum.map(blocks, &persisted_block/1)
+      "label" => Map.get(slide, "label", ""),
+      "title" => Map.get(slide, "title", ""),
+      "body" => Map.get(slide, "body", ""),
+      "blocks" => Enum.map(Map.get(slide, "blocks", []), &persisted_block/1)
     }
   end
 
@@ -78,8 +78,15 @@ defmodule GridMediaManager.Promotion.SlideSequence do
 
   defp persisted_block(block) do
     block
-    |> Map.take([:type, :text, :level, :marker])
-    |> Map.new(fn {key, value} -> {Atom.to_string(key), to_string(value)} end)
+    |> Enum.reduce(%{}, fn {key, value}, persisted ->
+      key = to_string(key)
+
+      if key in ["type", "text", "level", "marker"] do
+        Map.put(persisted, key, to_string(value))
+      else
+        persisted
+      end
+    end)
   end
 
   defp humanize(type), do: type |> to_string() |> String.replace("_", " ") |> String.capitalize()

@@ -10,8 +10,8 @@ defmodule GridMediaManager.RationalGrid.Client do
     * `RATIONALGRID_PROMOTION_API_TOKEN` - optional bearer token for authenticated requests
       (or `config :grid_media_manager, :rational_grid, promotion_api_token: ...`)
 
-  Internal users may also paste a direct promotion endpoint URL, in which case it
-  is fetched as-is.
+  Direct promotion endpoint URLs are accepted only when they share the configured
+  RationalGrid origin. Credentials are never attached to another host.
   """
 
   alias GridMediaManager.RationalGrid.Slug
@@ -49,7 +49,7 @@ defmodule GridMediaManager.RationalGrid.Client do
         {:error, :blank}
 
       Slug.direct_media_url?(input) ->
-        {:ok, input}
+        if trusted_url?(input), do: {:ok, input}, else: {:error, :untrusted_origin}
 
       true ->
         with {:ok, slug} <- Slug.normalize(input) do
@@ -64,6 +64,20 @@ defmodule GridMediaManager.RationalGrid.Client do
       token -> [{"authorization", "Bearer #{token}"}]
     end
   end
+
+  def trusted_url?(url) when is_binary(url) do
+    with %URI{scheme: scheme, host: host, port: port} when scheme in ["http", "https"] <-
+           URI.parse(url),
+         %URI{scheme: trusted_scheme, host: trusted_host, port: trusted_port} <-
+           URI.parse(base_url()) do
+      scheme == trusted_scheme and String.downcase(host) == String.downcase(trusted_host) and
+        effective_port(scheme, port) == effective_port(trusted_scheme, trusted_port)
+    else
+      _error -> false
+    end
+  end
+
+  def trusted_url?(_url), do: false
 
   def promotion_api_token do
     System.get_env(@promotion_api_token_env)
@@ -134,7 +148,9 @@ defmodule GridMediaManager.RationalGrid.Client do
   defp ensure_leading_slash(path), do: "/" <> path
 
   defp request(url) do
-    case Req.get(url: url, headers: request_headers(), receive_timeout: 15_000, retry: :transient) do
+    headers = if trusted_url?(url), do: request_headers(), else: []
+
+    case Req.get(url: url, headers: headers, receive_timeout: 15_000, retry: :transient) do
       {:ok, %{status: status} = response} when status in 200..299 ->
         {:ok, response}
 
@@ -145,6 +161,10 @@ defmodule GridMediaManager.RationalGrid.Client do
         {:error, {:request_failed, reason}}
     end
   end
+
+  defp effective_port("http", nil), do: 80
+  defp effective_port("https", nil), do: 443
+  defp effective_port(_scheme, port), do: port
 
   defp decode_media_response(response) do
     case decode_any_response(response) do

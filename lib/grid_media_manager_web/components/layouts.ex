@@ -37,27 +37,27 @@ defmodule GridMediaManagerWeb.Layouts do
     ~H"""
     <header class="sticky top-0 z-40 border-b border-base-content/10 bg-base-100/85 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
       <div class="mx-auto flex max-w-7xl items-center justify-between gap-4">
-        <a href="/" class="group flex items-center gap-3">
+        <.link navigate={~p"/"} class="group flex items-center gap-3">
           <span class="grid size-10 place-items-center rounded-2xl bg-base-content text-sm font-black tracking-tight text-base-100 shadow-lg shadow-base-content/10 transition group-hover:-translate-y-0.5">
             RG
           </span>
           <span>
             <span class="block text-sm font-semibold leading-5 text-base-content">
-              Grid Media Manager
+              RationalGrid Publishing Studio
             </span>
             <span class="block text-xs text-base-content/55">
-              Internal RationalGrid Share Studio
+              Draft, design, and publish
             </span>
           </span>
-        </a>
+        </.link>
 
         <nav class="flex items-center gap-3">
-          <a
-            href="/"
+          <.link
+            navigate={~p"/"}
             class="hidden rounded-full px-3 py-2 text-sm font-medium text-base-content/65 transition hover:bg-base-200 hover:text-base-content sm:inline-flex"
           >
-            Import
-          </a>
+            Campaigns
+          </.link>
           <.theme_toggle />
         </nav>
       </div>
@@ -121,10 +121,12 @@ defmodule GridMediaManagerWeb.Layouts do
   """
   def theme_toggle(assigns) do
     ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
+    <div class="relative flex flex-row items-center rounded-full border-2 border-base-300 bg-base-300">
+      <div class="absolute left-0 h-full w-1/3 rounded-full border border-base-200 bg-base-100 brightness-200 transition-[left] [[data-theme-choice=light]_&]:left-1/3 [[data-theme-choice=dark]_&]:left-2/3" />
 
       <button
+        type="button"
+        aria-label="Use system theme"
         class="flex p-2 cursor-pointer w-1/3"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="system"
@@ -133,6 +135,8 @@ defmodule GridMediaManagerWeb.Layouts do
       </button>
 
       <button
+        type="button"
+        aria-label="Use light theme"
         class="flex p-2 cursor-pointer w-1/3"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="light"
@@ -141,6 +145,8 @@ defmodule GridMediaManagerWeb.Layouts do
       </button>
 
       <button
+        type="button"
+        aria-label="Use dark theme"
         class="flex p-2 cursor-pointer w-1/3"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="dark"

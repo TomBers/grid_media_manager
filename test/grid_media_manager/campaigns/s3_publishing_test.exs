@@ -4,6 +4,8 @@ defmodule GridMediaManager.Campaigns.S3PublishingTest do
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Studio.Workflow
 
+  @png <<137, 80, 78, 71, 13, 10, 26, 10, 0, 1, 2, 3>>
+
   @environment_variables [
     "S3_BUCKET",
     "AWS_REGION",
@@ -17,7 +19,14 @@ defmodule GridMediaManager.Campaigns.S3PublishingTest do
   setup do
     previous_s3 = Application.get_env(:grid_media_manager, :s3)
     previous_buffer = Application.get_env(:grid_media_manager, :buffer)
+    previous_artifact_root = Application.get_env(:grid_media_manager, :artifact_store_path)
     previous_environment = Map.new(@environment_variables, &{&1, System.get_env(&1)})
+
+    artifact_root =
+      Path.join(
+        System.tmp_dir!(),
+        "grid-media-manager-s3-test-#{System.unique_integer([:positive])}"
+      )
 
     Enum.each(@environment_variables, &System.delete_env/1)
 
@@ -38,11 +47,15 @@ defmodule GridMediaManager.Campaigns.S3PublishingTest do
       plug: {Req.Test, __MODULE__}
     )
 
+    Application.put_env(:grid_media_manager, :artifact_store_path, artifact_root)
+
     Req.Test.verify_on_exit!()
 
     on_exit(fn ->
       restore_config(:s3, previous_s3)
       restore_config(:buffer, previous_buffer)
+      restore_config(:artifact_store_path, previous_artifact_root)
+      File.rm_rf!(artifact_root)
 
       Enum.each(previous_environment, fn
         {name, nil} -> System.delete_env(name)
@@ -56,6 +69,7 @@ defmodule GridMediaManager.Campaigns.S3PublishingTest do
   test "uploads local generated media to S3 before scheduling it through Buffer" do
     assert {:ok, campaign} = Campaigns.import_payload(payload(), "s3-buffer-publishing")
     assert {:ok, asset} = Campaigns.generate_grid_asset(campaign)
+    assert {:ok, asset} = Campaigns.store_client_artifact(asset, 1, @png)
 
     [draft] = Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: asset.id)
 
@@ -115,11 +129,17 @@ defmodule GridMediaManager.Campaigns.S3PublishingTest do
     assert {:ok, asset} =
              Campaigns.generate_curated_carousel(campaign, candidates, "minimal_dark")
 
+    asset =
+      Enum.reduce(Campaigns.media_asset_slide_indexes(asset), asset, fn index, asset ->
+        assert {:ok, asset} = Campaigns.store_client_artifact(asset, index, @png)
+        asset
+      end)
+
     assert asset.metadata["slide_count"] == 4
 
     [draft] =
       Campaigns.list_post_drafts(campaign,
-        platform: "instagram",
+        platform: "x",
         media_asset_id: asset.id
       )
 
@@ -140,9 +160,7 @@ defmodule GridMediaManager.Campaigns.S3PublishingTest do
 
       assert length(input["assets"]) == 4
 
-      assert input["metadata"] == %{
-               "instagram" => %{"type" => "carousel", "shouldShareToFeed" => true}
-             }
+      refute Map.has_key?(input, "metadata")
 
       assert Enum.all?(input["assets"], &match?(%{"image" => %{"url" => _}}, &1))
 

@@ -7,14 +7,29 @@ defmodule GridMediaManagerWeb.PostReviewLive do
   alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Social.PostReview
 
+  @queue_filters [
+    {"attention", "To review"},
+    {"approved", "Approved"},
+    {"scheduled", "Scheduled"},
+    {"published", "Published"},
+    {"all", "All"}
+  ]
+
   @impl true
   def mount(_params, _session, socket) do
     socket =
       socket
       |> assign(:page_title, "Proposed post queue")
+      |> assign(:queue_filter, "attention")
+      |> assign(:queue_filters, @queue_filters)
       |> stream_configure(:post_packages, dom_id: & &1.id)
 
     {:ok, load_review(socket)}
+  end
+
+  def handle_event("filter_queue", %{"status" => status}, socket) do
+    status = if status in Enum.map(@queue_filters, &elem(&1, 0)), do: status, else: "attention"
+    {:noreply, socket |> assign(:queue_filter, status) |> load_review()}
   end
 
   @impl true
@@ -133,10 +148,40 @@ defmodule GridMediaManagerWeb.PostReviewLive do
                 Queue state
               </p>
               <p class="mt-2 text-xl font-semibold text-base-content">
-                {if(@package_count == 0, do: "Empty", else: "Needs review")}
+                {queue_state(@package_count, @pending_count, @failed_count)}
               </p>
             </div>
           </section>
+
+          <nav
+            id="post-review-filters"
+            aria-label="Filter publishing queue"
+            class="flex flex-wrap gap-2 rounded-2xl border border-base-content/10 bg-base-100/80 p-2 shadow-sm"
+          >
+            <button
+              :for={{status, label} <- @queue_filters}
+              id={"post-review-filter-#{status}"}
+              type="button"
+              phx-click="filter_queue"
+              phx-value-status={status}
+              aria-pressed={@queue_filter == status}
+              class={[
+                "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition",
+                @queue_filter == status && "bg-base-content text-base-100 shadow-sm",
+                @queue_filter != status &&
+                  "text-base-content/60 hover:bg-base-200 hover:text-base-content"
+              ]}
+            >
+              {label}
+              <span class={[
+                "rounded-full px-2 py-0.5 text-xs",
+                @queue_filter == status && "bg-base-100/15",
+                @queue_filter != status && "bg-base-200"
+              ]}>
+                {Map.get(@queue_counts, status, 0)}
+              </span>
+            </button>
+          </nav>
 
           <section
             id="post-review-packages"
@@ -147,7 +192,7 @@ defmodule GridMediaManagerWeb.PostReviewLive do
               id="empty-post-review-packages"
               class="hidden rounded-[2rem] border border-dashed border-base-content/20 bg-base-100/70 p-10 text-center text-base-content/55 only:block xl:col-span-2"
             >
-              No potential posts are waiting. The queue is clear.
+              No posts match this view.
             </div>
             <.post_package
               :for={{id, package} <- @streams.post_packages}
@@ -167,32 +212,36 @@ defmodule GridMediaManagerWeb.PostReviewLive do
       |> Enum.filter(&PostReview.valid_for_asset?/1)
       |> Enum.filter(&PostReview.queueable?/1)
 
-    packages = drafts |> PostReview.packages() |> persist_missing_suggestions()
-    pending_ids = Enum.flat_map(packages, & &1.reviewable_ids)
-    pending_count = Enum.count(packages, &PostReview.pending?/1)
+    all_packages = PostReview.packages(drafts)
+    packages = filter_packages(all_packages, socket.assigns.queue_filter)
+    pending_ids = Enum.flat_map(all_packages, & &1.reviewable_ids)
+    pending_count = Enum.count(all_packages, &PostReview.pending?/1)
 
     socket
-    |> assign(:package_count, length(packages))
+    |> assign(:package_count, length(all_packages))
+    |> assign(:queue_counts, queue_counts(all_packages))
     |> assign(:pending_count, pending_count)
     |> assign(:pending_draft_count, length(pending_ids))
     |> assign(:pending_ids, pending_ids)
-    |> assign(:package_by_id, Map.new(packages, &{&1.id, &1}))
-    |> assign(:failed_count, Enum.count(packages, &(&1.status == "failed")))
+    |> assign(:package_by_id, Map.new(all_packages, &{&1.id, &1}))
+    |> assign(:failed_count, Enum.count(all_packages, &(&1.status == "failed")))
     |> stream(:post_packages, packages, reset: true)
   end
 
-  defp persist_missing_suggestions(packages) do
-    Enum.each(packages, fn package ->
-      if package.suggested? do
-        Enum.each(package.drafts, fn draft ->
-          if is_nil(draft.suggested_for) do
-            Campaigns.set_post_draft_suggestion(draft.id, package.suggested_for)
-          end
-        end)
-      end
-    end)
+  defp filter_packages(packages, "attention"),
+    do: Enum.filter(packages, &(&1.status in ["draft", "failed"]))
 
-    packages
+  defp filter_packages(packages, "all"), do: packages
+  defp filter_packages(packages, status), do: Enum.filter(packages, &(&1.status == status))
+
+  defp queue_counts(packages) do
+    %{
+      "attention" => Enum.count(packages, &(&1.status in ["draft", "failed"])),
+      "approved" => Enum.count(packages, &(&1.status == "approved")),
+      "scheduled" => Enum.count(packages, &(&1.status == "scheduled")),
+      "published" => Enum.count(packages, &(&1.status == "published")),
+      "all" => length(packages)
+    }
   end
 
   attr :id, :string, required: true
@@ -206,7 +255,7 @@ defmodule GridMediaManagerWeb.PostReviewLive do
     >
       <div class="grid gap-0 lg:grid-cols-[20rem_minmax(0,1fr)]">
         <div class="bg-base-200/70 p-5">
-          <%= if @package.asset do %>
+          <%= if @package.asset && @package.artifacts_ready? do %>
             <%= if video_asset?(@package.asset) do %>
               <video
                 id={"#{@id}-video"}
@@ -214,7 +263,7 @@ defmodule GridMediaManagerWeb.PostReviewLive do
                 preload="metadata"
                 class="aspect-[9/16] w-full rounded-2xl bg-black object-contain shadow-lg"
               >
-                <source src={@package.asset.url} type="video/mp4" />
+                <source src={package_preview_url(@package)} type="video/mp4" />
               </video>
             <% else %>
               <%= if length(@package.preview_images) > 1 do %>
@@ -235,7 +284,7 @@ defmodule GridMediaManagerWeb.PostReviewLive do
               <% else %>
                 <img
                   id={"#{@id}-image"}
-                  src={@package.asset.url}
+                  src={package_preview_url(@package)}
                   alt={package_title(@package)}
                   loading="lazy"
                   class="aspect-[4/5] w-full rounded-2xl bg-base-200 object-contain shadow-lg"
@@ -244,7 +293,18 @@ defmodule GridMediaManagerWeb.PostReviewLive do
             <% end %>
           <% else %>
             <div class="grid aspect-[4/5] place-items-center rounded-2xl border border-dashed border-base-content/15 bg-base-100 px-5 text-center text-sm font-semibold text-base-content/45">
-              {if(@package.kind == :video, do: "Video media pending", else: "Text-only post")}
+              <div>
+                <.icon name="hero-photo" class="mx-auto mb-3 size-7" />
+                <p>Finished media is not ready yet.</p>
+                <.link
+                  navigate={
+                    ~p"/campaigns/#{@package.campaign_id}/studio?step=review&asset=#{@package.asset && @package.asset.id}"
+                  }
+                  class="mt-3 inline-flex text-xs font-bold text-sky-700 dark:text-sky-200"
+                >
+                  Open the campaign to finish it
+                </.link>
+              </div>
             </div>
           <% end %>
         </div>
@@ -283,6 +343,7 @@ defmodule GridMediaManagerWeb.PostReviewLive do
                 {String.capitalize(@package.status)}
               </span>
               <button
+                :if={@package.deletable_ids != []}
                 id={"remove-post-package-#{@id}"}
                 type="button"
                 phx-click="delete_post_package"
@@ -348,6 +409,9 @@ defmodule GridMediaManagerWeb.PostReviewLive do
   defp video_asset?(%MediaAsset{mime_type: "video/mp4"}), do: true
   defp video_asset?(_asset), do: false
 
+  defp package_preview_url(%{preview_images: [%{url: url} | _rest]}), do: url
+  defp package_preview_url(_package), do: nil
+
   defp package_title(%{asset: %MediaAsset{title: title}}) when is_binary(title) and title != "",
     do: title
 
@@ -359,6 +423,16 @@ defmodule GridMediaManagerWeb.PostReviewLive do
   defp campaign_title(%{campaign_id: campaign_id}), do: "Campaign #{campaign_id}"
 
   defp platform_labels(platforms), do: Enum.map_join(platforms, ", ", &Platforms.label/1)
+
+  defp queue_state(0, _pending_count, _failed_count), do: "Empty"
+
+  defp queue_state(_package_count, _pending_count, failed_count) when failed_count > 0,
+    do: "Needs attention"
+
+  defp queue_state(_package_count, pending_count, _failed_count) when pending_count > 0,
+    do: "Needs review"
+
+  defp queue_state(_package_count, _pending_count, _failed_count), do: "Up to date"
 
   defp kind_badge_class(:video),
     do:

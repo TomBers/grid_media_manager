@@ -12,44 +12,27 @@ defmodule GridMediaManager.Social.Templates do
   alias GridMediaManager.RationalGrid.MediaPayload
   alias GridMediaManager.Social.Platforms
 
-  @base_angles ~w(question explainer discussion)
-
   def body(%Campaign{} = campaign, asset, platform, angle) do
     platform = if angle == "long_form", do: platform, else: canonical_platform(platform)
     body_for_platform(campaign, asset, platform, angle)
   end
 
   def draft_attrs(%Campaign{} = campaign, media_assets) when is_list(media_assets) do
-    base_drafts =
-      for platform <- Platforms.ids(),
-          angle <- @base_angles do
+    media_assets
+    |> Enum.flat_map(fn asset ->
+      platforms = asset_platforms(asset)
+      angle = asset_angle(asset)
+
+      Enum.map(platforms, fn platform ->
         %{
-          media_asset_id: nil,
+          media_asset_id: asset.id,
           platform: platform,
           angle: angle,
-          body: body(campaign, nil, platform, angle),
+          body: body(campaign, asset, platform, angle),
           status: "draft"
         }
-      end
-
-    asset_drafts =
-      media_assets
-      |> Enum.flat_map(fn asset ->
-        platforms = asset_platforms(asset)
-        angle = asset_angle(asset)
-
-        Enum.map(platforms, fn platform ->
-          %{
-            media_asset_id: asset.id,
-            platform: platform,
-            angle: angle,
-            body: body(campaign, asset, platform, angle),
-            status: "draft"
-          }
-        end)
       end)
-
-    base_drafts ++ asset_drafts
+    end)
   end
 
   def draft_attrs_for_platforms(%Campaign{} = campaign, media_assets, platforms)
@@ -322,8 +305,8 @@ defmodule GridMediaManager.Social.Templates do
            node when is_map(node) <- ShareCard.find_key_node(campaign, node_id) do
         ShareCard.node_short_video_slides(campaign, node)
         |> Enum.drop(1)
-        |> Enum.reject(&(Map.get(&1, :label) == "Learn more"))
-        |> Enum.map(&Map.get(&1, :body, ""))
+        |> Enum.reject(&(Map.get(&1, "label") == "Learn more"))
+        |> Enum.map(&Map.get(&1, "body", ""))
         |> Enum.reject(&(String.trim(&1) == ""))
         |> Enum.join("\n\n")
       else

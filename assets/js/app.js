@@ -26,6 +26,29 @@ import {hooks as colocatedHooks} from "phoenix-colocated/grid_media_manager"
 import topbar from "../vendor/topbar"
 import {CanvasSlideRenderer} from "./canvas_slide_renderer"
 
+const systemTheme = () => window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+
+const setTheme = theme => {
+  document.documentElement.setAttribute("data-theme-choice", theme)
+
+  if (theme === "system") {
+    localStorage.removeItem("phx:theme")
+    document.documentElement.setAttribute("data-theme", systemTheme())
+  } else {
+    localStorage.setItem("phx:theme", theme)
+    document.documentElement.setAttribute("data-theme", theme)
+  }
+}
+
+setTheme(localStorage.getItem("phx:theme") || "system")
+window.addEventListener("storage", event => {
+  if (event.key === "phx:theme") setTheme(event.newValue || "system")
+})
+window.addEventListener("phx:set-theme", event => setTheme(event.target.dataset.phxTheme))
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (!localStorage.getItem("phx:theme")) setTheme("system")
+})
+
 const Hooks = {...colocatedHooks, CanvasSlideRenderer}
 
 Hooks.CopyToClipboard = {

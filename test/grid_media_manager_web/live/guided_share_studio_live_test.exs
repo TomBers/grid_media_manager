@@ -106,13 +106,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert carousel.metadata["selected_slide_indexes"] == Enum.to_list(1..last_slide)
     assert has_element?(view, "#curated-carousel-order-#{carousel.id}")
 
-    preview_url = String.replace(carousel.url, "/slides/1/", "/slides/2/")
-
     view
     |> element("#curated-carousel-slide-#{carousel.id}-2")
     |> render_click()
 
-    assert has_element?(view, "#guided-output-preview-#{carousel.id}[src='#{preview_url}']")
+    assert has_element?(view, "#guided-output-preview-#{carousel.id}")
+    assert has_element?(view, "#curated-carousel-slides-#{carousel.id}[data-preview-slide='2']")
 
     view
     |> element("#move-curated-carousel-slide-down-#{carousel.id}-1")

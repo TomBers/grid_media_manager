@@ -2,8 +2,8 @@ defmodule GridMediaManager.Promotion.Markdown do
   @moduledoc """
   Extracts presentation-oriented block structure from RationalGrid Markdown.
 
-  The media pipeline renders SVG rather than browser HTML, so this module keeps
-  the semantic parts that improve card readability without depending on a DOM.
+  The browser canvas consumes these semantic blocks so editable text retains
+  headings, quotes, and list structure without depending on server rendering.
   """
 
   @type block :: %{

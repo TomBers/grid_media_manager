@@ -43,7 +43,19 @@ defmodule GridMediaManager.Campaigns.PostDraft do
     ])
     |> validate_required([:campaign_id, :platform, :angle, :body, :status])
     |> validate_inclusion(:status, @statuses)
+    |> unique_constraint([:campaign_id, :platform, :angle, :media_asset_id],
+      name: :post_drafts_unique_asset_destination
+    )
+    |> unique_constraint([:campaign_id, :platform, :angle],
+      name: :post_drafts_unique_campaign_destination
+    )
   end
 
   def statuses, do: @statuses
+
+  def editable?(%__MODULE__{status: status}), do: status in ["draft", "copied", "failed"]
+  def approvable?(%__MODULE__{status: status}), do: status in ["draft", "copied", "failed"]
+
+  def schedulable?(%__MODULE__{status: status}),
+    do: status in ["draft", "copied", "approved", "failed"]
 end

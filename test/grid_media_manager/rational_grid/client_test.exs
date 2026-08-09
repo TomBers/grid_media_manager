@@ -6,6 +6,7 @@ defmodule GridMediaManager.RationalGrid.ClientTest do
   setup do
     previous_config = Application.get_env(:grid_media_manager, :rational_grid)
     previous_token = System.get_env("RATIONALGRID_PROMOTION_API_TOKEN")
+    previous_base_url = System.get_env("RATIONAL_GRID_BASE_URL")
 
     on_exit(fn ->
       Application.put_env(:grid_media_manager, :rational_grid, previous_config)
@@ -15,11 +16,32 @@ defmodule GridMediaManager.RationalGrid.ClientTest do
       else
         System.delete_env("RATIONALGRID_PROMOTION_API_TOKEN")
       end
+
+      if previous_base_url do
+        System.put_env("RATIONAL_GRID_BASE_URL", previous_base_url)
+      else
+        System.delete_env("RATIONAL_GRID_BASE_URL")
+      end
     end)
 
     System.delete_env("RATIONALGRID_PROMOTION_API_TOKEN")
+    System.delete_env("RATIONAL_GRID_BASE_URL")
 
     :ok
+  end
+
+  test "rejects direct media URLs on an untrusted origin" do
+    Application.put_env(:grid_media_manager, :rational_grid, base_url: "https://rationalgrid.ai")
+
+    assert Client.media_url("https://attacker.example/api/media.json") ==
+             {:error, :untrusted_origin}
+  end
+
+  test "accepts direct media URLs on the configured origin" do
+    Application.put_env(:grid_media_manager, :rational_grid, base_url: "https://rationalgrid.ai")
+
+    assert Client.media_url("https://rationalgrid.ai/api/promotion/grids/example") ==
+             {:ok, "https://rationalgrid.ai/api/promotion/grids/example"}
   end
 
   test "defaults to the /api promotion endpoints" do

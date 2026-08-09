@@ -8,6 +8,32 @@ defmodule GridMediaManagerWeb.PostReviewLiveTest do
   alias GridMediaManager.Repo
   alias GridMediaManager.Social.Platforms
 
+  @png <<137, 80, 78, 71, 13, 10, 26, 10, 0, 1, 2, 3>>
+
+  setup do
+    previous_root = Application.get_env(:grid_media_manager, :artifact_store_path)
+
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "grid-media-manager-review-test-#{System.unique_integer([:positive])}"
+      )
+
+    Application.put_env(:grid_media_manager, :artifact_store_path, root)
+
+    on_exit(fn ->
+      File.rm_rf!(root)
+
+      if previous_root do
+        Application.put_env(:grid_media_manager, :artifact_store_path, previous_root)
+      else
+        Application.delete_env(:grid_media_manager, :artifact_store_path)
+      end
+    end)
+
+    :ok
+  end
+
   test "shows proposed posts once per logical package and approves the global queue", %{
     conn: conn
   } do
@@ -26,7 +52,7 @@ defmodule GridMediaManagerWeb.PostReviewLiveTest do
 
     assert Campaigns.list_post_drafts(campaign)
            |> Enum.filter(& &1.media_asset_id)
-           |> Enum.all?(&match?(%DateTime{}, &1.suggested_for))
+           |> Enum.all?(&is_nil(&1.suggested_for))
 
     view |> element("#approve-all-posts") |> render_click()
 
@@ -37,6 +63,11 @@ defmodule GridMediaManagerWeb.PostReviewLiveTest do
     assert has_element?(view, "#approve-all-posts[disabled]")
     assert has_element?(view, "#flash-info", "Approved")
     assert has_element?(view, "#empty-post-review-packages")
+
+    view |> element("#post-review-filter-approved") |> render_click()
+    assert has_element?(view, "#post-review-packages", "Approved")
+    assert has_element?(view, "#post-review-summary", "Up to date")
+    refute has_element?(view, "#post-review-packages button[id^='remove-post-package-']")
   end
 
   test "removes a proposed post package from the global queue", %{conn: conn} do
@@ -93,6 +124,9 @@ defmodule GridMediaManagerWeb.PostReviewLiveTest do
 
     assert :ok =
              Campaigns.ensure_post_drafts_for_platforms(campaign, [asset], Platforms.video_ids())
+
+    assert {:ok, asset} = Campaigns.store_client_artifact(asset, 1, @png)
+    asset
   end
 
   defp add_text_asset(campaign) do
@@ -118,6 +152,12 @@ defmodule GridMediaManagerWeb.PostReviewLiveTest do
 
     assert :ok =
              Campaigns.ensure_post_drafts_for_platforms(campaign, [asset], Platforms.text_ids())
+
+    asset =
+      Enum.reduce([1, 2, 4], asset, fn index, asset ->
+        assert {:ok, asset} = Campaigns.store_client_artifact(asset, index, @png)
+        asset
+      end)
 
     asset
   end

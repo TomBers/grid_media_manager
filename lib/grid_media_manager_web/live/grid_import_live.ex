@@ -2,15 +2,15 @@ defmodule GridMediaManagerWeb.GridImportLive do
   use GridMediaManagerWeb, :live_view
 
   alias GridMediaManager.Campaigns
-  alias GridMediaManager.Automation
   alias GridMediaManager.RationalGrid.Client
   alias GridMediaManager.RationalGrid.GridIndex
 
-  @preview_platforms ["instagram", "youtube", "tiktok", "x", "linkedin", "facebook"]
+  @page_size 24
 
   @impl true
   def mount(_params, _session, socket) do
-    cached_grids = GridIndex.list()
+    cached_grids = GridIndex.list(limit: @page_size)
+    cached_total = GridIndex.count()
     cached_at = GridIndex.last_refreshed_at()
     cached_tags = GridIndex.list_tags()
 
@@ -18,12 +18,16 @@ defmodule GridMediaManagerWeb.GridImportLive do
       socket
       |> assign(:page_title, "RationalGrid Share Studio")
       |> assign(:form, to_form(%{"source" => ""}, as: :import))
-      |> assign(:tag_filter_form, to_form(%{"tag" => ""}, as: :filter))
+      |> assign(:tag_filter_form, to_form(%{"query" => "", "tag" => ""}, as: :filter))
+      |> assign(:remote_grid_query, nil)
       |> assign(:remote_grid_filter, nil)
       |> assign(:remote_grid_tags, cached_tags)
       |> assign(:remote_grids_loaded?, not is_nil(cached_at))
       |> assign(:remote_grids_error, nil)
       |> assign(:remote_grids_refreshed_at, cached_at)
+      |> assign(:remote_grid_count, cached_total)
+      |> assign(:remote_grid_offset, length(cached_grids))
+      |> assign(:remote_grids_has_more?, length(cached_grids) < cached_total)
       |> stream_configure(:remote_grids, dom_id: &"remote-grid-#{&1.id}")
       |> stream(:remote_grids, cached_grids)
       |> stream(:campaigns, Campaigns.list_campaigns())
@@ -40,14 +44,42 @@ defmodule GridMediaManagerWeb.GridImportLive do
     import_source(socket, source)
   end
 
-  def handle_event("filter_remote_grids", %{"filter" => %{"tag" => tag}}, socket) do
-    tag = normalize_tag(tag)
+  def handle_event("filter_remote_grids", %{"filter" => params}, socket) do
+    query = normalize_query(Map.get(params, "query"))
+    tag = normalize_tag(Map.get(params, "tag"))
+    grids = GridIndex.list(query: query, tag: tag, limit: @page_size)
+    total = GridIndex.count(query: query, tag: tag)
 
     {:noreply,
      socket
+     |> assign(:remote_grid_query, query)
      |> assign(:remote_grid_filter, tag)
-     |> assign(:tag_filter_form, to_form(%{"tag" => tag || ""}, as: :filter))
-     |> stream(:remote_grids, GridIndex.list(tag: tag), reset: true)}
+     |> assign(:remote_grid_count, total)
+     |> assign(:remote_grid_offset, length(grids))
+     |> assign(:remote_grids_has_more?, length(grids) < total)
+     |> assign(
+       :tag_filter_form,
+       to_form(%{"query" => query || "", "tag" => tag || ""}, as: :filter)
+     )
+     |> stream(:remote_grids, grids, reset: true)}
+  end
+
+  def handle_event("load_more_grids", _params, socket) do
+    grids =
+      GridIndex.list(
+        query: socket.assigns.remote_grid_query,
+        tag: socket.assigns.remote_grid_filter,
+        limit: @page_size,
+        offset: socket.assigns.remote_grid_offset
+      )
+
+    next_offset = socket.assigns.remote_grid_offset + length(grids)
+
+    {:noreply,
+     socket
+     |> assign(:remote_grid_offset, next_offset)
+     |> assign(:remote_grids_has_more?, next_offset < socket.assigns.remote_grid_count)
+     |> stream(:remote_grids, grids)}
   end
 
   def handle_event("load_remote_grids", _params, socket) do
@@ -60,16 +92,36 @@ defmodule GridMediaManagerWeb.GridImportLive do
             selected_tag =
               selected_available_tag(socket.assigns.remote_grid_filter, refreshed_tags)
 
-            refreshed_grids = GridIndex.list(tag: selected_tag)
+            refreshed_grids =
+              GridIndex.list(
+                query: socket.assigns.remote_grid_query,
+                tag: selected_tag,
+                limit: @page_size
+              )
+
+            refreshed_total =
+              GridIndex.count(query: socket.assigns.remote_grid_query, tag: selected_tag)
 
             {:noreply,
              socket
-             |> assign(:tag_filter_form, to_form(%{"tag" => selected_tag || ""}, as: :filter))
+             |> assign(
+               :tag_filter_form,
+               to_form(
+                 %{
+                   "query" => socket.assigns.remote_grid_query || "",
+                   "tag" => selected_tag || ""
+                 },
+                 as: :filter
+               )
+             )
              |> assign(:remote_grid_filter, selected_tag)
              |> assign(:remote_grid_tags, refreshed_tags)
              |> assign(:remote_grids_loaded?, true)
              |> assign(:remote_grids_error, nil)
              |> assign(:remote_grids_refreshed_at, GridIndex.last_refreshed_at())
+             |> assign(:remote_grid_count, refreshed_total)
+             |> assign(:remote_grid_offset, length(refreshed_grids))
+             |> assign(:remote_grids_has_more?, length(refreshed_grids) < refreshed_total)
              |> stream(:remote_grids, refreshed_grids, reset: true)}
 
           {:error, reason} ->
@@ -79,33 +131,6 @@ defmodule GridMediaManagerWeb.GridImportLive do
       {:error, reason} ->
         {:noreply, assign(socket, :remote_grids_error, refresh_error_message(reason))}
     end
-  end
-
-  def handle_event("preview_grid", %{"source" => source}, socket) do
-    case Automation.preview_grid(source) do
-      {:ok, result} ->
-        preview_flash(socket, result)
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Preview stopped: #{inspect(reason)}")}
-    end
-  end
-
-  defp preview_flash(socket, %{campaign: campaign, assets: assets}) do
-    message =
-      "Preview ready for #{campaign.title}: #{length(assets)} media assets generated. Nothing was sent to Buffer."
-
-    {:noreply,
-     socket
-     |> put_flash(:info, message)
-     |> push_navigate(to: preview_path(campaign, assets))}
-  end
-
-  defp preview_path(campaign, assets) do
-    asset_ids = assets |> Enum.map(& &1.id) |> Enum.uniq() |> Enum.map_join(",", &to_string/1)
-    platforms = Enum.join(@preview_platforms, ",")
-
-    ~p"/campaigns/#{campaign.id}/studio?#{[step: "review", assets: asset_ids, platform: platforms, asset: "all"]}"
   end
 
   @impl true
@@ -118,15 +143,15 @@ defmodule GridMediaManagerWeb.GridImportLive do
         <div class="mx-auto max-w-7xl">
           <section class="rounded-[2rem] border border-base-content/10 bg-base-100/80 p-6 shadow-2xl shadow-orange-950/5 backdrop-blur md:p-8 lg:p-10">
             <p class="mb-4 inline-flex items-center rounded-full border border-orange-500/20 bg-orange-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-orange-700 dark:text-orange-200">
-              Internal RationalGrid sharing workbench
+              RationalGrid publishing studio
             </p>
 
             <h1 class="max-w-3xl text-4xl font-semibold tracking-tight text-base-content text-balance sm:text-5xl lg:text-6xl">
-              Turn argument maps into copy-ready social assets.
+              Turn a grid into a story worth sharing.
             </h1>
 
             <p class="mt-5 max-w-2xl text-base leading-8 text-base-content/70 sm:text-lg">
-              Paste a RationalGrid URL or slug. We’ll fetch the media payload, save a campaign, preview the share cards, and generate deterministic drafts for X, Bluesky, LinkedIn, Instagram, YouTube Shorts, and Substack.
+              Find a grid, choose the moments that matter, then edit the text directly in polished social assets for X, LinkedIn, Facebook, Instagram, TikTok, and YouTube.
             </p>
 
             <.form
@@ -146,7 +171,7 @@ defmodule GridMediaManagerWeb.GridImportLive do
 
               <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p class="text-sm text-base-content/60">
-                  No auth or LLM calls — just the RationalGrid media endpoint and simple templates.
+                  Your source content stays editable throughout the publishing workflow.
                 </p>
                 <button
                   id="load-grid-media-button"
@@ -182,18 +207,26 @@ defmodule GridMediaManagerWeb.GridImportLive do
                     <% end %>
                   </p>
                 </div>
-                <div class="flex flex-col gap-3 sm:min-w-64 sm:items-stretch">
+                <div class="flex flex-col gap-3 sm:min-w-80 sm:items-stretch">
                   <.form
                     for={@tag_filter_form}
                     id="remote-grid-filter-form"
                     phx-change="filter_remote_grids"
+                    class="grid gap-3"
                   >
                     <.input
+                      field={@tag_filter_form[:query]}
+                      type="search"
+                      label="Search grids"
+                      placeholder="Title, slug, or topic"
+                      phx-debounce="250"
+                    />
+                    <.input
                       field={@tag_filter_form[:tag]}
-                      type="select"
-                      label="Filter by tag"
-                      options={@remote_grid_tags}
-                      prompt="All tags"
+                      type="text"
+                      label="Narrow by exact tag"
+                      placeholder="Optional"
+                      phx-debounce="250"
                     />
                   </.form>
                   <button
@@ -219,7 +252,7 @@ defmodule GridMediaManagerWeb.GridImportLive do
               <div
                 id="remote-grids"
                 phx-update="stream"
-                class="mt-5 grid max-h-[48rem] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3"
+                class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
               >
                 <div
                   id="empty-remote-grids"
@@ -238,20 +271,23 @@ defmodule GridMediaManagerWeb.GridImportLive do
                   class="group rounded-2xl border border-base-content/10 bg-base-100 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-950/5"
                 >
                   <div class="flex min-h-48 flex-col">
-                    <button
-                      id={"import-remote-grid-#{grid.id}"}
-                      type="button"
-                      phx-click="import_remote_grid"
-                      phx-value-source={grid.source}
-                      class="min-w-0 flex-1 text-left"
-                    >
+                    <div class="min-w-0 flex-1 text-left">
                       <h3 class="line-clamp-2 font-semibold leading-6 text-base-content group-hover:text-orange-700 dark:group-hover:text-orange-200">
                         {grid.title}
                       </h3>
                       <p class="mt-1 line-clamp-1 text-xs text-base-content/50">/{grid.slug}</p>
-                    </button>
+                    </div>
 
                     <div class="mt-4 flex flex-wrap items-center gap-2">
+                      <button
+                        id={"import-remote-grid-#{grid.id}"}
+                        type="button"
+                        phx-click="import_remote_grid"
+                        phx-value-source={grid.source}
+                        class="inline-flex items-center rounded-full bg-base-content px-3 py-1.5 text-xs font-bold text-base-100 shadow-sm transition hover:-translate-y-0.5 hover:bg-orange-600 phx-click-loading:cursor-wait phx-click-loading:opacity-60"
+                      >
+                        Open in studio <.icon name="hero-arrow-right" class="ml-1.5 size-3.5" />
+                      </button>
                       <a
                         :if={grid.url}
                         href={grid.url}
@@ -261,15 +297,6 @@ defmodule GridMediaManagerWeb.GridImportLive do
                       >
                         Open source <.icon name="hero-arrow-up-right" class="ml-1 size-3" />
                       </a>
-                      <button
-                        id={"preview-grid-#{grid.id}"}
-                        type="button"
-                        phx-click="preview_grid"
-                        phx-value-source={grid.source}
-                        class="inline-flex items-center rounded-full bg-sky-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-500 phx-click-loading:cursor-wait phx-click-loading:opacity-60"
-                      >
-                        <.icon name="hero-eye" class="mr-1.5 size-3.5" /> Preview package
-                      </button>
                     </div>
                   </div>
 
@@ -289,14 +316,29 @@ defmodule GridMediaManagerWeb.GridImportLive do
                   </div>
                 </article>
               </div>
+
+              <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-base-content/10 pt-4">
+                <p class="text-sm text-base-content/55">
+                  Showing {min(@remote_grid_offset, @remote_grid_count)} of {@remote_grid_count} grids
+                </p>
+                <button
+                  :if={@remote_grids_has_more?}
+                  id="load-more-grids"
+                  type="button"
+                  phx-click="load_more_grids"
+                  class="inline-flex items-center rounded-xl border border-base-content/15 bg-base-100 px-4 py-2 text-sm font-semibold text-base-content transition hover:-translate-y-0.5 hover:bg-base-200 phx-click-loading:opacity-60"
+                >
+                  Show more <.icon name="hero-chevron-down" class="ml-1.5 size-4" />
+                </button>
+              </div>
             </div>
           </section>
 
           <aside class="mt-6 rounded-3xl border border-base-content/10 bg-base-100/60 shadow-lg shadow-base-content/5 backdrop-blur">
-            <details id="recent-campaigns-panel" class="group">
+            <details id="recent-campaigns-panel" class="group" open>
               <summary class="flex cursor-pointer list-none items-center justify-between gap-4 p-4 sm:p-5">
                 <span>
-                  <span class="block text-sm font-semibold text-base-content">Recent campaigns</span>
+                  <span class="block text-sm font-semibold text-base-content">Your recent work</span>
                   <span class="mt-1 block text-xs text-base-content/55">
                     Reopen a previously imported grid when needed.
                   </span>
@@ -379,6 +421,9 @@ defmodule GridMediaManagerWeb.GridImportLive do
   defp error_message(:blank), do: "Enter a RationalGrid URL or slug."
   defp error_message(:invalid), do: "That does not look like a valid RationalGrid URL or slug."
 
+  defp error_message(:untrusted_origin),
+    do: "Use a RationalGrid URL from the configured RationalGrid site, or enter its slug."
+
   defp error_message({:http_error, 401}),
     do: "RationalGrid rejected the request. Check RATIONALGRID_PROMOTION_API_TOKEN."
 
@@ -406,6 +451,15 @@ defmodule GridMediaManagerWeb.GridImportLive do
   end
 
   defp normalize_tag(_tag), do: nil
+
+  defp normalize_query(query) when is_binary(query) do
+    case String.trim(query) do
+      "" -> nil
+      value -> value
+    end
+  end
+
+  defp normalize_query(_query), do: nil
 
   defp selected_available_tag(nil, _tags), do: nil
   defp selected_available_tag(tag, tags), do: if(tag in tags, do: tag, else: nil)
