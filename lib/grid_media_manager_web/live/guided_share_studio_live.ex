@@ -119,10 +119,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
     restored_style = ShareCard.normalize_style(Map.get(studio_state, "selected_style"))
 
-    restored_filter =
-      if Map.get(studio_state, "candidate_filter") in Enum.map(@candidate_filters, & &1.id),
-        do: Map.get(studio_state, "candidate_filter"),
-        else: "all"
+    restored_filter = "all"
 
     socket =
       socket
@@ -266,16 +263,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:content_mode, mode)
       |> assign(:selected_format, selected_format)
       |> assign(:selected_platforms, selected_platforms)
-      |> assign(:candidate_filter, if(mode == "long_form", do: "key_node", else: "all"))
 
-    socket =
-      if mode == "long_form" do
-        select_single_long_form_candidate(socket)
-      else
-        persist_studio_state(socket)
-      end
-
-    {:noreply, socket}
+    {:noreply, persist_studio_state(socket)}
   end
 
   def handle_event("select_content_mode", _params, socket), do: {:noreply, socket}
@@ -338,7 +327,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         {:noreply,
          socket
          |> assign(:campaign, campaign)
-         |> assign(:title_card_mode, mode)}
+         |> assign(:title_card_mode, mode)
+         |> rehydrate_step("design")}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not save the title card choice.")}
@@ -358,7 +348,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       socket.assigns.all_candidates
       |> Workflow.selected_candidates(socket.assigns.selected_order)
       |> maybe_text_quote_candidates(socket.assigns.content_mode, socket.assigns.all_candidates)
-      |> maybe_long_form_candidates(socket.assigns.content_mode)
+      |> maybe_long_form_candidates(
+        socket.assigns.content_mode,
+        socket.assigns.all_candidates
+      )
 
     format =
       case socket.assigns.content_mode do
@@ -676,49 +669,51 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
         <div class="mx-auto max-w-7xl space-y-6">
           <header class="overflow-hidden rounded-[2rem] border border-base-content/10 bg-base-100/85 shadow-2xl shadow-base-content/5 backdrop-blur-xl">
-            <div class="grid gap-8 p-6 md:p-8 lg:grid-cols-[1fr_auto] lg:items-end lg:p-10">
+            <div class="grid gap-5 p-5 md:p-7 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
-                <div class="flex flex-wrap items-center gap-3">
-                  <span class="inline-flex items-center rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-orange-700 dark:text-orange-200">
-                    RationalGrid publishing studio
-                  </span>
-                  <span class="inline-flex items-center rounded-full border border-base-content/10 bg-base-100 px-3 py-1 text-xs font-medium text-base-content/55">
-                    Human in the loop
-                  </span>
-                </div>
-
-                <h1 class="mt-5 max-w-4xl text-3xl font-semibold tracking-tight text-base-content text-balance sm:text-4xl lg:text-5xl">
-                  Turn this grid into a story people want to join.
+                <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-700 dark:text-orange-200">
+                  RationalGrid publishing studio
+                </p>
+                <h1 class="mt-2 max-w-4xl text-2xl font-semibold tracking-tight text-base-content text-balance sm:text-3xl">
+                  {@campaign.title}
                 </h1>
-                <p class="mt-4 max-w-3xl text-base leading-7 text-base-content/65">
-                  Curate the strongest questions, human highlights, and key ideas. Then shape a coherent visual package and refine the invitation for each social channel.
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
+                  <%= case @step do %>
+                    <% "curate" -> %>
+                      Choose the moments that tell one focused story.
+                    <% "design" -> %>
+                      Choose the output, visual treatment, and destinations.
+                    <% _ -> %>
+                      Refine the finished media and channel copy before publishing.
+                  <% end %>
                 </p>
 
-                <div class="mt-6 flex flex-wrap items-center gap-3 text-sm text-base-content/55">
-                  <span class="inline-flex items-center gap-1.5">
-                    <.icon name="hero-squares-2x2" class="size-4" /> {@campaign.node_count || 0} nodes
+                <div class="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold text-base-content/55">
+                  <span class="rounded-full bg-base-200 px-3 py-1.5">
+                    {length(@all_candidates)} available moments
                   </span>
-                  <span class="size-1 rounded-full bg-base-content/25" />
-                  <span>{length(@all_candidates)} candidate moments</span>
-                  <span class="size-1 rounded-full bg-base-content/25" />
-                  <a
-                    href={@campaign.grid_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex items-center font-semibold text-base-content/70 transition hover:text-orange-600"
-                  >
-                    Open source grid <.icon name="hero-arrow-up-right" class="ml-1 size-3.5" />
-                  </a>
+                  <span class="rounded-full bg-orange-500/10 px-3 py-1.5 text-orange-700 dark:text-orange-200">
+                    {@selected_count} selected
+                  </span>
                 </div>
               </div>
 
-              <div class="flex flex-wrap justify-end gap-2">
+              <div class="flex flex-wrap gap-2 lg:justify-end">
+                <a
+                  id="open-source-grid"
+                  href={@campaign.grid_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center justify-center rounded-xl border border-base-content/15 px-3 py-2.5 text-sm font-semibold text-base-content/65 transition hover:bg-base-200"
+                >
+                  Source grid <.icon name="hero-arrow-up-right" class="ml-1.5 size-4" />
+                </a>
                 <.link
                   id="open-post-review"
                   navigate={~p"/posts/review"}
-                  class="inline-flex items-center justify-center rounded-2xl bg-base-content px-4 py-3 text-sm font-semibold text-base-100 shadow-sm transition hover:-translate-y-0.5 hover:bg-base-content/85"
+                  class="inline-flex items-center justify-center rounded-xl bg-base-content px-3 py-2.5 text-sm font-semibold text-base-100 shadow-sm transition hover:-translate-y-0.5 hover:bg-base-content/85"
                 >
-                  Review proposed posts <.icon name="hero-queue-list" class="ml-2 size-4" />
+                  All posts <.icon name="hero-queue-list" class="ml-1.5 size-4" />
                 </.link>
               </div>
             </div>
@@ -827,7 +822,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
           <section
             :if={@step == "curate"}
             id="stage-curate"
-            class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]"
+            class="space-y-6"
           >
             <div class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 backdrop-blur md:p-7">
               <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -836,27 +831,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     01 · Find the signal
                   </p>
                   <h2 class="mt-2 text-2xl font-semibold tracking-tight text-base-content">
-                    What is worth sharing?
+                    Pick the moments for this package.
                   </h2>
                   <p class="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
-                    The recommended question is preselected when available. Human highlights are surfaced next because they already carry an editorial signal.
+                    Choose a clear opener, then add only the questions, passages, or answers needed to support it.
                   </p>
-                  <div
-                    id="candidate-type-legend"
-                    class="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-base-content/60"
-                  >
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-sky-500/10 px-3 py-1.5 text-sky-700 dark:text-sky-200">
-                      <.icon name="hero-chat-bubble-left-right" class="size-3.5" />
-                      Questions · prompts
-                    </span>
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-violet-500/10 px-3 py-1.5 text-violet-700 dark:text-violet-200">
-                      <.icon name="hero-bookmark" class="size-3.5" /> Highlights · selected passages
-                    </span>
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-emerald-700 dark:text-emerald-200">
-                      <.icon name="hero-document-text" class="size-3.5" />
-                      Longer answers · multi-slide ideas
-                    </span>
-                  </div>
                 </div>
                 <p class="rounded-2xl bg-base-200 px-4 py-2 text-sm font-semibold text-base-content/65">
                   Choose up to {@max_selection}
@@ -919,24 +898,30 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               </div>
             </div>
 
-            <aside id="story-queue" class="self-start">
-              <div class="fixed top-32 right-[max(1rem,calc((100vw-80rem)/2))] z-40 max-h-[calc(100vh-2rem)] w-[22rem] overflow-y-auto rounded-[2rem] border border-base-content/10 bg-base-content p-5 text-base-100 shadow-2xl shadow-base-content/15 md:p-6">
+            <aside id="story-queue">
+              <div class="rounded-[2rem] border border-orange-500/25 bg-orange-500/5 p-5 shadow-xl shadow-base-content/5 md:p-6">
                 <div class="flex items-center justify-between gap-3">
                   <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-300">
-                      Story queue
+                    <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-700 dark:text-orange-200">
+                      Your story
                     </p>
-                    <h2 class="mt-1 text-xl font-semibold">{@selected_count} selected</h2>
+                    <h2 class="mt-1 text-xl font-semibold text-base-content">
+                      {@selected_count} of {@max_selection} moments selected
+                    </h2>
                   </div>
-                  <span class="grid size-11 place-items-center rounded-2xl bg-white/10 text-lg font-semibold">
+                  <span class="grid size-11 place-items-center rounded-2xl bg-orange-500 text-lg font-semibold text-white shadow-lg shadow-orange-950/15">
                     {@selected_count}
                   </span>
                 </div>
 
-                <div id="selected-aspects" phx-update="stream" class="mt-5 space-y-2">
+                <div
+                  id="selected-aspects"
+                  phx-update="stream"
+                  class="mt-5 grid gap-2 md:grid-cols-2"
+                >
                   <div
                     id="empty-selected-aspects"
-                    class="hidden rounded-2xl border border-dashed border-white/20 p-4 text-sm text-white/55 only:block"
+                    class="hidden rounded-2xl border border-dashed border-base-content/20 p-4 text-sm text-base-content/55 only:block md:col-span-2"
                   >
                     Pick at least one moment to continue.
                   </div>
@@ -944,18 +929,21 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     :for={{id, candidate} <- @streams.selected_aspects}
                     id={id}
                     candidate={candidate}
+                    theme="light"
                   />
                 </div>
 
-                <button
-                  id="continue-to-design"
-                  type="button"
-                  phx-click="continue_to_design"
-                  disabled={@selected_count == 0}
-                  class="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-orange-500 px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-950/25 transition hover:-translate-y-0.5 hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Design the package <.icon name="hero-arrow-right" class="ml-2 size-4" />
-                </button>
+                <div class="mt-5 flex justify-end">
+                  <button
+                    id="continue-to-design"
+                    type="button"
+                    phx-click="continue_to_design"
+                    disabled={@selected_count == 0}
+                    class="inline-flex items-center justify-center rounded-2xl bg-orange-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-950/25 transition hover:-translate-y-0.5 hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Continue to design <.icon name="hero-arrow-right" class="ml-2 size-4" />
+                  </button>
+                </div>
               </div>
             </aside>
           </section>
@@ -966,9 +954,116 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
             class="space-y-6"
           >
             <div class="space-y-6">
+              <div class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 md:p-7">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.2em] text-sky-600 dark:text-sky-300">
+                      01 · Output
+                    </p>
+                    <h2 class="mt-2 text-xl font-semibold text-base-content">
+                      What are you creating?
+                    </h2>
+                    <p class="mt-1 max-w-2xl text-sm leading-6 text-base-content/60">
+                      Choose the finished format first. This keeps the visual and channel choices relevant.
+                    </p>
+                  </div>
+                  <span class="rounded-full bg-base-200 px-3 py-1 text-xs font-medium text-base-content/55">
+                    {cond do
+                      @content_mode == "video" -> "Vertical video"
+                      @content_mode == "long_form" -> "Long-form post"
+                      true -> "Image carousel"
+                    end}
+                  </span>
+                </div>
+
+                <div id="content-mode-picker" class="mt-5 grid gap-3 sm:grid-cols-3">
+                  <button
+                    id="content-mode-video"
+                    type="button"
+                    phx-click="select_content_mode"
+                    phx-value-mode="video"
+                    aria-pressed={@content_mode == "video"}
+                    class={content_mode_card_class(@content_mode == "video")}
+                  >
+                    <span class="flex items-start justify-between gap-3">
+                      <span class="grid size-11 place-items-center rounded-2xl bg-sky-500 text-white shadow-lg shadow-sky-950/15">
+                        <.icon name="hero-play-circle" class="size-6" />
+                      </span>
+                      <.icon
+                        :if={@content_mode == "video"}
+                        name="hero-check-circle-solid"
+                        class="size-5 text-sky-500"
+                      />
+                    </span>
+                    <span class="mt-4 block text-base font-bold text-base-content">Video</span>
+                    <span class="mt-1 block text-sm font-semibold text-base-content/70">
+                      One combined vertical video
+                    </span>
+                    <span class="mt-2 block text-xs leading-5 text-base-content/55">
+                      Automatically ready for TikTok, Instagram, and YouTube.
+                    </span>
+                  </button>
+
+                  <button
+                    id="content-mode-text"
+                    type="button"
+                    phx-click="select_content_mode"
+                    phx-value-mode="text"
+                    aria-pressed={@content_mode == "text"}
+                    class={content_mode_card_class(@content_mode == "text")}
+                  >
+                    <span class="flex items-start justify-between gap-3">
+                      <span class="grid size-11 place-items-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-950/15">
+                        <.icon name="hero-photo" class="size-6" />
+                      </span>
+                      <.icon
+                        :if={@content_mode == "text"}
+                        name="hero-check-circle-solid"
+                        class="size-5 text-orange-500"
+                      />
+                    </span>
+                    <span class="mt-4 block text-base font-bold text-base-content">
+                      Image carousel
+                    </span>
+                    <span class="mt-1 block text-sm font-semibold text-base-content/70">
+                      Swipeable portrait images
+                    </span>
+                    <span class="mt-2 block text-xs leading-5 text-base-content/55">
+                      Editable PNG cards for X, LinkedIn, and Facebook.
+                    </span>
+                  </button>
+
+                  <button
+                    id="content-mode-long-form"
+                    type="button"
+                    phx-click="select_content_mode"
+                    phx-value-mode="long_form"
+                    aria-pressed={@content_mode == "long_form"}
+                    class={content_mode_card_class(@content_mode == "long_form")}
+                  >
+                    <span class="flex items-start justify-between gap-3">
+                      <span class="grid size-11 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-950/15">
+                        <.icon name="hero-document-text" class="size-6" />
+                      </span>
+                      <.icon
+                        :if={@content_mode == "long_form"}
+                        name="hero-check-circle-solid"
+                        class="size-5 text-emerald-500"
+                      />
+                    </span>
+                    <span class="mt-4 block text-base font-bold text-base-content">Long post</span>
+                    <span class="mt-1 block text-sm font-semibold text-base-content/70">
+                      One answer with a cover
+                    </span>
+                    <span class="mt-2 block text-xs leading-5 text-base-content/55">
+                      Choose one longer answer for a full LinkedIn and Facebook post with a themed cover image.
+                    </span>
+                  </button>
+                </div>
+              </div>
               <div class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 backdrop-blur md:p-7">
                 <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-600 dark:text-orange-300">
-                  02 · Art direction
+                  02 · Visual style
                 </p>
                 <h2 class="mt-2 text-2xl font-semibold tracking-tight text-base-content">
                   Choose a visual voice.
@@ -988,7 +1083,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     class={style_card_class(@selected_style == style.id)}
                   >
                     <span class={[
-                      "block h-24 rounded-2xl border border-white/15 shadow-inner",
+                      "block h-16 rounded-2xl border border-white/15 shadow-inner",
                       style_swatch_class(style.id)
                     ]} />
                     <span class="mt-3 flex items-start justify-between gap-3">
@@ -1014,7 +1109,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 md:p-7"
               >
                 <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-600 dark:text-orange-300">
-                  Title card
+                  03 · Opening frame
                 </p>
                 <h2 class="mt-2 text-xl font-semibold text-base-content">
                   Choose the opening frame.
@@ -1059,13 +1154,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               </div>
 
               <div
+                :if={@title_card_mode == "pexels"}
                 id="pexels-background-picker"
                 class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 md:p-7"
               >
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <p class="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-300">
-                      Optional photo backdrop
+                      Photo search
                     </p>
                     <h2 class="mt-2 text-xl font-semibold text-base-content">
                       Add a view from Pexels.
@@ -1212,140 +1308,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </p>
               </div>
 
-              <div class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 md:p-7">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.2em] text-sky-600 dark:text-sky-300">
-                      Content mode
-                    </p>
-                    <h2 class="mt-2 text-xl font-semibold text-base-content">
-                      How should we make this package?
-                    </h2>
-                    <p class="mt-1 max-w-2xl text-sm leading-6 text-base-content/60">
-                      Video creates one vertical package. Short text creates an ordered image carousel, while a longer post keeps one answer together.
-                    </p>
-                  </div>
-                  <span class="rounded-full bg-base-200 px-3 py-1 text-xs font-medium text-base-content/55">
-                    {cond do
-                      @content_mode == "video" -> "Automatic video"
-                      @content_mode == "long_form" -> "Long-form post"
-                      true -> "Short text set"
-                    end}
-                  </span>
-                </div>
-
-                <div id="content-mode-picker" class="mt-5 grid gap-3 sm:grid-cols-3">
-                  <button
-                    id="content-mode-video"
-                    type="button"
-                    phx-click="select_content_mode"
-                    phx-value-mode="video"
-                    aria-pressed={@content_mode == "video"}
-                    class={content_mode_card_class(@content_mode == "video")}
-                  >
-                    <span class="flex items-start justify-between gap-3">
-                      <span class="grid size-11 place-items-center rounded-2xl bg-sky-500 text-white shadow-lg shadow-sky-950/15">
-                        <.icon name="hero-play-circle" class="size-6" />
-                      </span>
-                      <.icon
-                        :if={@content_mode == "video"}
-                        name="hero-check-circle-solid"
-                        class="size-5 text-sky-500"
-                      />
-                    </span>
-                    <span class="mt-4 block text-base font-bold text-base-content">Video</span>
-                    <span class="mt-1 block text-sm font-semibold text-base-content/70">
-                      One combined vertical video
-                    </span>
-                    <span class="mt-2 block text-xs leading-5 text-base-content/55">
-                      Automatically ready for TikTok, Instagram, and YouTube.
-                    </span>
-                  </button>
-
-                  <button
-                    id="content-mode-text"
-                    type="button"
-                    phx-click="select_content_mode"
-                    phx-value-mode="text"
-                    aria-pressed={@content_mode == "text"}
-                    class={content_mode_card_class(@content_mode == "text")}
-                  >
-                    <span class="flex items-start justify-between gap-3">
-                      <span class="grid size-11 place-items-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-950/15">
-                        <.icon name="hero-photo" class="size-6" />
-                      </span>
-                      <.icon
-                        :if={@content_mode == "text"}
-                        name="hero-check-circle-solid"
-                        class="size-5 text-orange-500"
-                      />
-                    </span>
-                    <span class="mt-4 block text-base font-bold text-base-content">Short text</span>
-                    <span class="mt-1 block text-sm font-semibold text-base-content/70">
-                      Ordered multi-image carousel
-                    </span>
-                    <span class="mt-2 block text-xs leading-5 text-base-content/55">
-                      Buffer-ready text cards for X, LinkedIn, and Facebook with the RationalGrid CTA last.
-                    </span>
-                  </button>
-
-                  <button
-                    id="content-mode-long-form"
-                    type="button"
-                    phx-click="select_content_mode"
-                    phx-value-mode="long_form"
-                    aria-pressed={@content_mode == "long_form"}
-                    class={content_mode_card_class(@content_mode == "long_form")}
-                  >
-                    <span class="flex items-start justify-between gap-3">
-                      <span class="grid size-11 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-950/15">
-                        <.icon name="hero-document-text" class="size-6" />
-                      </span>
-                      <.icon
-                        :if={@content_mode == "long_form"}
-                        name="hero-check-circle-solid"
-                        class="size-5 text-emerald-500"
-                      />
-                    </span>
-                    <span class="mt-4 block text-base font-bold text-base-content">Longer post</span>
-                    <span class="mt-1 block text-sm font-semibold text-base-content/70">
-                      One answer with a cover
-                    </span>
-                    <span class="mt-2 block text-xs leading-5 text-base-content/55">
-                      Choose one longer answer for a full LinkedIn and Facebook post with a themed cover image.
-                    </span>
-                  </button>
-                </div>
-
-                <div
-                  id="story-package-default"
-                  class="mt-5 flex items-start gap-4 rounded-3xl border border-sky-500/25 bg-sky-500/8 p-4"
-                >
-                  <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-sky-500 text-white shadow-lg shadow-sky-950/15">
-                    <.icon name="hero-sparkles" class="size-5" />
-                  </span>
-                  <div>
-                    <%= cond do %>
-                      <% @content_mode == "video" -> %>
-                        <p class="font-bold text-base-content">Automatic video selected</p>
-                        <p class="mt-1 text-sm leading-6 text-base-content/60">
-                          All selected moments will be woven into one vertical video. Channel copy is generated automatically and can be scheduled together.
-                        </p>
-                      <% @content_mode == "long_form" -> %>
-                        <p class="font-bold text-base-content">Longer post selected</p>
-                        <p class="mt-1 text-sm leading-6 text-base-content/60">
-                          One longer answer will become a themed cover image and an editable LinkedIn and Facebook post.
-                        </p>
-                      <% true -> %>
-                        <p class="font-bold text-base-content">Short text selected</p>
-                        <p class="mt-1 text-sm leading-6 text-base-content/60">
-                          One portrait image will be generated for each selected moment. Copy stays editable for manual publishing.
-                        </p>
-                    <% end %>
-                  </div>
-                </div>
-              </div>
-
               <div
                 id="design-platform-picker"
                 class="rounded-[2rem] border border-sky-500/20 bg-sky-500/5 p-5 shadow-xl shadow-base-content/5 md:p-7"
@@ -1353,7 +1315,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p class="text-xs font-bold uppercase tracking-[0.15em] text-sky-700 dark:text-sky-200">
-                      Destinations
+                      04 · Destinations
                     </p>
                     <h2 class="mt-1 text-xl font-semibold text-base-content">
                       Where should this package go?
@@ -1400,11 +1362,21 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
             <aside id="package-brief">
               <div class="rounded-[2rem] border border-base-content/10 bg-base-100/90 p-5 shadow-xl shadow-base-content/5 md:p-6">
                 <p class="text-xs font-bold uppercase tracking-[0.2em] text-base-content/45">
-                  Package brief
+                  Ready to create
                 </p>
                 <h2 class="mt-2 text-xl font-semibold text-base-content">
-                  {@selected_count} story moments
+                  Review this package
                 </h2>
+                <p class="mt-1 text-sm text-base-content/55">
+                  <%= if @content_mode == "long_form" do %>
+                    One longer answer will become the post. Your {@selected_count}-moment story selection stays intact.
+                  <% else %>
+                    {@selected_count} {if(@selected_count == 1,
+                      do: "story moment",
+                      else: "story moments"
+                    )} will use the choices below.
+                  <% end %>
+                </p>
                 <div
                   id="selected-aspects"
                   phx-update="stream"
@@ -1747,24 +1719,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
             />
           </span>
         </span>
-        <h3 class="mt-4 text-base font-semibold leading-6 text-base-content">{@candidate.title}</h3>
-        <p :if={@candidate.excerpt} class="mt-2 line-clamp-3 text-sm leading-6 text-base-content/58">
+        <h3 class="mt-3 text-base font-semibold leading-6 text-base-content">{@candidate.title}</h3>
+        <p :if={@candidate.excerpt} class="mt-1.5 line-clamp-2 text-sm leading-6 text-base-content/58">
           {@candidate.excerpt}
         </p>
-        <div class="mt-4 flex flex-wrap items-center gap-2 text-[0.7rem] font-semibold text-base-content/50">
-          <span class="inline-flex items-center gap-1 rounded-full bg-base-200 px-2.5 py-1">
-            <.icon name="hero-bars-3-bottom-left" class="size-3.5" />
-            {@candidate.character_count} chars
-          </span>
+        <div class="mt-3 flex flex-wrap items-center gap-2 text-[0.7rem] font-semibold text-base-content/50">
           <span class="inline-flex items-center gap-1 rounded-full bg-base-200 px-2.5 py-1">
             <.icon name="hero-rectangle-stack" class="size-3.5" />
             {@candidate.slide_count} {if(@candidate.slide_count == 1, do: "slide", else: "slides")}
           </span>
           <span class="text-base-content/40">{candidate_type_description(@candidate.type)}</span>
         </div>
-        <p class="mt-auto flex items-center gap-1.5 pt-4 text-xs font-medium text-base-content/45">
-          <.icon name="hero-signal" class="size-3.5" /> {@candidate.signal}
-        </p>
       </button>
     </article>
     """
@@ -2258,25 +2223,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     end
   end
 
-  defp select_single_long_form_candidate(socket) do
-    candidate =
-      socket.assigns.all_candidates
-      |> Workflow.filter_candidates("key_node")
-      |> List.first()
-
-    case candidate do
-      nil ->
-        socket
-        |> assign(:selected_keys, MapSet.new())
-        |> assign(:selected_order, [])
-        |> assign(:selected_count, 0)
-        |> persist_studio_state()
-
-      candidate ->
-        update_selection(socket, MapSet.new([candidate.key]), [candidate.key], candidate)
-    end
-  end
-
   defp update_selection(socket, selected_keys, selected_order, candidate) do
     candidates = socket.assigns.all_candidates
     visible_candidates = Workflow.filter_candidates(candidates, socket.assigns.candidate_filter)
@@ -2341,6 +2287,13 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
          socket.assigns.selected_count,
          socket.assigns.output_asset_count
        ) do
+      socket =
+        if step == "curate" do
+          assign(socket, :candidate_filter, "all")
+        else
+          socket
+        end
+
       socket
       |> assign(:step, step)
       |> stream(
@@ -2351,10 +2304,51 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         ),
         reset: true
       )
+      |> rehydrate_step(step)
     else
       put_flash(socket, :error, step_error(step))
     end
   end
+
+  defp rehydrate_step(socket, "curate") do
+    visible_candidates =
+      Workflow.filter_candidates(socket.assigns.all_candidates, socket.assigns.candidate_filter)
+
+    stream(
+      socket,
+      :candidate_groups,
+      candidate_groups(
+        visible_candidates,
+        socket.assigns.selected_keys,
+        socket.assigns.all_candidates
+      ),
+      reset: true
+    )
+  end
+
+  defp rehydrate_step(socket, "design") do
+    photos =
+      socket.assigns.pexels_by_id
+      |> Map.values()
+      |> Enum.sort_by(&(Map.get(&1, :id) || Map.get(&1, "id")))
+
+    stream(socket, :pexels_photos, photos, reset: true)
+  end
+
+  defp rehydrate_step(socket, "review") do
+    assets =
+      socket.assigns.output_asset_ids
+      |> Enum.sort()
+      |> Enum.map(&Campaigns.get_media_asset/1)
+      |> Enum.filter(&match?(%MediaAsset{}, &1))
+      |> Enum.filter(&(&1.campaign_id == socket.assigns.campaign.id))
+
+    socket
+    |> stream(:output_assets, assets, reset: true)
+    |> refresh_review_drafts()
+  end
+
+  defp rehydrate_step(socket, _step), do: socket
 
   defp complete_generation(socket, %{assets: [], errors: errors}) do
     {:noreply,
@@ -2837,11 +2831,15 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp maybe_text_quote_candidates(candidates, _mode, _all_candidates), do: candidates
 
-  defp maybe_long_form_candidates(candidates, "long_form") do
-    Enum.filter(candidates, &(&1.type == "key_node")) |> Enum.take(1)
+  defp maybe_long_form_candidates(candidates, "long_form", all_candidates) do
+    candidate =
+      Enum.find(candidates, &(&1.type == "key_node")) ||
+        Enum.find(all_candidates, &(&1.type == "key_node"))
+
+    if candidate, do: [candidate], else: []
   end
 
-  defp maybe_long_form_candidates(candidates, _mode), do: candidates
+  defp maybe_long_form_candidates(candidates, _mode, _all_candidates), do: candidates
 
   defp quote_candidate?(%{type: type}) when type in ["question", "highlight", "key_node"],
     do: true
@@ -3116,7 +3114,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp candidate_card_class(selected?) do
     [
-      "min-h-60 rounded-3xl border p-5 hover:-translate-y-0.5 hover:shadow-xl",
+      "rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-lg",
       if(selected?,
         do: "border-orange-500/50 bg-orange-500/8 shadow-lg shadow-orange-950/5",
         else: "border-base-content/10 bg-base-100 hover:border-base-content/20"

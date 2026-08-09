@@ -4,24 +4,30 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
   import Phoenix.LiveViewTest
 
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Studio.Workflow
 
   test "redirects safely when the campaign no longer exists", %{conn: conn} do
     assert {:error, {:redirect, %{to: "/"}}} = live(conn, "/campaigns/999999/studio")
   end
 
-  test "surfaces and preselects the recommended conversation starter", %{conn: conn} do
+  test "surfaces the recommended conversation starter without selecting it", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-curation")
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
     assert has_element?(view, "#guided-share-studio")
-    assert has_element?(view, "#open-post-review[href='/posts/review']", "Review proposed posts")
+    assert has_element?(view, "#open-post-review[href='/posts/review']", "All posts")
     assert has_element?(view, "#stage-curate")
     assert has_element?(view, "#studio-progress")
-    assert has_element?(view, "#candidate-type-legend", "Longer answers · multi-slide ideas")
     assert has_element?(view, "#content-candidates [id^='select-aspect-question-']")
-    assert has_element?(view, "#content-candidates", "chars")
     assert has_element?(view, "#content-candidates", "slide")
+    assert has_element?(view, "#content-candidates", "Best opener")
+    assert has_element?(view, "#story-queue", "0 of 6 moments selected")
+    refute has_element?(view, "#selected-aspects", "If a drug like soma existed today...")
+    assert has_element?(view, "#continue-to-design[disabled]")
+
+    select_recommended_question(view, campaign)
+
     assert has_element?(view, "#selected-aspects", "If a drug like soma existed today...")
     assert has_element?(view, "#continue-to-design:not([disabled])")
 
@@ -43,6 +49,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#content-candidates", "What evidence would change your mind?")
     assert has_element?(view, "#content-candidates", "Found inside “The case for uncertainty”.")
 
+    select_recommended_question(view, campaign)
     view |> element("#continue-to-design") |> render_click()
     view |> element("#create-story-package") |> render_click()
     await_generation(view)
@@ -66,6 +73,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
+    select_recommended_question(view, campaign)
+
     view
     |> element("#select-aspect-highlight-123")
     |> render_click()
@@ -83,7 +92,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#guided-style-minimal_dark", "Minimal dark")
     assert has_element?(view, "#content-mode-video")
     assert has_element?(view, "#content-mode-text")
-    assert has_element?(view, "#content-mode-long-form", "Longer post")
+    assert has_element?(view, "#content-mode-long-form", "Long post")
     assert has_element?(view, "#pexels-background-picker")
     assert has_element?(view, "#package-brief")
     assert has_element?(view, "#studio-progress > li:nth-child(3)")
@@ -91,6 +100,28 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     refute has_element?(view, "#progress-step-generate")
     assert has_element?(view, "#guided-style-picker > button:nth-child(6)")
     refute has_element?(view, "#guided-style-picker > button:nth-child(7)")
+
+    view |> element("#back-to-curate") |> render_click()
+
+    assert has_element?(view, "#stage-curate")
+    assert has_element?(view, "#content-candidates [id^='select-aspect-']")
+    assert has_element?(view, "#story-queue", "3 of 6 moments selected")
+
+    view |> element("#continue-to-design") |> render_click()
+
+    assert has_element?(view, "#stage-design")
+    assert has_element?(view, "#package-brief", "3 story moments")
+
+    view |> element("#content-mode-long-form") |> render_click()
+    assert has_element?(view, "#package-brief", "3-moment story selection stays intact")
+
+    view |> element("#back-to-curate") |> render_click()
+    assert has_element?(view, "#content-candidates [id^='select-aspect-question-']")
+    assert has_element?(view, "#story-queue", "3 of 6 moments selected")
+
+    view |> element("#continue-to-design") |> render_click()
+    view |> element("#content-mode-video") |> render_click()
+    assert has_element?(view, "#package-brief", "3 story moments")
 
     view
     |> element("#guided-style-warm_paper")
@@ -146,13 +177,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
+    view |> element("#select-aspect-key-node-1") |> render_click()
     view |> element("#continue-to-design") |> render_click()
     view |> element("#content-mode-long-form") |> render_click()
 
-    assert has_element?(view, "#story-package-default", "Longer post selected")
+    assert has_element?(view, "#content-mode-long-form", "Long post")
 
     assert has_element?(view, "#design-platform-summary", "LinkedIn and Facebook")
-    assert has_element?(view, "#selected-aspects", "Longer answer")
+    assert has_element?(view, "#package-brief", "story selection stays intact")
     assert has_element?(view, "#create-story-package", "Create post")
   end
 
@@ -161,6 +193,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
+    select_recommended_question(view, campaign)
     view |> element("#select-aspect-highlight-123") |> render_click()
     view |> element("#select-aspect-key-node-1") |> render_click()
     view |> element("#continue-to-design") |> render_click()
@@ -183,6 +216,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
+    select_recommended_question(view, campaign)
     view |> element("#continue-to-design") |> render_click()
     view |> element("#content-mode-text") |> render_click()
     view |> element("#create-story-package") |> render_click()
@@ -204,6 +238,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(resumed_view, "#guided-output-#{asset.id}")
     assert has_element?(resumed_view, "#guided-review-drafts article")
     assert has_element?(resumed_view, "#resume-package-#{batch_id}")
+
+    resumed_view |> element("#revise-package") |> render_click()
+    assert has_element?(resumed_view, "#stage-design")
+    assert has_element?(resumed_view, "#package-brief", "story moment")
+
+    resumed_view |> element("#progress-step-review") |> render_click()
+    assert has_element?(resumed_view, "#guided-output-#{asset.id}")
+    assert has_element?(resumed_view, "#guided-review-drafts article")
   end
 
   test "edits and approves associated copy during review", %{conn: conn} do
@@ -211,6 +253,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
+    select_recommended_question(view, campaign)
     view |> element("#continue-to-design") |> render_click()
     view |> element("#content-mode-text") |> render_click()
     view |> element("#create-story-package") |> render_click()
@@ -282,6 +325,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
       Process.sleep(100)
       await_generation(view, attempts - 1)
     end
+  end
+
+  defp select_recommended_question(view, campaign) do
+    candidate = Enum.find(Workflow.candidates(campaign), & &1.recommended?)
+    view |> element("#select-aspect-#{candidate.dom_id}") |> render_click()
   end
 
   defp simplified_payload do

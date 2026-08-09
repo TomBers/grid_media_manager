@@ -34,17 +34,7 @@ defmodule GridMediaManager.Studio.Workflow do
       [grid_candidate(campaign)]
   end
 
-  def default_selection(candidates) when is_list(candidates) do
-    candidate =
-      Enum.find(candidates, & &1.recommended?) ||
-        Enum.find(candidates, &(&1.type == "highlight")) ||
-        Enum.find(candidates, &(&1.type == "grid"))
-
-    case candidate do
-      nil -> MapSet.new()
-      candidate -> MapSet.new([candidate.key])
-    end
-  end
+  def default_selection(candidates) when is_list(candidates), do: MapSet.new()
 
   def selected_candidates(candidates, %MapSet{} = selected_keys) when is_list(candidates) do
     Enum.filter(candidates, &MapSet.member?(selected_keys, &1.key))
