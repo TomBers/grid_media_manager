@@ -68,16 +68,6 @@ const PALETTES = {
     muted: "#fdba74",
     accent: "#f59e0b",
   },
-  signal_red: {
-    canvas: ["#2b0709", "#7f1d1d", "#111827"],
-    card: "rgba(24,10,11,0.82)",
-    panel: "rgba(255,241,242,0.08)",
-    border: "rgba(254,205,211,0.2)",
-    text: "#fff7ed",
-    secondary: "#fecaca",
-    muted: "#fda4af",
-    accent: "#fb7185",
-  },
   deep_ocean: {
     canvas: ["#082f49", "#0f172a", "#164e63"],
     card: "rgba(6,17,31,0.84)",
@@ -89,14 +79,14 @@ const PALETTES = {
     accent: "#67e8f9",
   },
   newsprint: {
-    canvas: ["#f5f0e6", "#d6c8b6"],
-    card: "rgba(250,247,240,0.94)",
-    panel: "rgba(255,253,248,0.84)",
-    border: "rgba(120,113,108,0.62)",
+    canvas: ["#f7f1e5", "#d8c9b5", "#eee4d4"],
+    card: "rgba(255,252,245,0.94)",
+    panel: "rgba(250,246,237,0.9)",
+    border: "rgba(87,83,78,0.42)",
     text: "#1c1917",
     secondary: "#44403c",
     muted: "#78716c",
-    accent: "#991b1b",
+    accent: "#9f1239",
   },
 }
 

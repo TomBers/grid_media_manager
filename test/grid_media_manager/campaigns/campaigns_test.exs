@@ -43,6 +43,8 @@ defmodule GridMediaManager.CampaignsTest do
     assert Enum.map(styles, & &1.id) |> Enum.uniq() |> length() == length(styles)
     assert Enum.any?(styles, &(&1.id == "minimal_light"))
     assert Enum.any?(styles, &(&1.id == "editorial_dark"))
+    assert Enum.any?(styles, &(&1.id == "newsprint"))
+    refute Enum.any?(styles, &(&1.id == "signal_red"))
     assert ShareCard.normalize_style("not-a-style") == ShareCard.default_style()
   end
 

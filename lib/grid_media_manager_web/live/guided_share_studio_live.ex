@@ -691,6 +691,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       <div
         id="guided-share-studio"
         phx-hook="PreserveScrollPosition"
+        data-step={@step}
         class="relative isolate min-h-screen overflow-hidden px-4 py-8 sm:px-6 lg:px-8 lg:py-10"
       >
         <div class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[34rem] bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.17),transparent_38%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.13),transparent_36%)]" />
@@ -3585,14 +3586,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp style_swatch_class("warm_paper"),
     do: "bg-gradient-to-br from-amber-200 via-orange-700 to-stone-900"
 
-  defp style_swatch_class("signal_red"),
-    do: "bg-gradient-to-br from-rose-300 via-red-800 to-amber-500"
-
   defp style_swatch_class("deep_ocean"),
     do: "bg-gradient-to-br from-cyan-300 via-sky-950 to-emerald-400"
 
   defp style_swatch_class("newsprint"),
-    do: "bg-gradient-to-br from-stone-100 via-amber-100 to-red-800"
+    do: "bg-gradient-to-br from-stone-50 via-amber-100 to-rose-800"
 
   defp style_swatch_class(_style), do: "bg-base-300"
 

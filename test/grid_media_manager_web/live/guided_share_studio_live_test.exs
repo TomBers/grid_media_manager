@@ -15,7 +15,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
-    assert has_element?(view, "#guided-share-studio")
+    assert has_element?(view, "#guided-share-studio[data-step='curate']")
     refute has_element?(view, "#previous-outputs")
     assert has_element?(view, "#stage-curate")
     assert has_element?(view, "#studio-progress")
@@ -153,6 +153,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     |> render_click()
 
     assert has_element?(view, "#stage-design")
+    assert has_element?(view, "#guided-share-studio[data-step='design']")
     assert has_element?(view, "#guided-style-minimal_light", "Minimal light")
     assert has_element?(view, "#guided-style-minimal_dark", "Minimal dark")
     assert has_element?(view, "#content-mode-video")
@@ -206,6 +207,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     await_generation(view)
 
     assert has_element?(view, "#stage-review")
+    assert has_element?(view, "#guided-share-studio[data-step='review']")
     assert has_element?(view, "#guided-output-assets article")
     assert has_element?(view, "#guided-review-drafts article")
 

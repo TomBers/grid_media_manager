@@ -42,10 +42,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
       category: "Warm"
     },
     %{
-      id: "signal_red",
-      label: "Signal red",
-      description: "High urgency · debate prompts and bold hooks",
-      category: "Bold"
+      id: "newsprint",
+      label: "Newsprint",
+      description: "Cream paper and ink · essays and considered ideas",
+      category: "Classic"
     },
     %{
       id: "deep_ocean",
