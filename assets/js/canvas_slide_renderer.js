@@ -680,10 +680,11 @@ export const CanvasSlideRenderer = {
         if (status) status.textContent = "Finished assets saved"
       }
 
-      if (this.root.dataset.videoPreviewId) {
+      const automaticSave = this.root.dataset.videoPreviewId || this.root.dataset.autoSave === "true"
+      if (automaticSave) {
         if (this.uploadedFrameFingerprint !== fingerprint && !this.uploadingFrames) {
           await this.uploadFrames({automatic: true, fingerprint})
-        } else {
+        } else if (this.root.dataset.videoPreviewId) {
           this.loadVideoFallback()
         }
       }

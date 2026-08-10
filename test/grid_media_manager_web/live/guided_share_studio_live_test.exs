@@ -278,6 +278,72 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert List.last(carousel.metadata["slides"])["title"] == "Continue on RationalGrid.ai"
   end
 
+  test "creates video and image outputs together from one design", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-bundle")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
+
+    select_recommended_question(view, campaign)
+    view |> element("#select-aspect-highlight-123") |> render_click()
+    view |> element("#continue-to-design") |> render_click()
+
+    assert has_element?(view, "#content-mode-bundle", "Video + carousel")
+    view |> element("#content-mode-bundle") |> render_click()
+
+    assert has_element?(view, "#design-platform-summary", "Text cards will be posted")
+    assert has_element?(view, "#create-story-package", "Create both")
+
+    view |> element("#create-story-package") |> render_click()
+    await_generation(view)
+
+    assets = Campaigns.list_media_assets(campaign)
+    carousel = Enum.find(assets, &(&1.kind == "curated_carousel"))
+    video = Enum.find(assets, &(&1.kind == "curated_carousel_video"))
+    assert carousel
+    assert video
+    assert has_element?(view, "#guided-output-assets article:nth-child(2)")
+    assert has_element?(view, "#curated-carousel-slides-#{carousel.id}[data-auto-save='true']")
+    assert has_element?(view, "#curated-carousel-slides-#{video.id}[data-auto-save='true']")
+    assert has_element?(view, "#guided-bulk-schedule-form", "Publish text and video posts")
+    assert has_element?(view, "#guided-platform-summary", "Text cards will be posted")
+    refute has_element?(view, "#create-companion-carousel")
+
+    drafts = Campaigns.list_post_drafts(campaign)
+
+    assert Enum.all?(
+             Enum.filter(drafts, &(&1.platform in ["x", "linkedin", "facebook"])),
+             &(&1.media_asset_id == carousel.id)
+           )
+
+    assert Enum.all?(
+             Enum.filter(drafts, &(&1.platform in ["tiktok", "instagram", "youtube"])),
+             &(&1.media_asset_id == video.id)
+           )
+  end
+
+  test "creates an image carousel directly from video review", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-companion")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
+
+    select_recommended_question(view, campaign)
+    view |> element("#continue-to-design") |> render_click()
+    view |> element("#content-mode-video") |> render_click()
+    view |> element("#create-story-package") |> render_click()
+    await_generation(view)
+
+    assert has_element?(view, "#create-companion-carousel", "Create image carousel")
+    view |> element("#create-companion-carousel") |> render_click()
+    render_async(view, 30_000)
+
+    carousel =
+      Campaigns.list_media_assets(campaign) |> Enum.find(&(&1.kind == "curated_carousel"))
+
+    assert carousel
+    assert has_element?(view, "#guided-output-#{carousel.id}")
+    refute has_element?(view, "#create-companion-carousel")
+  end
+
   test "restores the generated post screen after a refresh", %{conn: conn} do
     assert {:ok, campaign} =
              Campaigns.import_payload(simplified_payload(), "guided-resume-review")
@@ -314,6 +380,51 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     resumed_view |> element("#progress-step-review") |> render_click()
     assert has_element?(resumed_view, "#guided-output-#{asset.id}")
     assert has_element?(resumed_view, "#guided-review-drafts article")
+  end
+
+  test "review restores scheduling channels from its assets instead of stale design state", %{
+    conn: conn
+  } do
+    assert {:ok, campaign} =
+             Campaigns.import_payload(simplified_payload(), "guided-review-platforms")
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
+
+    select_recommended_question(view, campaign)
+    view |> element("#continue-to-design") |> render_click()
+    view |> element("#content-mode-video") |> render_click()
+    view |> element("#create-story-package") |> render_click()
+    await_generation(view)
+
+    video = Campaigns.list_media_assets(campaign) |> Enum.find(&(&1.mime_type == "video/mp4"))
+    assert video
+
+    assert {:ok, _campaign} =
+             Campaigns.save_guided_studio_state(campaign, %{
+               "content_mode" => "long_form",
+               "selected_format" => "long_form",
+               "selected_platforms" => ["linkedin", "facebook"]
+             })
+
+    review_path =
+      ~p"/campaigns/#{campaign.id}/studio?#{[step: "review", assets: Integer.to_string(video.id), platform: "tiktok,youtube,instagram", asset: "all"]}"
+
+    {:ok, resumed_view, _html} = live(conn, review_path)
+
+    assert has_element?(
+             resumed_view,
+             "#guided-platform-summary",
+             "The video will be posted to TikTok, Instagram, and YouTube"
+           )
+
+    assert has_element?(
+             resumed_view,
+             "#guided-bulk-schedule-form",
+             "Publish TikTok, Instagram, and YouTube posts at (UTC)"
+           )
+
+    assert has_element?(resumed_view, "#guided-review-drafts article")
+    refute has_element?(resumed_view, "#empty-guided-review-drafts:only-child")
   end
 
   test "edits and approves associated copy during review", %{conn: conn} do

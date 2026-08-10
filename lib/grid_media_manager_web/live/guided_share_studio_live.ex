@@ -35,6 +35,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       icon: "hero-play-circle"
     },
     %{
+      id: "combined_carousel",
+      label: "Video + image carousel",
+      size: "One MP4 + portrait PNGs",
+      description:
+        "Create the vertical video and editable image carousel together from the same story.",
+      icon: "hero-squares-2x2"
+    },
+    %{
       id: "long_form",
       label: "Long-form LinkedIn/Facebook post",
       size: "One portrait cover + full answer",
@@ -79,11 +87,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     restored_asset_filter = restore_asset_filter(params, restored_asset_ids)
     restored_video_only? = restored_assets != [] and Enum.all?(restored_assets, &video_asset?/1)
 
-    restored_content_mode =
-      if restored_assets == [] or Enum.any?(restored_assets, &video_asset?/1),
-        do: "video",
-        else: "text"
-
     previous_packages = previous_output_packages(campaign)
     studio_state = Campaigns.guided_studio_state(campaign)
     selected_keys = restored_selected_keys(candidates, studio_state)
@@ -93,29 +96,42 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
     expanded_thread_ids = initial_expanded_thread_ids(candidates, selected_keys)
 
-    restored_content_mode = Map.get(studio_state, "content_mode", restored_content_mode)
-    restored_format = Map.get(studio_state, "selected_format")
+    saved_content_mode = Map.get(studio_state, "content_mode")
 
-    restored_format =
-      if Enum.any?(@formats, &(&1.id == restored_format)) do
-        restored_format
-      else
-        case restored_content_mode do
-          "video" -> "story_video"
-          "long_form" -> "long_form"
-          _ -> "portrait"
-        end
+    restored_content_mode =
+      cond do
+        restored_assets != [] -> content_mode_for_assets(restored_assets)
+        saved_content_mode in ["video", "bundle", "text", "long_form"] -> saved_content_mode
+        true -> "video"
       end
 
-    restored_platforms =
+    saved_format = Map.get(studio_state, "selected_format")
+
+    restored_format =
+      if restored_assets == [] and Enum.any?(@formats, &(&1.id == saved_format)) do
+        saved_format
+      else
+        format_for_content_mode(restored_content_mode)
+      end
+
+    available_platforms =
       if restored_assets == [],
         do: platforms_for_mode(restored_content_mode),
         else: platforms_for_assets(restored_assets)
 
-    saved_platforms = Map.get(studio_state, "selected_platforms", [])
-    available_platforms = platforms_for_mode(restored_content_mode)
+    requested_platforms = requested_review_platforms(params, available_platforms)
+
+    saved_platforms =
+      if restored_assets == [], do: Map.get(studio_state, "selected_platforms", []), else: []
+
     saved_platforms = Enum.filter(saved_platforms, &(&1 in available_platforms))
-    restored_platforms = if saved_platforms == [], do: restored_platforms, else: saved_platforms
+
+    restored_platforms =
+      cond do
+        requested_platforms != [] -> requested_platforms
+        saved_platforms != [] -> saved_platforms
+        true -> available_platforms
+      end
 
     restored_style = ShareCard.normalize_style(Map.get(studio_state, "selected_style"))
 
@@ -151,7 +167,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:output_asset_count, length(restored_assets))
       |> assign(:output_video_only?, restored_video_only?)
       |> assign(:review_draft_count, 0)
+      |> assign(:review_pending_count, 0)
       |> assign(:review_schedulable_count, 0)
+      |> assign(:bulk_schedule_ready?, false)
       |> assign(:preview_mode?, true)
       |> assign(:bulk_schedule_form, to_form(%{"scheduled_for" => ""}, as: :bulk_schedule))
       |> assign(:previous_package_count, length(previous_packages))
@@ -203,8 +221,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     {:noreply,
      socket
      |> assign(:generation_in_progress?, false)
-     |> assign(:generation_error, "Video generation failed before a package could be created.")
-     |> put_flash(:error, "Video generation failed. Try again or adjust the selection.")}
+     |> assign(:generation_error, "Media generation failed before a package could be created.")
+     |> put_flash(:error, "Media generation failed. Try again or adjust the selection.")}
   end
 
   @impl true
@@ -297,23 +315,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   def handle_event("select_content_mode", %{"mode" => mode}, socket)
-      when mode in ["video", "text", "long_form"] do
-    selected_format =
-      case mode do
-        "video" -> "story_video"
-        "long_form" -> "long_form"
-        _ -> "portrait"
-      end
-
-    selected_platforms = platforms_for_mode(mode)
-
-    socket =
-      socket
-      |> assign(:content_mode, mode)
-      |> assign(:selected_format, selected_format)
-      |> assign(:selected_platforms, selected_platforms)
-
-    {:noreply, persist_studio_state(socket)}
+      when mode in ["video", "bundle", "text", "long_form"] do
+    {:noreply, socket |> put_content_mode(mode) |> persist_studio_state()}
   end
 
   def handle_event("select_content_mode", _params, socket), do: {:noreply, socket}
@@ -393,35 +396,36 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   def handle_event("generate_package", _params, socket) do
-    selected_candidates =
-      socket.assigns.all_candidates
-      |> Workflow.selected_candidates(socket.assigns.selected_order)
-      |> maybe_text_quote_candidates(socket.assigns.content_mode, socket.assigns.all_candidates)
-      |> maybe_long_form_candidates(
-        socket.assigns.content_mode,
-        socket.assigns.all_candidates
-      )
+    {:noreply, start_package_generation(socket, socket.assigns.content_mode)}
+  end
 
-    format =
-      case socket.assigns.content_mode do
-        "text" -> "portrait"
-        "long_form" -> "long_form"
-        _ -> socket.assigns.selected_format
-      end
-
-    campaign = socket.assigns.campaign
-    style = socket.assigns.selected_style
-
-    socket =
-      socket
-      |> assign(:generation_in_progress?, true)
-      |> assign(:generation_error, nil)
-      |> start_async(:generate_package, fn ->
-        Workflow.generate(campaign, selected_candidates, style: style, format: format)
-      end)
-
+  def handle_event(
+        "generate_companion",
+        _params,
+        %{assigns: %{generation_in_progress?: true}} = socket
+      ) do
     {:noreply, socket}
   end
+
+  def handle_event("generate_companion", %{"mode" => "text"}, socket) do
+    socket = socket |> put_content_mode("text") |> persist_studio_state()
+
+    case existing_companion_carousel(socket) do
+      %MediaAsset{} = carousel ->
+        assets =
+          case Campaigns.assign_generation_batch([carousel]) do
+            {:ok, updated_assets} -> updated_assets
+            {:error, _reason} -> [carousel]
+          end
+
+        complete_generation(socket, %{assets: assets, errors: []})
+
+      nil ->
+        {:noreply, start_package_generation(socket, "text")}
+    end
+  end
+
+  def handle_event("generate_companion", _params, socket), do: {:noreply, socket}
 
   def handle_event("toggle_platform", %{"platform" => platform}, socket) do
     available = platforms_for_mode(socket.assigns.content_mode)
@@ -624,40 +628,32 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         %{"bulk_schedule" => %{"scheduled_for" => scheduled_for}},
         socket
       ) do
-    drafts =
+    pending_drafts =
       socket.assigns.campaign
       |> Campaigns.list_post_drafts()
       |> Enum.filter(&(&1.platform in socket.assigns.selected_platforms))
       |> Enum.filter(&review_draft?(socket, &1))
       |> deduplicate_review_drafts()
+      |> Enum.filter(&PostDraft.schedulable?/1)
+
+    drafts =
+      pending_drafts
       |> schedulable_drafts()
-      |> Enum.reject(&(&1.status == "scheduled"))
-
-    results = Enum.map(drafts, &Campaigns.schedule_post_draft(&1.id, scheduled_for))
-    scheduled_count = Enum.count(results, &match?({:ok, _draft}, &1))
-    failed_count = length(results) - scheduled_count
-
-    socket = refresh_review_drafts(socket)
 
     cond do
-      drafts == [] ->
+      pending_drafts == [] ->
         {:noreply, put_flash(socket, :info, "All matching posts are already scheduled.")}
 
-      failed_count == 0 ->
-        {:noreply,
-         put_flash(
-           socket,
-           :info,
-           "Scheduled #{scheduled_count} #{if(scheduled_count == 1, do: "post", else: "posts")} through Buffer."
-         )}
-
-      true ->
+      socket.assigns.content_mode == "bundle" and length(drafts) != length(pending_drafts) ->
         {:noreply,
          put_flash(
            socket,
            :error,
-           "Scheduled #{scheduled_count} posts; #{failed_count} could not be scheduled. Check Buffer connections."
+           "The combined package is still preparing. Save both media assets before scheduling all channels together."
          )}
+
+      true ->
+        schedule_bulk_drafts(socket, drafts, scheduled_for)
     end
   end
 
@@ -1153,13 +1149,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   <span class="rounded-full bg-base-200 px-3 py-1 text-xs font-medium text-base-content/55">
                     {cond do
                       @content_mode == "video" -> "Vertical video"
+                      @content_mode == "bundle" -> "Video + carousel"
                       @content_mode == "long_form" -> "Long-form post"
                       true -> "Image carousel"
                     end}
                   </span>
                 </div>
 
-                <div id="content-mode-picker" class="mt-5 grid gap-3 sm:grid-cols-3">
+                <div id="content-mode-picker" class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <button
                     id="content-mode-video"
                     type="button"
@@ -1184,6 +1181,35 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     </span>
                     <span class="mt-2 block text-xs leading-5 text-base-content/55">
                       Automatically ready for TikTok, Instagram, and YouTube.
+                    </span>
+                  </button>
+
+                  <button
+                    id="content-mode-bundle"
+                    type="button"
+                    phx-click="select_content_mode"
+                    phx-value-mode="bundle"
+                    aria-pressed={@content_mode == "bundle"}
+                    class={content_mode_card_class(@content_mode == "bundle")}
+                  >
+                    <span class="flex items-start justify-between gap-3">
+                      <span class="grid size-11 place-items-center rounded-2xl bg-violet-500 text-white shadow-lg shadow-violet-950/15">
+                        <.icon name="hero-squares-2x2" class="size-6" />
+                      </span>
+                      <.icon
+                        :if={@content_mode == "bundle"}
+                        name="hero-check-circle-solid"
+                        class="size-5 text-violet-500"
+                      />
+                    </span>
+                    <span class="mt-4 block text-base font-bold text-base-content">
+                      Video + carousel
+                    </span>
+                    <span class="mt-1 block text-sm font-semibold text-base-content/70">
+                      Create both together
+                    </span>
+                    <span class="mt-2 block text-xs leading-5 text-base-content/55">
+                      One story and style, packaged for every supported social channel.
                     </span>
                   </button>
 
@@ -1630,6 +1656,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     {cond do
                       @generation_in_progress? -> "Creating…"
                       @content_mode == "video" -> "Create video"
+                      @content_mode == "bundle" -> "Create both"
                       @content_mode == "long_form" -> "Create post"
                       true -> "Create carousel"
                     end}
@@ -1652,6 +1679,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   <h2 class="mt-1 text-xl font-semibold text-base-content">
                     {cond do
                       @output_video_only? -> "Review the combined video and its copy."
+                      @content_mode == "bundle" -> "Review the video, image carousel and copy."
                       @content_mode == "text" -> "Review the image carousel and edit its copy."
                       @content_mode == "long_form" -> "Review the cover image and longer post."
                       true -> "Review the visuals and their copy together."
@@ -1666,6 +1694,21 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </div>
               </div>
               <div class="flex shrink-0 flex-wrap justify-end gap-2">
+                <button
+                  :if={@output_video_only?}
+                  id="create-companion-carousel"
+                  type="button"
+                  phx-click="generate_companion"
+                  phx-value-mode="text"
+                  disabled={@generation_in_progress?}
+                  class="inline-flex items-center justify-center rounded-2xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-950/15 transition hover:-translate-y-0.5 hover:bg-orange-400 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <.icon name="hero-photo" class="mr-2 size-4" />
+                  {if(@generation_in_progress?,
+                    do: "Creating carousel…",
+                    else: "Create image carousel"
+                  )}
+                </button>
                 <.link
                   id="review-all-proposed-posts"
                   navigate={~p"/posts/review"}
@@ -1749,6 +1792,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     selected={@selected_output_asset_id == Integer.to_string(asset.id)}
                     preview_slide={Map.get(@carousel_preview_slides, asset.id, 1)}
                     wide={@output_asset_count == 1}
+                    auto_save={@content_mode == "bundle"}
                     cover_image_url={
                       pexels_cover_url(
                         @selected_pexels_background,
@@ -1766,22 +1810,27 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   </p>
                   <h3 class="mt-2 text-xl font-semibold text-base-content">
                     {cond do
+                      @content_mode == "bundle" -> "Edit the carousel and video copy."
                       @content_mode == "text" -> "Edit the copy for these images."
                       @content_mode == "long_form" -> "Edit the longer post."
                       true -> "Write the post for this visual."
                     end}
                   </h3>
                   <p class="mt-1 text-sm leading-6 text-base-content/60">
-                    <%= if @content_mode == "text" do %>
-                      Refine each caption, then schedule the X, LinkedIn, and Facebook posts together below.
+                    <%= if @content_mode == "bundle" do %>
+                      Choose one publishing time below. Text channels will use the image carousel; TikTok, Instagram, and YouTube will use the video.
                     <% else %>
-                      <%= if @content_mode == "long_form" do %>
-                        The full answer is kept in one editable post with the themed cover image above. It will be scheduled to LinkedIn and Facebook.
+                      <%= if @content_mode == "text" do %>
+                        Refine each caption, then schedule the X, LinkedIn, and Facebook posts together below.
                       <% else %>
-                        <%= if @selected_output_asset_id == "all" do %>
-                          Showing copy across all visuals. Select one above to focus on a single visual.
+                        <%= if @content_mode == "long_form" do %>
+                          The full answer is kept in one editable post with the themed cover image above. It will be scheduled to LinkedIn and Facebook.
                         <% else %>
-                          The drafts below belong to the visual selected above. The same reviewed copy will be posted to TikTok, Instagram, and YouTube.
+                          <%= if @selected_output_asset_id == "all" do %>
+                            Showing copy across all visuals. Select one above to focus on a single visual.
+                          <% else %>
+                            The drafts below belong to the visual selected above. The same reviewed copy will be posted to TikTok, Instagram, and YouTube.
+                          <% end %>
                         <% end %>
                       <% end %>
                     <% end %>
@@ -1789,7 +1838,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </div>
 
                 <div
-                  :if={@content_mode in ["video", "long_form"]}
+                  :if={@content_mode in ["video", "bundle", "long_form"]}
                   class="mt-4 flex items-center gap-2 rounded-2xl bg-sky-500/10 px-3 py-2.5 text-xs font-semibold text-sky-800 dark:text-sky-100"
                 >
                   <.icon name="hero-information-circle" class="size-4 shrink-0" />
@@ -1800,7 +1849,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </div>
 
                 <div
-                  :if={@content_mode in ["video", "long_form"]}
+                  :if={@content_mode in ["video", "bundle", "long_form"]}
                   id="guided-platform-summary"
                   class="mt-5 rounded-2xl border border-base-content/10 bg-base-200/50 px-4 py-3 text-sm font-semibold text-base-content"
                 >
@@ -1813,7 +1862,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </div>
 
                 <.form
-                  :if={@content_mode in ["video", "text", "long_form"]}
+                  :if={@content_mode in ["video", "bundle", "text", "long_form"]}
                   for={@bulk_schedule_form}
                   id="guided-bulk-schedule-form"
                   phx-submit="schedule_selected_drafts"
@@ -1840,12 +1889,16 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   <button
                     id="guided-schedule-selected-drafts"
                     type="submit"
-                    disabled={@review_schedulable_count == 0}
+                    disabled={not @bulk_schedule_ready?}
                     phx-confirm="This will create live posts in Buffer for the selected channels. Continue only after reviewing the media and copy."
                     class="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-lg shadow-emerald-950/15 transition hover:-translate-y-0.5 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <.icon name="hero-calendar-days" class="mr-1.5 size-4" />
-                    Publish {@review_schedulable_count} posts
+                    <%= if @content_mode == "bundle" and not @bulk_schedule_ready? and @review_pending_count > 0 do %>
+                      Preparing {@review_schedulable_count} of {@review_pending_count} posts…
+                    <% else %>
+                      Publish {@review_schedulable_count} posts
+                    <% end %>
                   </button>
                 </.form>
 
@@ -1986,6 +2039,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   attr :selected, :boolean, required: true
   attr :preview_slide, :integer, default: 1
   attr :wide, :boolean, default: false
+  attr :auto_save, :boolean, default: false
   attr :cover_image_url, :string, default: nil
 
   defp output_asset_card(assigns) do
@@ -2053,6 +2107,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         data-logo-src="/images/rg_logo.webp"
         data-upload-url={client_artifact_upload_url(@asset)}
         data-asset-id={@asset.id}
+        data-auto-save={if(@auto_save, do: "true", else: "false")}
         data-renderer-version={ArtifactStore.renderer_version()}
         data-artifacts-ready={if(@artifacts_ready?, do: "true", else: "false")}
         class={[
@@ -2498,6 +2553,79 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     end
   end
 
+  defp put_content_mode(socket, mode) do
+    socket
+    |> assign(:content_mode, mode)
+    |> assign(:selected_format, format_for_content_mode(mode))
+    |> assign(:selected_platforms, platforms_for_mode(mode))
+  end
+
+  defp format_for_content_mode("video"), do: "story_video"
+  defp format_for_content_mode("bundle"), do: "combined_carousel"
+  defp format_for_content_mode("long_form"), do: "long_form"
+  defp format_for_content_mode(_mode), do: "portrait"
+
+  defp content_mode_for_assets(assets) do
+    video? = Enum.any?(assets, &video_asset?/1)
+    visual? = Enum.any?(assets, &(not video_asset?(&1)))
+
+    cond do
+      video? and visual? -> "bundle"
+      video? -> "video"
+      Enum.any?(assets, &(&1.kind == "long_form_post")) -> "long_form"
+      true -> "text"
+    end
+  end
+
+  defp requested_review_platforms(%{"platform" => platforms}, available_platforms)
+       when is_binary(platforms) do
+    requested = platforms |> String.split(",", trim: true) |> MapSet.new()
+    Enum.filter(available_platforms, &MapSet.member?(requested, &1))
+  end
+
+  defp requested_review_platforms(_params, _available_platforms), do: []
+
+  defp start_package_generation(socket, content_mode) do
+    selected_candidates =
+      socket.assigns.all_candidates
+      |> Workflow.selected_candidates(socket.assigns.selected_order)
+      |> maybe_text_quote_candidates(content_mode, socket.assigns.all_candidates)
+      |> maybe_long_form_candidates(content_mode, socket.assigns.all_candidates)
+
+    format =
+      case content_mode do
+        "text" -> "portrait"
+        "bundle" -> "combined_carousel"
+        "long_form" -> "long_form"
+        _ -> socket.assigns.selected_format
+      end
+
+    campaign = socket.assigns.campaign
+    style = socket.assigns.selected_style
+
+    socket
+    |> assign(:generation_in_progress?, true)
+    |> assign(:generation_error, nil)
+    |> start_async(:generate_package, fn ->
+      Workflow.generate(campaign, selected_candidates, style: style, format: format)
+    end)
+  end
+
+  defp existing_companion_carousel(socket) do
+    video_source_ids =
+      socket.assigns.output_asset_ids
+      |> Enum.map(&Campaigns.get_media_asset/1)
+      |> Enum.filter(&match?(%MediaAsset{}, &1))
+      |> Enum.filter(&video_asset?/1)
+      |> MapSet.new(& &1.source_id)
+
+    socket.assigns.campaign
+    |> Campaigns.list_media_assets()
+    |> Enum.find(fn asset ->
+      asset.kind == "curated_carousel" and MapSet.member?(video_source_ids, asset.source_id)
+    end)
+  end
+
   defp restored_selected_keys(candidates, state) do
     keys = Map.get(state, "selected_keys")
 
@@ -2813,15 +2941,44 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> deduplicate_review_drafts()
 
     preview_mode? = Enum.all?(drafts, &(&1.status not in ["scheduled", "published"]))
+    pending_drafts = Enum.filter(drafts, &PostDraft.schedulable?/1)
+    schedulable_drafts = schedulable_drafts(pending_drafts)
+
+    bulk_schedule_ready? =
+      schedulable_drafts != [] and
+        (socket.assigns.content_mode != "bundle" or
+           length(schedulable_drafts) == length(pending_drafts))
 
     socket
     |> assign(:preview_mode?, preview_mode?)
     |> assign(:review_draft_count, length(drafts))
-    |> assign(
-      :review_schedulable_count,
-      drafts |> schedulable_drafts() |> Enum.count(&(&1.status != "scheduled"))
-    )
+    |> assign(:review_pending_count, length(pending_drafts))
+    |> assign(:review_schedulable_count, length(schedulable_drafts))
+    |> assign(:bulk_schedule_ready?, bulk_schedule_ready?)
     |> stream(:review_drafts, Enum.map(drafts, &draft_item/1), reset: true)
+  end
+
+  defp schedule_bulk_drafts(socket, drafts, scheduled_for) do
+    results = Enum.map(drafts, &Campaigns.schedule_post_draft(&1.id, scheduled_for))
+    scheduled_count = Enum.count(results, &match?({:ok, _draft}, &1))
+    failed_count = length(results) - scheduled_count
+    socket = refresh_review_drafts(socket)
+
+    if failed_count == 0 do
+      {:noreply,
+       put_flash(
+         socket,
+         :info,
+         "Scheduled #{scheduled_count} #{if(scheduled_count == 1, do: "post", else: "posts")} through Buffer."
+       )}
+    else
+      {:noreply,
+       put_flash(
+         socket,
+         :error,
+         "Scheduled #{scheduled_count} posts; #{failed_count} could not be scheduled. Check Buffer connections."
+       )}
+    end
   end
 
   defp schedulable_drafts(drafts) do
@@ -3121,6 +3278,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp pexels_cover_url(_background, _mode), do: nil
 
   defp platforms_for_mode("text"), do: Platforms.text_ids()
+  defp platforms_for_mode("bundle"), do: Platforms.ids()
   defp platforms_for_mode("long_form"), do: Platforms.long_form_ids()
   defp platforms_for_mode("video"), do: Platforms.video_ids()
 
