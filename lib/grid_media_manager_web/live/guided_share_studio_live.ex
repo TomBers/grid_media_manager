@@ -45,9 +45,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     %{
       id: "long_form",
       label: "Long-form LinkedIn/Facebook post",
-      size: "One portrait cover + full answer",
+      size: "One portrait cover + editable text",
       description:
-        "Turn one longer answer into a single themed cover image and an editable post for LinkedIn and Facebook.",
+        "Publish selected answers, questions, and highlights as one editable post for LinkedIn and Facebook.",
       icon: "hero-document-text"
     },
     %{
@@ -1262,10 +1262,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     </span>
                     <span class="mt-4 block text-base font-bold text-base-content">Long post</span>
                     <span class="mt-1 block text-sm font-semibold text-base-content/70">
-                      One answer with a cover
+                      Full text with a cover
                     </span>
                     <span class="mt-2 block text-xs leading-5 text-base-content/55">
-                      Choose one longer answer for a full LinkedIn and Facebook post with a themed cover image.
+                      Keep longer answers, questions, and highlights as editable LinkedIn and Facebook text instead of squeezing them onto slides.
                     </span>
                   </button>
                 </div>
@@ -1578,7 +1578,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </h2>
                 <p class="mt-1 text-sm text-base-content/55">
                   <%= if @content_mode == "long_form" do %>
-                    One longer answer will become the post. Your {@selected_count}-moment story selection stays intact.
+                    {@selected_count} selected {if(@selected_count == 1,
+                      do: "moment becomes",
+                      else: "moments become"
+                    )} one editable text post, in the order shown below.
                   <% else %>
                     {@selected_count} {if(@selected_count == 1,
                       do: "story moment",
@@ -1681,7 +1684,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                       @output_video_only? -> "Review the combined video and its copy."
                       @content_mode == "bundle" -> "Review the video, image carousel and copy."
                       @content_mode == "text" -> "Review the image carousel and edit its copy."
-                      @content_mode == "long_form" -> "Review the cover image and longer post."
+                      @content_mode == "long_form" -> "Review the cover image and full text post."
                       true -> "Review the visuals and their copy together."
                     end}
                   </h2>
@@ -1792,7 +1795,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     selected={@selected_output_asset_id == Integer.to_string(asset.id)}
                     preview_slide={Map.get(@carousel_preview_slides, asset.id, 1)}
                     wide={@output_asset_count == 1}
-                    auto_save={@content_mode == "bundle"}
+                    auto_save={@content_mode in ["bundle", "long_form"]}
                     cover_image_url={
                       pexels_cover_url(
                         @selected_pexels_background,
@@ -2476,20 +2479,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     selected_order = socket.assigns.selected_order
 
     cond do
-      socket.assigns.content_mode == "long_form" and candidate.type != "key_node" ->
-        {:noreply, put_flash(socket, :error, "Longer posts use one longer answer.")}
-
-      socket.assigns.content_mode == "long_form" ->
-        {selected_keys, selected_order} =
-          if MapSet.member?(selected_keys, candidate.key) do
-            {MapSet.delete(selected_keys, candidate.key),
-             List.delete(selected_order, candidate.key)}
-          else
-            {MapSet.new([candidate.key]), [candidate.key]}
-          end
-
-        {:noreply, update_selection(socket, selected_keys, selected_order, candidate)}
-
       MapSet.member?(selected_keys, candidate.key) ->
         selected_keys = MapSet.delete(selected_keys, candidate.key)
         selected_order = List.delete(selected_order, candidate.key)
@@ -2590,7 +2579,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       socket.assigns.all_candidates
       |> Workflow.selected_candidates(socket.assigns.selected_order)
       |> maybe_text_quote_candidates(content_mode, socket.assigns.all_candidates)
-      |> maybe_long_form_candidates(content_mode, socket.assigns.all_candidates)
 
     format =
       case content_mode do
@@ -3308,7 +3296,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         "Text cards will be posted to X, LinkedIn, and Facebook with the same copy."
 
       platforms == Platforms.long_form_ids() ->
-        "The longer answer and cover image will be posted to LinkedIn and Facebook."
+        "The full selected text and cover image will be posted to LinkedIn and Facebook."
 
       platforms == Platforms.video_ids() ->
         "The video will be posted to TikTok, Instagram, and YouTube with the same copy."
@@ -3366,16 +3354,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp maybe_text_quote_candidates(candidates, _mode, _all_candidates), do: candidates
-
-  defp maybe_long_form_candidates(candidates, "long_form", all_candidates) do
-    candidate =
-      Enum.find(candidates, &(&1.type == "key_node")) ||
-        Enum.find(all_candidates, &(&1.type == "key_node"))
-
-    if candidate, do: [candidate], else: []
-  end
-
-  defp maybe_long_form_candidates(candidates, _mode, _all_candidates), do: candidates
 
   defp quote_candidate?(%{type: type}) when type in ["question", "highlight", "key_node"],
     do: true

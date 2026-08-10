@@ -675,11 +675,24 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
-  def generate_long_form_post(
-        %Campaign{} = campaign,
-        node_id,
-        style \\ ShareCard.default_style()
-      ) do
+  def generate_long_form_post(campaign, source, style \\ ShareCard.default_style())
+
+  def generate_long_form_post(%Campaign{} = campaign, candidates, style)
+      when is_list(candidates) and candidates != [] do
+    campaign = get_campaign!(campaign.id)
+
+    with attrs when is_map(attrs) <-
+           ShareCard.long_form_asset_attr(campaign, candidates, style) do
+      upsert_generated_asset_with_drafts(campaign, attrs)
+    else
+      _ -> {:error, :unsupported_content}
+    end
+  end
+
+  def generate_long_form_post(%Campaign{}, candidates, _style) when is_list(candidates),
+    do: {:error, :not_enough_candidates}
+
+  def generate_long_form_post(%Campaign{} = campaign, node_id, style) do
     campaign = get_campaign!(campaign.id)
 
     with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),

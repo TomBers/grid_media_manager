@@ -118,6 +118,41 @@ defmodule GridMediaManager.Promotion.Markdown do
 
   def plain_inline(text), do: text |> to_string() |> plain_inline()
 
+  @doc """
+  Converts authored Markdown into plain text suitable for social feed posts.
+
+  Block structure becomes whitespace, Unicode bullets, and typographic quotation
+  marks. Unlike slide-oriented text, link destinations remain visible because
+  Facebook and LinkedIn only make pasted URLs clickable.
+  """
+  @spec social_text(term()) :: String.t()
+  def social_text(markdown) when is_binary(markdown) do
+    markdown
+    |> social_sections()
+    |> Enum.join("\n\n")
+  end
+
+  def social_text(markdown), do: markdown |> to_string() |> social_text()
+
+  @doc """
+  Returns the same social-safe text grouped into complete authored sections.
+
+  These boundaries let character-limited platforms omit a complete trailing
+  section rather than cutting through one of its paragraphs or lists.
+  """
+  @spec social_sections(term()) :: [String.t()]
+  def social_sections(markdown) when is_binary(markdown) do
+    markdown
+    |> preserve_link_destinations()
+    |> prepare_social_blocks()
+    |> blocks()
+    |> group_social_sections()
+    |> Enum.map(&readable_text/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  def social_sections(markdown), do: markdown |> to_string() |> social_sections()
+
   defp split_block(%{text: text} = block, max_characters) do
     text
     |> complete_sentences()
@@ -129,6 +164,98 @@ defmodule GridMediaManager.Promotion.Markdown do
   end
 
   defp split_block(_block, _max_characters), do: []
+
+  defp preserve_link_destinations(markdown) do
+    markdown =
+      Regex.replace(
+        ~r/!?\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/u,
+        markdown,
+        fn
+          _match, "", url -> url
+          _match, label, url when label == url -> url
+          _match, label, url -> "#{label} — #{url}"
+        end
+      )
+
+    Regex.replace(~r/<((?:https?:\/\/|mailto:)[^>]+)>/u, markdown, "\\1")
+  end
+
+  defp prepare_social_blocks(markdown) do
+    markdown
+    |> String.replace("\r\n", "\n")
+    |> String.split("\n")
+    |> Enum.reject(&Regex.match?(~r/^\s*```/u, &1))
+    |> social_table_lines()
+    |> Enum.join("\n")
+  end
+
+  defp social_table_lines([header, separator | rest]) do
+    if table_row?(header) and table_separator?(separator) do
+      {rows, remaining} = Enum.split_while(rest, &table_row?/1)
+      headers = table_cells(header)
+
+      ["" | Enum.map(rows, &social_table_row(headers, &1))] ++
+        ["" | social_table_lines(remaining)]
+    else
+      [header | social_table_lines([separator | rest])]
+    end
+  end
+
+  defp social_table_lines(lines), do: lines
+
+  defp table_row?(line) do
+    line = String.trim(line)
+    String.starts_with?(line, "|") and String.ends_with?(line, "|")
+  end
+
+  defp table_separator?(line) do
+    line
+    |> table_cells()
+    |> case do
+      [] -> false
+      cells -> Enum.all?(cells, &Regex.match?(~r/^:?-{3,}:?$/u, &1))
+    end
+  end
+
+  defp table_cells(line) do
+    line
+    |> String.trim()
+    |> String.trim("|")
+    |> String.split("|")
+    |> Enum.map(&String.trim/1)
+  end
+
+  defp social_table_row(headers, row) do
+    text =
+      headers
+      |> Enum.zip(table_cells(row))
+      |> Enum.reject(fn {_header, value} -> value == "" end)
+      |> Enum.map_join(" · ", fn
+        {"", value} -> value
+        {header, value} -> "#{header}: #{value}"
+      end)
+
+    "- #{text}"
+  end
+
+  defp group_social_sections(blocks) do
+    {sections, current, _heading_seen?} =
+      Enum.reduce(blocks, {[], [], false}, fn
+        %{type: :heading} = heading, {sections, current, false} ->
+          {sections, current ++ [heading], true}
+
+        %{type: :heading} = heading, {sections, current, true} ->
+          {append_social_section(sections, current), [heading], true}
+
+        block, {sections, current, heading_seen?} ->
+          {sections, current ++ [block], heading_seen?}
+      end)
+
+    append_social_section(sections, current)
+  end
+
+  defp append_social_section(sections, []), do: sections
+  defp append_social_section(sections, blocks), do: sections ++ [blocks]
 
   defp presentation_list_item(_block, text) do
     cond do

@@ -109,6 +109,43 @@ defmodule GridMediaManager.CampaignsTest do
            |> Enum.sort() == Enum.sort(Platforms.long_form_ids())
   end
 
+  test "creates one ordered long-form text post from questions, answers, and highlights" do
+    campaign = import_campaign("multi-source-long-form")
+    candidates = Workflow.candidates(campaign)
+
+    question = Enum.find(candidates, &(&1.type == "question"))
+    answer = Enum.find(candidates, &(&1.type == "key_node" and &1.node_class == "answer"))
+    highlight = Enum.find(candidates, &(&1.type == "highlight"))
+
+    assert {:ok, asset} =
+             Campaigns.generate_long_form_post(
+               campaign,
+               [question, answer, highlight],
+               "minimal_light"
+             )
+
+    assert asset.kind == "long_form_post"
+    assert asset.text =~ question.title
+    assert asset.text =~ "First claim: confidence should follow evidence."
+    assert asset.text =~ highlight.title
+
+    assert Enum.map(asset.metadata["sources"], & &1["type"]) == [
+             "question",
+             "key_node",
+             "highlight"
+           ]
+
+    drafts = Campaigns.list_post_drafts(campaign, media_asset_id: asset.id)
+
+    assert drafts |> Enum.map(& &1.platform) |> Enum.sort() ==
+             Enum.sort(Platforms.long_form_ids())
+
+    assert Enum.all?(drafts, &String.contains?(&1.body, "• Look for disconfirming evidence."))
+    assert Enum.all?(drafts, &String.contains?(&1.body, campaign.grid_url))
+    refute Enum.any?(drafts, &String.contains?(&1.body, "# A structured answer"))
+    refute Enum.any?(drafts, &String.contains?(&1.body, "> Good reasoning"))
+  end
+
   test "builds one ordered carousel sequence for image and video outputs" do
     campaign = import_campaign("story-sequence")
     candidates = Workflow.candidates(campaign) |> Enum.take(2)

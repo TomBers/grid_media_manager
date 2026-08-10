@@ -8,6 +8,7 @@ defmodule GridMediaManager.Social.Templates do
 
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
+  alias GridMediaManager.Promotion.Markdown
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.RationalGrid.MediaPayload
   alias GridMediaManager.Social.Platforms
@@ -204,14 +205,14 @@ defmodule GridMediaManager.Social.Templates do
          platform,
          "long_form"
        ) do
-    answer =
+    source =
       asset.text
       |> fallback(asset.title)
       |> to_string()
-      |> String.trim()
       |> fallback(asset.title |> fallback("Long-form answer") |> to_string())
 
-    fit_long_form_to_platform(answer, platform, asset_link(campaign, asset))
+    sections = Markdown.social_sections(source)
+    fit_long_form_to_platform(sections, platform, asset_link(campaign, asset))
   end
 
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "visual") do
@@ -465,27 +466,75 @@ defmodule GridMediaManager.Social.Templates do
     end
   end
 
-  defp fit_long_form_to_platform(copy, platform, link) do
+  defp fit_long_form_to_platform(sections, platform, link) do
     cta = cta_line(link)
+    copy = Enum.join(sections, "\n\n")
     full_copy = copy <> "\n\n" <> cta
 
     if Platforms.within_limit?(full_copy, platform) do
       full_copy
     else
       limit = Platforms.max_chars(platform)
-      available = max(limit - String.length(cta) - 3, 0)
+      available = max(limit - String.length(cta) - 5, 0)
 
       shortened =
-        copy
-        |> String.slice(0, available)
-        |> String.trim_trailing()
-        |> Kernel.<>("…")
+        sections
+        |> complete_sections_within(available)
+        |> fallback(logical_blocks_within(copy, available))
 
-      shortened_copy = shortened <> "\n\n" <> cta
+      shortened_copy = shortened <> "\n\n…\n\n" <> cta
 
       if Platforms.within_limit?(shortened_copy, platform), do: shortened_copy, else: cta
     end
   end
+
+  defp complete_sections_within(sections, limit) do
+    sections
+    |> Enum.reduce_while([], fn section, selected ->
+      candidate = Enum.join(selected ++ [section], "\n\n")
+
+      if String.length(candidate) <= limit do
+        {:cont, selected ++ [section]}
+      else
+        {:halt, selected}
+      end
+    end)
+    |> Enum.join("\n\n")
+  end
+
+  defp logical_blocks_within(copy, limit) do
+    copy
+    |> String.split(~r/\n{2,}/u, trim: true)
+    |> group_list_blocks()
+    |> Enum.reduce_while([], fn block, selected ->
+      candidate = Enum.join(selected ++ [block], "\n\n")
+
+      if String.length(candidate) <= limit do
+        {:cont, selected ++ [block]}
+      else
+        {:halt, selected}
+      end
+    end)
+    |> Enum.join("\n\n")
+  end
+
+  defp group_list_blocks(blocks) do
+    {groups, list_items} =
+      Enum.reduce(blocks, {[], []}, fn block, {groups, list_items} ->
+        if list_block?(block) do
+          {groups, list_items ++ [block]}
+        else
+          {append_list_group(groups, list_items) ++ [block], []}
+        end
+      end)
+
+    append_list_group(groups, list_items)
+  end
+
+  defp list_block?(block), do: Regex.match?(~r/^(?:•|\d+[.)])\s+/u, block)
+
+  defp append_list_group(groups, []), do: groups
+  defp append_list_group(groups, items), do: groups ++ [Enum.join(items, "\n\n")]
 
   defp compact_fallback(link) when is_binary(link) and link != "" do
     cta_line(link)

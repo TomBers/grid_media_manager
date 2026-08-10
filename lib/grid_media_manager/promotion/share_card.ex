@@ -405,6 +405,46 @@ defmodule GridMediaManager.Promotion.ShareCard do
     }
   end
 
+  def long_form_asset_attr(%Campaign{} = campaign, candidates, style \\ @default_style)
+      when is_list(candidates) do
+    style = normalize_style(style)
+
+    entries =
+      candidates
+      |> Enum.map(&long_form_entry(campaign, &1))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq_by(&normalize_long_form_text(&1.text))
+
+    case entries do
+      [] ->
+        nil
+
+      entries ->
+        cover_title = long_form_cover_title(campaign, entries)
+        text = entries |> Enum.map(& &1.text) |> Enum.join("\n\n")
+        source_id = long_form_source_id(entries)
+        slide = %{"kind" => "cover", "label" => "", "title" => cover_title, "body" => ""}
+
+        %{
+          title: "#{cover_title} · Long-form post",
+          kind: "long_form_post",
+          url: asset_identity(campaign, "long-form", source_id, style, "portrait"),
+          mime_type: "image/png",
+          text: text,
+          node_id: shared_long_form_value(entries, :node_id),
+          highlight_id: shared_long_form_value(entries, :highlight_id),
+          recommended_platforms: Platforms.long_form_ids(),
+          style: style,
+          source_type: "long_form_post",
+          source_id: source_id,
+          metadata:
+            image_metadata("portrait", [slide])
+            |> Map.put("content_type", "long_form")
+            |> Map.put("sources", Enum.map(entries, &long_form_source_metadata/1))
+        }
+    end
+  end
+
   def question_asset_attr(
         %Campaign{} = campaign,
         question,
@@ -555,6 +595,154 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> fallback(value(node, "excerpt"))
     |> fallback("")
     |> to_string()
+  end
+
+  defp long_form_entry(%Campaign{} = campaign, candidate) do
+    case value(candidate, "type") do
+      "key_node" ->
+        long_form_node_entry(campaign, candidate)
+
+      "question" ->
+        long_form_question_entry(campaign, candidate)
+
+      "highlight" ->
+        long_form_highlight_entry(campaign, candidate)
+
+      "grid" ->
+        long_form_entry_map(
+          "grid",
+          to_string(campaign.id),
+          campaign.title,
+          campaign.title,
+          nil,
+          nil
+        )
+
+      _type ->
+        nil
+    end
+  end
+
+  defp long_form_node_entry(campaign, candidate) do
+    source_id = value(candidate, "source_id")
+
+    case find_key_node(campaign, source_id) do
+      node when is_map(node) ->
+        title = node |> value("title") |> present_string() |> fallback(campaign.title)
+        text = node_content(campaign, node) |> present_string() |> fallback(title)
+        node_id = node |> value("id") |> nullable_string()
+        long_form_entry_map("key_node", source_id, title, text, node_id, nil)
+
+      _node ->
+        nil
+    end
+  end
+
+  defp long_form_question_entry(campaign, candidate) do
+    source_id = value(candidate, "source_id")
+
+    case find_question(campaign, source_id) do
+      question when is_map(question) ->
+        text = question |> value("question") |> present_string()
+
+        if text do
+          cover_title = if String.length(text) <= 140, do: text, else: campaign.title
+
+          long_form_entry_map(
+            "question",
+            source_id,
+            cover_title,
+            text,
+            value(question, "node_id") |> nullable_string(),
+            nil
+          )
+        end
+
+      _question ->
+        nil
+    end
+  end
+
+  defp long_form_highlight_entry(campaign, candidate) do
+    source_id = value(candidate, "source_id")
+
+    case find_highlight(campaign, source_id) do
+      highlight when is_map(highlight) ->
+        text = highlight_text(highlight)
+        node_id = value(highlight, "node_id") |> nullable_string()
+        cover_title = related_node_title(campaign, node_id) || campaign.title
+
+        if text do
+          long_form_entry_map(
+            "highlight",
+            source_id,
+            cover_title,
+            text,
+            node_id,
+            integer_value(value(highlight, "id"))
+          )
+        end
+
+      _highlight ->
+        nil
+    end
+  end
+
+  defp long_form_entry_map(type, source_id, cover_title, text, node_id, highlight_id) do
+    %{
+      type: type,
+      source_id: to_string(source_id),
+      cover_title: cover_title,
+      text: text |> to_string() |> String.trim(),
+      node_id: node_id,
+      highlight_id: highlight_id
+    }
+  end
+
+  defp long_form_cover_title(campaign, [entry]), do: entry.cover_title |> fallback(campaign.title)
+  defp long_form_cover_title(campaign, _entries), do: campaign.title
+
+  defp related_node_title(_campaign, nil), do: nil
+
+  defp related_node_title(campaign, node_id) do
+    case find_key_node(campaign, node_id) do
+      node when is_map(node) -> node |> value("title") |> present_string()
+      _node -> nil
+    end
+  end
+
+  defp shared_long_form_value(entries, field) do
+    case entries |> Enum.map(&Map.get(&1, field)) |> Enum.reject(&is_nil/1) |> Enum.uniq() do
+      [value] -> value
+      _values -> nil
+    end
+  end
+
+  defp long_form_source_metadata(entry) do
+    %{
+      "type" => entry.type,
+      "source_id" => entry.source_id,
+      "node_id" => entry.node_id,
+      "highlight_id" => entry.highlight_id
+    }
+  end
+
+  defp long_form_source_id(entries) do
+    entries
+    |> Enum.map(&long_form_source_metadata/1)
+    |> then(&{&1, Enum.map(entries, fn entry -> entry.text end)})
+    |> :erlang.term_to_binary()
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.url_encode64(padding: false)
+    |> binary_part(0, 20)
+  end
+
+  defp normalize_long_form_text(text) do
+    text
+    |> to_string()
+    |> String.downcase()
+    |> String.replace(~r/\s+/u, " ")
+    |> String.trim()
   end
 
   defp stringify_blocks(blocks) do

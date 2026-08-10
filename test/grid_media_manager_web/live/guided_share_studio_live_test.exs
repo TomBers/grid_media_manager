@@ -178,7 +178,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#package-brief", "3 story moments")
 
     view |> element("#content-mode-long-form") |> render_click()
-    assert has_element?(view, "#package-brief", "3-moment story selection stays intact")
+
+    assert has_element?(
+             view,
+             "#package-brief",
+             "3 selected moments become one editable text post"
+           )
 
     view |> element("#back-to-curate") |> render_click()
     assert has_element?(view, "#content-candidates [id^='select-aspect-question-']")
@@ -240,11 +245,13 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
            )
   end
 
-  test "selects one longer answer for the long-form post mode", %{conn: conn} do
+  test "turns selected questions, answers, and highlights into one long-form post", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-long-form")
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
+    select_recommended_question(view, campaign)
+    view |> element("#select-aspect-highlight-123") |> render_click()
     view |> element("#select-aspect-key-node-1") |> render_click()
     view |> element("#continue-to-design") |> render_click()
     view |> element("#content-mode-long-form") |> render_click()
@@ -252,8 +259,35 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#content-mode-long-form", "Long post")
 
     assert has_element?(view, "#design-platform-summary", "LinkedIn and Facebook")
-    assert has_element?(view, "#package-brief", "story selection stays intact")
+
+    assert has_element?(
+             view,
+             "#package-brief",
+             "3 selected moments become one editable text post"
+           )
+
     assert has_element?(view, "#create-story-package", "Create post")
+
+    view |> element("#create-story-package") |> render_click()
+    await_generation(view)
+
+    asset =
+      campaign
+      |> Campaigns.list_media_assets()
+      |> Enum.find(&(&1.kind == "long_form_post"))
+
+    assert asset
+    assert asset.text =~ "If a drug like soma existed today"
+    assert asset.text =~ "Perfect comfort can become a cage."
+    assert asset.text =~ "Long answer"
+
+    assert Enum.map(asset.metadata["sources"], & &1["type"]) == [
+             "question",
+             "highlight",
+             "key_node"
+           ]
+
+    assert has_element?(view, "#curated-carousel-slides-#{asset.id}[data-auto-save='true']")
   end
 
   test "combines multiple selected moments into one carousel output", %{conn: conn} do

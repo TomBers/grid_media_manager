@@ -39,6 +39,52 @@ defmodule GridMediaManager.Promotion.MarkdownTest do
            ] = Markdown.blocks(markdown)
   end
 
+  test "converts Markdown to social text while preserving visible link destinations" do
+    markdown = """
+    # A useful heading
+
+    A paragraph with **strong text**, *emphasis*, and <strong>HTML</strong>.
+
+    > A quoted claim
+
+    - First point
+    - [Explore the grid](https://rationalgrid.ai/g/collective)
+
+    | Claim | Confidence |
+    | --- | --- |
+    | Art matters | High |
+
+    ```text
+    A preserved fenced line
+    ```
+
+    <https://rationalgrid.ai/g/another-grid>
+    """
+
+    expected =
+      [
+        "A useful heading",
+        "",
+        "A paragraph with strong text, emphasis, and HTML.",
+        "",
+        "“A quoted claim”",
+        "",
+        "• First point",
+        "",
+        "• Explore the grid — https://rationalgrid.ai/g/collective",
+        "",
+        "• Claim: Art matters · Confidence: High",
+        "",
+        "A preserved fenced line",
+        "",
+        "https://rationalgrid.ai/g/another-grid"
+      ]
+      |> Enum.join("\n")
+
+    assert Markdown.social_text(markdown) == expected
+    assert Markdown.social_sections(markdown) == [expected]
+  end
+
   test "paginates long blocks only at complete sentence boundaries" do
     text =
       "First complete thought. Second complete thought. Third complete thought. Fourth complete thought."

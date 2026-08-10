@@ -187,24 +187,13 @@ defmodule GridMediaManager.Studio.Workflow do
   end
 
   defp generate_long_form_post(campaign, candidates, style) do
-    case Enum.filter(candidates, &(&1.type == "key_node")) do
-      [%{source_id: source_id} = candidate] ->
-        case Campaigns.generate_long_form_post(campaign, source_id, style) do
-          {:ok, asset} -> %{assets: [asset], errors: []}
-          {:error, reason} -> %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
-        end
+    case Campaigns.generate_long_form_post(campaign, candidates, style) do
+      {:ok, asset} ->
+        %{assets: [asset], errors: []}
 
-      [] ->
-        %{
-          assets: [],
-          errors: [%{candidate: List.first(candidates), reason: :requires_longer_answer}]
-        }
-
-      candidates ->
-        %{
-          assets: [],
-          errors: [%{candidate: List.first(candidates), reason: :one_longer_answer_required}]
-        }
+      {:error, reason} ->
+        candidate = List.first(candidates) || %{title: campaign.title}
+        %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
     end
   end
 
