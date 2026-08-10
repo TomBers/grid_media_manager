@@ -87,7 +87,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     restored_asset_filter = restore_asset_filter(params, restored_asset_ids)
     restored_video_only? = restored_assets != [] and Enum.all?(restored_assets, &video_asset?/1)
 
-    previous_packages = previous_output_packages(campaign)
     studio_state = Campaigns.guided_studio_state(campaign)
     selected_keys = restored_selected_keys(candidates, studio_state)
 
@@ -172,7 +171,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:bulk_schedule_ready?, false)
       |> assign(:preview_mode?, true)
       |> assign(:bulk_schedule_form, to_form(%{"scheduled_for" => ""}, as: :bulk_schedule))
-      |> assign(:previous_package_count, length(previous_packages))
       |> assign(:generation_error, nil)
       |> assign(:generation_in_progress?, false)
       |> assign(:pexels_configured?, Pexels.configured?())
@@ -186,7 +184,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> stream_configure(:output_assets, dom_id: &"guided-output-#{&1.id}")
       |> stream_configure(:review_drafts, dom_id: &"guided-draft-#{&1.id}")
       |> stream_configure(:pexels_photos, dom_id: &"pexels-photo-#{&1.id}")
-      |> stream_configure(:previous_packages, dom_id: &"previous-package-#{&1.dom_id}")
       |> stream(
         :candidate_groups,
         candidate_groups(
@@ -200,7 +197,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> stream(:output_assets, restored_assets)
       |> stream(:review_drafts, [])
       |> stream(:pexels_photos, [])
-      |> stream(:previous_packages, previous_packages)
       |> maybe_restore_review_drafts(restored_assets)
 
     {:ok, socket}
@@ -409,20 +405,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   def handle_event("generate_companion", %{"mode" => "text"}, socket) do
     socket = socket |> put_content_mode("text") |> persist_studio_state()
-
-    case existing_companion_carousel(socket) do
-      %MediaAsset{} = carousel ->
-        assets =
-          case Campaigns.assign_generation_batch([carousel]) do
-            {:ok, updated_assets} -> updated_assets
-            {:error, _reason} -> [carousel]
-          end
-
-        complete_generation(socket, %{assets: assets, errors: []})
-
-      nil ->
-        {:noreply, start_package_generation(socket, "text")}
-    end
+    {:noreply, start_package_generation(socket, "text")}
   end
 
   def handle_event("generate_companion", _params, socket), do: {:noreply, socket}
@@ -753,13 +736,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 >
                   Source grid <.icon name="hero-arrow-up-right" class="ml-1.5 size-4" />
                 </a>
-                <.link
-                  id="open-post-review"
-                  navigate={~p"/posts/review"}
-                  class="inline-flex items-center justify-center rounded-xl bg-base-content px-3 py-2.5 text-sm font-semibold text-base-100 shadow-sm transition hover:-translate-y-0.5 hover:bg-base-content/85"
-                >
-                  All posts <.icon name="hero-queue-list" class="ml-1.5 size-4" />
-                </.link>
               </div>
             </div>
 
@@ -794,75 +770,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               </ol>
             </div>
           </header>
-
-          <details
-            id="previous-outputs"
-            class="group rounded-[2rem] border border-base-content/10 bg-base-100/85 shadow-lg shadow-base-content/5 backdrop-blur"
-          >
-            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 md:px-7">
-              <span>
-                <span class="block text-xs font-bold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
-                  Previous outputs
-                </span>
-                <span class="mt-1 block text-sm text-base-content/55">
-                  {@previous_package_count} saved {if(@previous_package_count == 1,
-                    do: "package",
-                    else: "packages"
-                  )}
-                </span>
-              </span>
-              <span class="grid size-9 place-items-center rounded-xl bg-base-200 transition group-open:rotate-180">
-                <.icon name="hero-chevron-down" class="size-4" />
-              </span>
-            </summary>
-
-            <div
-              id="previous-output-packages"
-              phx-update="stream"
-              class="grid gap-3 border-t border-base-content/10 p-4 sm:grid-cols-2 lg:grid-cols-3 md:p-6"
-            >
-              <div
-                id="empty-previous-output-packages"
-                class="hidden rounded-2xl border border-dashed border-base-content/20 p-5 text-sm text-base-content/50 only:block sm:col-span-2 lg:col-span-3"
-              >
-                Generated packages will appear here with a link back to their post screen.
-              </div>
-
-              <article
-                :for={{id, package} <- @streams.previous_packages}
-                id={id}
-                class="flex gap-3 rounded-2xl border border-base-content/10 bg-base-100 p-3 transition hover:-translate-y-0.5 hover:shadow-lg"
-              >
-                <img
-                  :if={package.preview}
-                  src={package.preview.url}
-                  alt={package.title}
-                  loading="lazy"
-                  class="h-20 w-20 shrink-0 rounded-xl bg-base-200 object-cover"
-                />
-                <span
-                  :if={is_nil(package.preview)}
-                  class="grid size-20 shrink-0 place-items-center rounded-xl bg-base-200"
-                >
-                  <.icon name="hero-photo" class="size-6 text-base-content/35" />
-                </span>
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-bold text-base-content">{package.title}</p>
-                  <p class="mt-1 text-xs text-base-content/50">{package.summary}</p>
-                  <p class="mt-1 text-[0.68rem] text-base-content/40">
-                    {Calendar.strftime(package.created_at, "%b %-d, %Y · %H:%M UTC")}
-                  </p>
-                  <.link
-                    id={"resume-package-#{package.dom_id}"}
-                    navigate={package.resume_path}
-                    class="mt-2 inline-flex items-center text-xs font-bold text-violet-700 transition hover:text-violet-500 dark:text-violet-200"
-                  >
-                    Resume post screen <.icon name="hero-arrow-right" class="ml-1 size-3" />
-                  </.link>
-                </div>
-              </article>
-            </div>
-          </details>
 
           <section
             :if={@step == "curate"}
@@ -1712,13 +1619,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     else: "Create image carousel"
                   )}
                 </button>
-                <.link
-                  id="review-all-proposed-posts"
-                  navigate={~p"/posts/review"}
-                  class="inline-flex items-center justify-center rounded-2xl bg-base-content px-4 py-2.5 text-sm font-semibold text-base-100 transition hover:-translate-y-0.5 hover:bg-base-content/85"
-                >
-                  <.icon name="hero-queue-list" class="mr-2 size-4" /> Review all posts
-                </.link>
                 <button
                   id="revise-package"
                   type="button"
@@ -2599,21 +2499,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     end)
   end
 
-  defp existing_companion_carousel(socket) do
-    video_source_ids =
-      socket.assigns.output_asset_ids
-      |> Enum.map(&Campaigns.get_media_asset/1)
-      |> Enum.filter(&match?(%MediaAsset{}, &1))
-      |> Enum.filter(&video_asset?/1)
-      |> MapSet.new(& &1.source_id)
-
-    socket.assigns.campaign
-    |> Campaigns.list_media_assets()
-    |> Enum.find(fn asset ->
-      asset.kind == "curated_carousel" and MapSet.member?(video_source_ids, asset.source_id)
-    end)
-  end
-
   defp restored_selected_keys(candidates, state) do
     keys = Map.get(state, "selected_keys")
 
@@ -2759,7 +2644,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:generation_error, generation_error(errors))
       |> stream(:output_assets, assets, reset: true)
       |> refresh_review_drafts()
-      |> refresh_previous_packages()
       |> put_flash(
         :info,
         "Created #{length(assets)} media #{if(length(assets) == 1, do: "asset", else: "assets")} and associated copy."
@@ -2767,90 +2651,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> maybe_patch_review_url()
 
     {:noreply, socket}
-  end
-
-  defp previous_output_packages(campaign) do
-    campaign
-    |> Campaigns.list_media_assets()
-    |> Enum.filter(&(is_binary(&1.source_type) and &1.source_type != ""))
-    |> Enum.group_by(&previous_package_key/1)
-    |> Enum.map(fn {package_id, assets} -> previous_package(campaign, package_id, assets) end)
-    |> Enum.sort_by(&DateTime.to_unix(&1.created_at), :desc)
-    |> Enum.take(18)
-  end
-
-  defp previous_package_key(asset) do
-    Map.get(asset.metadata || %{}, "generation_batch_id") ||
-      if(asset.kind in ["curated_carousel", "curated_carousel_video"],
-        do: "curated-#{asset.source_id}",
-        else: "asset-#{asset.id}"
-      )
-  end
-
-  defp previous_package(campaign, package_id, assets) do
-    assets = Enum.sort_by(assets, & &1.id)
-    preview = Enum.find(assets, &(not video_asset?(&1)))
-    created_at = Enum.max_by(assets, &DateTime.to_unix(&1.inserted_at)).inserted_at
-    platform = previous_package_platform(assets)
-    asset_ids = Enum.map(assets, & &1.id)
-    dom_id = package_dom_id(package_id)
-
-    %{
-      id: package_id,
-      dom_id: dom_id,
-      title: previous_package_title(campaign, assets),
-      summary: previous_package_summary(assets),
-      preview: preview,
-      created_at: created_at,
-      resume_path: review_path(campaign, asset_ids, platform, "all")
-    }
-  end
-
-  defp package_dom_id(value) do
-    value
-    |> to_string()
-    |> String.replace(~r/[^A-Za-z0-9_-]+/, "-")
-    |> String.trim("-")
-  end
-
-  defp previous_package_title(campaign, assets) do
-    if Enum.any?(assets, &(&1.kind in ["curated_carousel", "curated_carousel_video"])) do
-      "#{campaign.title} · Story package"
-    else
-      case assets do
-        [asset] -> asset.title
-        assets -> "#{length(assets)}-asset package · #{campaign.title}"
-      end
-    end
-  end
-
-  defp previous_package_summary(assets) do
-    labels =
-      assets
-      |> Enum.map(&previous_asset_label/1)
-      |> Enum.uniq()
-      |> Enum.join(" + ")
-
-    "#{length(assets)} #{if(length(assets) == 1, do: "asset", else: "assets")} · #{labels}"
-  end
-
-  defp previous_asset_label(%MediaAsset{kind: "curated_carousel"}), do: "carousel"
-  defp previous_asset_label(%MediaAsset{kind: "curated_carousel_video"}), do: "Short"
-  defp previous_asset_label(%MediaAsset{mime_type: "video/mp4"}), do: "video"
-  defp previous_asset_label(%MediaAsset{}), do: "image"
-
-  defp previous_package_platform(assets) do
-    assets
-    |> platforms_for_assets()
-    |> Enum.join(",")
-  end
-
-  defp refresh_previous_packages(socket) do
-    packages = previous_output_packages(socket.assigns.campaign)
-
-    socket
-    |> assign(:previous_package_count, length(packages))
-    |> stream(:previous_packages, packages, reset: true)
   end
 
   defp restored_output_assets(campaign, %{"step" => "review", "assets" => asset_ids})

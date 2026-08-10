@@ -16,7 +16,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
 
     assert has_element?(view, "#guided-share-studio")
-    assert has_element?(view, "#open-post-review[href='/posts/review']", "All posts")
+    refute has_element?(view, "#previous-outputs")
     assert has_element?(view, "#stage-curate")
     assert has_element?(view, "#studio-progress")
     assert has_element?(view, "#content-candidates [id^='select-aspect-question-']")
@@ -366,6 +366,16 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     view |> element("#create-story-package") |> render_click()
     await_generation(view)
 
+    hidden_carousel =
+      Campaigns.list_media_assets(campaign) |> Enum.find(&(&1.kind == "curated_carousel"))
+
+    assert hidden_carousel
+
+    refute Enum.any?(
+             Campaigns.list_post_drafts(campaign),
+             &(&1.media_asset_id == hidden_carousel.id)
+           )
+
     assert has_element?(view, "#create-companion-carousel", "Create image carousel")
     view |> element("#create-companion-carousel") |> render_click()
     render_async(view, 30_000)
@@ -374,11 +384,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
       Campaigns.list_media_assets(campaign) |> Enum.find(&(&1.kind == "curated_carousel"))
 
     assert carousel
+
+    assert Enum.any?(
+             Campaigns.list_post_drafts(campaign),
+             &(&1.media_asset_id == carousel.id and &1.platform in ["x", "linkedin", "facebook"])
+           )
+
     assert has_element?(view, "#guided-output-#{carousel.id}")
     refute has_element?(view, "#create-companion-carousel")
   end
 
-  test "restores the generated post screen after a refresh", %{conn: conn} do
+  test "restores the current generated post screen after a refresh", %{conn: conn} do
     assert {:ok, campaign} =
              Campaigns.import_payload(simplified_payload(), "guided-resume-review")
 
@@ -397,16 +413,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     assert_patch(view, resume_path)
 
-    batch_id = asset.metadata["generation_batch_id"]
-    assert has_element?(view, "#resume-package-#{batch_id}[href='#{resume_path}']")
-
     {:ok, resumed_view, _html} = live(conn, resume_path)
 
     assert has_element?(resumed_view, "#stage-review")
     assert has_element?(resumed_view, "#guided-output-#{asset.id}")
     assert has_element?(resumed_view, "#guided-review-drafts article")
-    assert has_element?(resumed_view, "#resume-package-#{batch_id}")
-
     resumed_view |> element("#revise-package") |> render_click()
     assert has_element?(resumed_view, "#stage-design")
     assert has_element?(resumed_view, "#package-brief", "story moment")

@@ -26,7 +26,6 @@ defmodule GridMediaManagerWeb.Router do
     get "/media-assets/:id/artifacts/:index", PromotionAssetController, :artifact
     get "/media-assets/:id/artifact.mp4", PromotionAssetController, :video_artifact
 
-    live "/posts/review", PostReviewLive, :show
     live "/campaigns/:id/studio", GuidedShareStudioLive, :show
     live "/campaigns/:id", GuidedShareStudioLive, :show
   end

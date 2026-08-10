@@ -80,13 +80,6 @@ defmodule GridMediaManager.Campaigns do
     |> Repo.all()
   end
 
-  def list_all_post_drafts do
-    PostDraft
-    |> order_by([d], asc: d.inserted_at, asc: d.id)
-    |> preload([:media_asset, :campaign])
-    |> Repo.all()
-  end
-
   def ensure_post_drafts_for_platforms(campaign, media_assets, platforms, opts \\ [])
 
   def ensure_post_drafts_for_platforms(%Campaign{} = campaign, media_assets, platforms, opts)
@@ -310,25 +303,6 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
-  def assign_generation_batch(assets) when is_list(assets) do
-    batch_id = Ecto.UUID.generate()
-    generated_at = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
-
-    Repo.transaction(fn ->
-      Enum.map(assets, fn asset ->
-        metadata =
-          Map.merge(asset.metadata || %{}, %{
-            "generation_batch_id" => batch_id,
-            "generated_at" => generated_at
-          })
-
-        asset
-        |> MediaAsset.changeset(%{metadata: metadata})
-        |> Repo.update!()
-      end)
-    end)
-  end
-
   def set_pexels_background(%Campaign{} = campaign, photo) when is_map(photo) do
     background =
       photo
@@ -416,53 +390,6 @@ defmodule GridMediaManager.Campaigns do
       update_post_draft(post_draft, %{status: "approved"})
     else
       {:error, :invalid_transition}
-    end
-  end
-
-  def approve_post_drafts(ids) when is_list(ids),
-    do: approve_post_drafts_query(ids)
-
-  def set_post_draft_suggestion(id, %DateTime{} = suggested_for) do
-    id
-    |> get_post_draft!()
-    |> update_post_draft(%{suggested_for: DateTime.truncate(suggested_for, :second)})
-  end
-
-  def delete_post_drafts(ids) when is_list(ids) do
-    ids = ids |> Enum.map(&parse_integer/1) |> Enum.reject(&is_nil/1)
-
-    if ids == [] do
-      {:ok, 0}
-    else
-      Repo.transaction(fn ->
-        {count, _rows} =
-          PostDraft
-          |> where([d], d.id in ^ids)
-          |> where([d], d.status in ["draft", "copied", "failed"])
-          |> Repo.delete_all()
-
-        count
-      end)
-    end
-  end
-
-  defp approve_post_drafts_query(ids) do
-    ids = ids |> Enum.map(&parse_integer/1) |> Enum.reject(&is_nil/1)
-
-    if ids == [] do
-      {:ok, []}
-    else
-      Repo.transaction(fn ->
-        PostDraft
-        |> where([d], d.id in ^ids)
-        |> where([d], d.status in ["draft", "copied"])
-        |> Repo.all()
-        |> Enum.map(fn draft ->
-          draft
-          |> PostDraft.changeset(%{status: "approved"})
-          |> Repo.update!()
-        end)
-      end)
     end
   end
 

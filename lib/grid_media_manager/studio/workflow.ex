@@ -107,7 +107,7 @@ defmodule GridMediaManager.Studio.Workflow do
           }
       end
 
-    assign_generation_batch(result)
+    result
   end
 
   defp generate_text_carousel(campaign, candidates, style) do
@@ -118,15 +118,6 @@ defmodule GridMediaManager.Studio.Workflow do
       {:error, reason} ->
         candidate = List.first(candidates) || %{title: campaign.title}
         %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
-    end
-  end
-
-  defp assign_generation_batch(%{assets: []} = result), do: result
-
-  defp assign_generation_batch(%{assets: assets} = result) do
-    case Campaigns.assign_generation_batch(assets) do
-      {:ok, updated_assets} -> %{result | assets: updated_assets}
-      {:error, _reason} -> result
     end
   end
 
