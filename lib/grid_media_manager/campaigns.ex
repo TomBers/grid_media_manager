@@ -519,7 +519,7 @@ defmodule GridMediaManager.Campaigns do
 
   def generate_curated_carousel(%Campaign{} = campaign, candidates, style)
       when is_list(candidates) and length(candidates) >= 1 do
-    generate_curated_carousel(campaign, candidates, style, :with_drafts)
+    generate_curated_carousel(campaign, candidates, style, :with_drafts, :full)
   end
 
   def generate_curated_carousel(%Campaign{}, _candidates, _style),
@@ -527,13 +527,24 @@ defmodule GridMediaManager.Campaigns do
 
   def generate_curated_carousel_for_video(%Campaign{} = campaign, candidates, style)
       when is_list(candidates) and length(candidates) >= 1 do
-    generate_curated_carousel(campaign, candidates, style, :without_drafts)
+    generate_curated_carousel(campaign, candidates, style, :without_drafts, :short_video)
   end
 
-  defp generate_curated_carousel(%Campaign{} = campaign, candidates, style, draft_mode) do
+  def generate_curated_carousel_bundle(%Campaign{} = campaign, candidates, style)
+      when is_list(candidates) and length(candidates) >= 1 do
+    generate_curated_carousel(campaign, candidates, style, :with_drafts, :short_video)
+  end
+
+  defp generate_curated_carousel(
+         %Campaign{} = campaign,
+         candidates,
+         style,
+         draft_mode,
+         reading_mode
+       ) do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
-    slides = SlideSequence.build(campaign, candidates)
+    slides = SlideSequence.build(campaign, candidates, reading_mode: reading_mode)
     token = curated_carousel_token(candidates, slides, style)
 
     attrs = %{

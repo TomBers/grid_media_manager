@@ -51,6 +51,61 @@ defmodule GridMediaManager.Promotion.MarkdownTest do
     assert Enum.join(page_texts, " ") == text
   end
 
+  test "enforces the page limit when a single sentence is unusually long" do
+    text =
+      "A single sentence can contain enough subordinate clauses and descriptive language to overwhelm a social video frame even though it never reaches a full stop"
+
+    pages = Markdown.paginate_blocks([%{type: :paragraph, text: text}], 60)
+    page_texts = Enum.map(pages, &Markdown.readable_text/1)
+
+    assert length(page_texts) == 3
+    assert Enum.all?(page_texts, &(String.length(&1) <= 60))
+    assert Enum.join(page_texts, " ") == text
+  end
+
+  test "does not split common abbreviations into broken reading beats" do
+    text =
+      "Professional fasters like Dr. Henry Tanner became global attractions. Their performances drew paying crowds."
+
+    pages = Markdown.paginate_blocks([%{type: :paragraph, text: text}], 80)
+
+    assert Enum.map(pages, &Markdown.readable_text/1) == [
+             "Professional fasters like Dr. Henry Tanner became global attractions.",
+             "Their performances drew paying crowds."
+           ]
+  end
+
+  test "removes editorial scaffolding while retaining genuine lists" do
+    blocks = [
+      %{type: :list_item, marker: "•", text: "Category: Historical foundation"},
+      %{
+        type: :list_item,
+        marker: "•",
+        text: "The Non-Obvious Connection: Fasting became a public spectacle."
+      },
+      %{
+        type: :list_item,
+        marker: "•",
+        text: "Question/Insight Opened: What did the audience reward?"
+      },
+      %{type: :list_item, marker: "•", text: "A genuine list item"}
+    ]
+
+    assert Markdown.presentation_blocks(blocks) == [
+             %{
+               type: :paragraph,
+               role: :connection,
+               text: "Fasting became a public spectacle."
+             },
+             %{
+               type: :paragraph,
+               role: :question,
+               text: "What did the audience reward?"
+             },
+             %{type: :list_item, marker: "•", text: "A genuine list item"}
+           ]
+  end
+
   test "groups Markdown into carousel-ready sections" do
     sections =
       Markdown.sections("""

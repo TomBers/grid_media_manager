@@ -9,7 +9,10 @@ defmodule GridMediaManager.Promotion.SlideSequence do
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Promotion.ShareCard
 
-  def build(%Campaign{} = campaign, candidates) when is_list(candidates) do
+  def build(%Campaign{} = campaign, candidates, opts \\ [])
+      when is_list(candidates) and is_list(opts) do
+    reading_mode = Keyword.get(opts, :reading_mode, :full)
+
     cover = %{
       "kind" => "cover",
       "label" => "RationalGrid story",
@@ -24,16 +27,18 @@ defmodule GridMediaManager.Promotion.SlideSequence do
       "body" => ""
     }
 
-    [cover] ++ Enum.flat_map(candidates, &candidate_slides(campaign, &1)) ++ [closing]
+    [cover] ++
+      Enum.flat_map(candidates, &candidate_slides(campaign, &1, reading_mode)) ++ [closing]
   end
 
   defp candidate_slides(
          %Campaign{} = campaign,
-         %{type: "key_node", source_id: node_id} = candidate
+         %{type: "key_node", source_id: node_id} = candidate,
+         reading_mode
        ) do
     case ShareCard.find_key_node(campaign, node_id) do
       node when is_map(node) ->
-        ShareCard.node_reading_slides(campaign, node)
+        reading_slides(campaign, node, reading_mode)
         |> Enum.drop(1)
         |> Enum.reject(&(Map.get(&1, "label") == "Learn more"))
         |> Enum.map(&persisted_slide/1)
@@ -43,7 +48,7 @@ defmodule GridMediaManager.Promotion.SlideSequence do
     end
   end
 
-  defp candidate_slides(_campaign, %{type: type} = candidate)
+  defp candidate_slides(_campaign, %{type: type} = candidate, _reading_mode)
        when type in ["question", "highlight"] do
     [
       %{
@@ -55,7 +60,13 @@ defmodule GridMediaManager.Promotion.SlideSequence do
     ]
   end
 
-  defp candidate_slides(_campaign, candidate), do: [fallback_slide(candidate)]
+  defp candidate_slides(_campaign, candidate, _reading_mode), do: [fallback_slide(candidate)]
+
+  defp reading_slides(campaign, node, :short_video),
+    do: ShareCard.node_short_video_slides(campaign, node)
+
+  defp reading_slides(campaign, node, _reading_mode),
+    do: ShareCard.node_reading_slides(campaign, node)
 
   defp persisted_slide(slide) when is_map(slide) do
     %{

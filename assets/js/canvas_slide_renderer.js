@@ -1,9 +1,11 @@
 const WIDTH = 1080
 const IMAGE_HEIGHT = 1350
 const VIDEO_HEIGHT = 1920
-const UI_FONT = "Arial, Helvetica, sans-serif"
-const QUOTE_FONT = "Georgia, Times New Roman, serif"
-const FONT_SIZES = [136, 128, 120, 112, 104, 96, 88, 80, 72, 64, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 18]
+const CANVAS_FONT_NAME = "Atkinson Hyperlegible Next"
+const UI_FONT = `"${CANVAS_FONT_NAME}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
+const QUOTE_FONT = UI_FONT
+const VIDEO_NODE_FONT_SIZES = [76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 18]
+const IMAGE_NODE_FONT_SIZES = [68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 18]
 
 const PALETTES = {
   minimal_light: {
@@ -240,22 +242,7 @@ function normalizedBlocks(slide) {
 }
 
 function wrapText(context, text, maxWidth) {
-  const words = String(text || "").split(/\s+/).filter(Boolean).flatMap(word => {
-    if (context.measureText(word).width <= maxWidth) return [word]
-    const parts = []
-    let part = ""
-    Array.from(word).forEach(character => {
-      const next = `${part}${character}`
-      if (part && context.measureText(next).width > maxWidth) {
-        parts.push(part)
-        part = character
-      } else {
-        part = next
-      }
-    })
-    if (part) parts.push(part)
-    return parts
-  })
+  const words = String(text || "").split(/\s+/).filter(Boolean)
   const lines = []
   let line = ""
 
@@ -271,36 +258,61 @@ function wrapText(context, text, maxWidth) {
 
   if (line) lines.push(line)
 
-  if (lines.length > 1 && lines.at(-1).split(" ").length === 1) {
-    const previousWords = lines.at(-2).split(" ")
-    const orphan = lines.at(-1)
-    if (previousWords.length > 2) {
-      const moved = previousWords.pop()
-      const balancedLast = `${moved} ${orphan}`
-      if (context.measureText(balancedLast).width <= maxWidth) {
-        lines[lines.length - 2] = previousWords.join(" ")
-        lines[lines.length - 1] = balancedLast
-      }
+  for (let index = lines.length - 1; index > 0; index -= 1) {
+    const previousWords = lines[index - 1].split(" ")
+    let currentLine = lines[index]
+
+    while (previousWords.length > 1) {
+      const movedWord = previousWords.at(-1)
+      const previousLine = previousWords.join(" ")
+      const nextPreviousLine = previousWords.slice(0, -1).join(" ")
+      const nextCurrentLine = `${movedWord} ${currentLine}`
+
+      if (context.measureText(nextCurrentLine).width > maxWidth) break
+
+      const currentDifference = Math.abs(
+        context.measureText(previousLine).width - context.measureText(currentLine).width
+      )
+      const nextDifference = Math.abs(
+        context.measureText(nextPreviousLine).width - context.measureText(nextCurrentLine).width
+      )
+
+      if (nextDifference >= currentDifference) break
+
+      previousWords.pop()
+      currentLine = nextCurrentLine
+      lines[index - 1] = nextPreviousLine
+      lines[index] = currentLine
     }
   }
   return lines
 }
 
+function linesFit(context, lines, maxWidth) {
+  return lines.every(line => context.measureText(line).width <= maxWidth)
+}
+
+function hasReadableEnding(lines) {
+  return lines.length <= 1 || lines.at(-1).split(/\s+/).length > 1
+}
+
 function blockStyle(block, fontSize, palette) {
   if (block.type === "heading") {
-    return {size: fontSize + 5, lineHeight: (fontSize + 5) * 1.28, gap: 18, weight: 800, color: palette.text, family: UI_FONT}
+    const size = Math.min(fontSize + 8, 88)
+    return {size, lineHeight: size * 1.18, gap: 24, weight: 800, color: palette.text, family: UI_FONT}
   }
   if (block.type === "blockquote") {
-    return {size: fontSize, lineHeight: fontSize * 1.42, gap: 18, weight: 600, color: palette.secondary, family: QUOTE_FONT}
+    return {size: fontSize, lineHeight: fontSize * 1.36, gap: 22, weight: 650, color: palette.secondary, family: QUOTE_FONT}
   }
   if (block.type === "list_item") {
-    return {size: Math.max(fontSize - 1, 16), lineHeight: fontSize * 1.38, gap: 7, weight: 550, color: palette.secondary, family: UI_FONT}
+    return {size: Math.max(fontSize - 1, 16), lineHeight: fontSize * 1.36, gap: 12, weight: 550, color: palette.secondary, family: UI_FONT}
   }
-  return {size: fontSize, lineHeight: fontSize * 1.42, gap: 14, weight: 500, color: palette.secondary, family: UI_FONT}
+  return {size: fontSize, lineHeight: fontSize * 1.38, gap: 18, weight: 500, color: palette.secondary, family: UI_FONT}
 }
 
 function layoutBlocks(context, blocks, fontSize, palette, bodyWidth) {
   let y = 0
+  let fits = true
   const layout = []
 
   blocks.forEach(block => {
@@ -311,22 +323,37 @@ function layoutBlocks(context, blocks, fontSize, palette, bodyWidth) {
       ? Math.max(Math.ceil(context.measureText(block.marker).width + markerGap), 52)
       : 0
     const lines = wrapText(context, block.text, bodyWidth - indent)
+    fits = fits && linesFit(context, lines, bodyWidth - indent) && hasReadableEnding(lines)
     layout.push({block, style, indent, lines, y})
     y += lines.length * style.lineHeight + style.gap
   })
 
-  return {layout, height: Math.max(y - (layout.at(-1)?.style.gap || 0), 0)}
+  return {layout, height: Math.max(y - (layout.at(-1)?.style.gap || 0), 0), fits}
 }
 
 function nodeLayout(context, slide, palette, frame) {
   const blocks = normalizedBlocks(slide)
-  return FONT_SIZES.map(fontSize => layoutBlocks(context, blocks, fontSize, palette, frame.bodyWidth)).find(result => result.height <= frame.bodyMaxY - frame.bodyStartY) || layoutBlocks(context, blocks, FONT_SIZES[FONT_SIZES.length - 1], palette, frame.bodyWidth)
+  const fontSizes = frame.video ? VIDEO_NODE_FONT_SIZES : IMAGE_NODE_FONT_SIZES
+
+  return fontSizes
+    .map(fontSize => layoutBlocks(context, blocks, fontSize, palette, frame.bodyWidth))
+    .find(result => result.fits && result.height <= frame.bodyMaxY - frame.bodyStartY) ||
+    layoutBlocks(context, blocks, fontSizes.at(-1), palette, frame.bodyWidth)
 }
 
 function drawNode(context, slide, palette, frame) {
   const {layout, height} = nodeLayout(context, slide, palette, frame)
   const bodyHeight = frame.bodyMaxY - frame.bodyStartY
-  const startY = frame.bodyStartY + Math.max(Math.floor((bodyHeight - height) / 2), 0)
+  const standaloneHeading = layout.length === 1 && layout[0].block.type === "heading"
+  const headingAccentSpace = standaloneHeading ? 116 : 0
+  const contentHeight = height + headingAccentSpace
+  const contentTop = frame.bodyStartY + Math.max(Math.floor((bodyHeight - contentHeight) / 2), 0)
+  const startY = contentTop + headingAccentSpace
+
+  if (standaloneHeading) {
+    context.fillStyle = palette.accent
+    context.fillRect(frame.bodyX, contentTop, 120, 7)
+  }
 
   layout.forEach(({block, style, indent, lines, y}) => {
     context.font = `${style.weight} ${style.size}px ${style.family}`
@@ -353,7 +380,13 @@ function titleLayout(context, title, palette, maxWidth = 820) {
   for (const size of sizes) {
     context.font = `900 ${size}px ${UI_FONT}`
     const lines = wrapText(context, cleanInlineMarkdown(title), maxWidth)
-    if (lines.length * size * 1.18 <= 360) return {size, lines, lineHeight: size * 1.18}
+    if (
+      linesFit(context, lines, maxWidth) &&
+      hasReadableEnding(lines) &&
+      lines.length * size * 1.18 <= 360
+    ) {
+      return {size, lines, lineHeight: size * 1.18}
+    }
   }
   const size = 32
   context.font = `900 ${size}px ${UI_FONT}`
@@ -370,7 +403,13 @@ function supportingLayout(context, body, maxWidth, maxHeight, options = {}) {
     const lineHeight = size * 1.42
     context.font = `${weight} ${size}px ${family}`
     const lines = wrapText(context, text, maxWidth)
-    if (lines.length * lineHeight <= maxHeight) return {size, lineHeight, lines, family, weight}
+    if (
+      linesFit(context, lines, maxWidth) &&
+      hasReadableEnding(lines) &&
+      lines.length * lineHeight <= maxHeight
+    ) {
+      return {size, lineHeight, lines, family, weight}
+    }
   }
 
   const size = sizes.at(-1)
@@ -415,20 +454,25 @@ function drawCover(context, slide, palette, frame, textColor = palette.text) {
 
 function drawQuote(context, slide, palette, frame) {
   const sizes = frame.video
-    ? [104, 96, 88, 80, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28]
-    : [88, 80, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28]
+    ? [72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28]
+    : [64, 60, 56, 52, 48, 44, 40, 36, 32, 28]
   const quoteText = cleanInlineMarkdown(slide.title)
   const availableHeight = frame.bodyMaxY - frame.bodyStartY
   const accentGap = frame.video ? 64 : 52
   const accentHeight = 8
   const maximumQuoteHeight = availableHeight - accentGap - accentHeight
+  const quoteWidth = frame.bodyWidth - 36
   let quote = null
 
   for (const size of sizes) {
     context.font = `700 ${size}px ${QUOTE_FONT}`
-    const lines = wrapText(context, quoteText, frame.bodyWidth)
-    if (lines.length * size * 1.18 <= maximumQuoteHeight) {
-      quote = {size, lines, lineHeight: size * 1.18}
+    const lines = wrapText(context, quoteText, quoteWidth)
+    if (
+      linesFit(context, lines, quoteWidth) &&
+      hasReadableEnding(lines) &&
+      lines.length * size * 1.24 <= maximumQuoteHeight
+    ) {
+      quote = {size, lines, lineHeight: size * 1.24}
       break
     }
   }
@@ -436,7 +480,7 @@ function drawQuote(context, slide, palette, frame) {
   if (!quote) {
     const size = sizes.at(-1)
     context.font = `700 ${size}px ${QUOTE_FONT}`
-    quote = {size, lines: wrapText(context, quoteText, frame.bodyWidth), lineHeight: size * 1.18}
+    quote = {size, lines: wrapText(context, quoteText, quoteWidth), lineHeight: size * 1.24}
   }
 
   const quoteHeight = quote.lines.length * quote.lineHeight
@@ -500,14 +544,15 @@ function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverImag
   const frame = {
     video,
     height: video ? VIDEO_HEIGHT : IMAGE_HEIGHT,
-    bodyX: 130,
-    bodyWidth: 820,
+    bodyX: 150,
+    bodyWidth: 780,
     bodyStartY: video ? 350 : 240,
     bodyMaxY: video ? 1620 : 1160,
   }
   canvas.width = WIDTH
   canvas.height = frame.height
   context.clearRect(0, 0, WIDTH, frame.height)
+  context.fontKerning = "normal"
   drawBackground(context, palette, frame)
 
   if (slide.kind === "cta" || slide.label === "Learn more") {
@@ -568,6 +613,15 @@ function loadImage(source) {
 function cacheBustedUrl(source) {
   const separator = source.includes("?") ? "&" : "?"
   return `${source}${separator}browser_frames=${Date.now()}`
+}
+
+async function loadCanvasFont() {
+  if (!document.fonts?.load) return
+
+  await Promise.all([
+    document.fonts.load(`500 76px "${CANVAS_FONT_NAME}"`),
+    document.fonts.load(`800 88px "${CANVAS_FONT_NAME}"`),
+  ])
 }
 
 export const CanvasSlideRenderer = {
@@ -638,6 +692,7 @@ export const CanvasSlideRenderer = {
       const slides = JSON.parse(this.root.dataset.slides || "[]")
       const style = this.root.dataset.style || "editorial_dark"
       const video = this.root.dataset.videoFrame === "true"
+      await loadCanvasFont()
       const logo = await loadImage(this.root.dataset.logoSrc || "/images/rg_logo.webp")
       const coverImage = this.root.dataset.coverImageUrl
         ? await loadImage(this.root.dataset.coverImageUrl)

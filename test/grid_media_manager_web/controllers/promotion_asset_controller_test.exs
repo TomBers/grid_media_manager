@@ -2,6 +2,7 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
   use GridMediaManagerWeb.ConnCase
 
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Promotion.ArtifactStore
 
   @png <<137, 80, 78, 71, 13, 10, 26, 10, 0, 1, 2, 3>>
 
@@ -41,7 +42,10 @@ defmodule GridMediaManagerWeb.PromotionAssetControllerTest do
 
     conn =
       conn
-      |> put_req_header("x-canvas-renderer-version", "2")
+      |> put_req_header(
+        "x-canvas-renderer-version",
+        Integer.to_string(ArtifactStore.renderer_version())
+      )
       |> post(~p"/api/media-assets/#{asset.id}/artifacts/1", %{"artifact" => upload})
 
     assert %{"saved" => true, "index" => "1"} = json_response(conn, 201)

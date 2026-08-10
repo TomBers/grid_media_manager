@@ -6,11 +6,14 @@ defmodule GridMediaManager.Promotion.Markdown do
   headings, quotes, and list structure without depending on server rendering.
   """
 
+  @protected_period "\uE000"
+
   @type block :: %{
           required(:type) => :heading | :paragraph | :blockquote | :list_item,
           required(:text) => String.t(),
           optional(:level) => pos_integer(),
-          optional(:marker) => String.t()
+          optional(:marker) => String.t(),
+          optional(:role) => :connection | :question
         }
 
   @spec blocks(term()) :: [block()]
@@ -67,6 +70,22 @@ defmodule GridMediaManager.Promotion.Markdown do
 
   def paginate_blocks(_blocks, _max_characters), do: []
 
+  @doc """
+  Removes authoring scaffolding that is useful in Markdown but distracting on a slide.
+
+  Semantic lists remain lists. Editorial labels such as `Category` are removed,
+  while labelled explanation and question items become clean prose blocks.
+  """
+  @spec presentation_blocks([block()]) :: [block()]
+  def presentation_blocks(blocks) when is_list(blocks) do
+    Enum.flat_map(blocks, fn
+      %{type: :list_item, text: text} = block -> presentation_list_item(block, text)
+      block -> [block]
+    end)
+  end
+
+  def presentation_blocks(_blocks), do: []
+
   @spec readable_text([block()]) :: String.t()
   def readable_text(blocks) when is_list(blocks) do
     blocks
@@ -102,6 +121,7 @@ defmodule GridMediaManager.Promotion.Markdown do
   defp split_block(%{text: text} = block, max_characters) do
     text
     |> complete_sentences()
+    |> Enum.flat_map(&split_long_text(&1, max_characters))
     |> Enum.reduce([], fn sentence, chunks ->
       append_sentence(chunks, sentence, max_characters)
     end)
@@ -110,15 +130,80 @@ defmodule GridMediaManager.Promotion.Markdown do
 
   defp split_block(_block, _max_characters), do: []
 
+  defp presentation_list_item(_block, text) do
+    cond do
+      Regex.match?(~r/^category\s*:/iu, text) ->
+        []
+
+      match =
+          Regex.run(
+            ~r/^(?:the\s+)?(?:non-obvious\s+connection|question\/insight\s+opened|key\s+insight|connection)\s*:\s*(.+)$/iu,
+            text,
+            capture: :all_but_first
+          ) ->
+        role = if Regex.match?(~r/question\/insight/iu, text), do: :question, else: :connection
+
+        [
+          %{
+            type: :paragraph,
+            role: role,
+            text: match |> List.first() |> String.trim()
+          }
+        ]
+
+      true ->
+        [%{type: :list_item, marker: "•", text: text}]
+    end
+  end
+
+  defp split_long_text(text, max_characters) do
+    text
+    |> String.split(~r/\s+/u, trim: true)
+    |> Enum.reduce([], fn word, chunks ->
+      case List.pop_at(chunks, -1) do
+        {nil, []} ->
+          [word]
+
+        {current, previous} ->
+          combined = current <> " " <> word
+
+          if String.length(combined) <= max_characters do
+            previous ++ [combined]
+          else
+            chunks ++ [word]
+          end
+      end
+    end)
+  end
+
   defp complete_sentences(text) do
-    Regex.scan(~r/.+?(?:[.!?]+(?=\s|$)|$)/u, text)
+    text
+    |> protect_abbreviation_periods()
+    |> then(&Regex.scan(~r/.+?(?:[.!?]+(?=\s|$)|$)/u, &1))
     |> List.flatten()
+    |> Enum.map(&String.replace(&1, @protected_period, "."))
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
     |> case do
       [] -> [String.trim(text)]
       sentences -> sentences
     end
+  end
+
+  defp protect_abbreviation_periods(text) do
+    text
+    |> String.replace(
+      ~r/\b(Dr|Mr|Mrs|Ms|Prof|Sr|Jr|St)\./u,
+      "\\1" <> @protected_period
+    )
+    |> String.replace(
+      ~r/\b(e)\.(g)\./iu,
+      "\\1" <> @protected_period <> "\\2" <> @protected_period
+    )
+    |> String.replace(
+      ~r/\b(i)\.(e)\./iu,
+      "\\1" <> @protected_period <> "\\2" <> @protected_period
+    )
   end
 
   defp append_sentence([], sentence, _max_characters), do: [sentence]

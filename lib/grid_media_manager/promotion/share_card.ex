@@ -13,7 +13,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
   alias GridMediaManager.Social.Platforms
 
   @default_style "editorial_dark"
-  @carousel_reading_max_characters 360
+  @carousel_reading_max_characters 220
+  @short_video_max_characters 220
 
   @styles [
     %{
@@ -177,8 +178,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
       campaign
       |> node_content(node)
       |> Markdown.sections()
-      |> Enum.flat_map(fn section ->
-        section.blocks
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {section, section_index} ->
+        section
+        |> reading_section_blocks(node_title, section_index)
         |> Markdown.paginate_blocks(@carousel_reading_max_characters)
         |> Enum.map(fn blocks ->
           %{
@@ -195,8 +198,108 @@ defmodule GridMediaManager.Promotion.ShareCard do
       content_slides ++ [cta_slide()]
   end
 
-  def node_short_video_slides(%Campaign{} = campaign, node),
-    do: node_reading_slides(campaign, node)
+  def node_short_video_slides(%Campaign{} = campaign, node) when is_map(node) do
+    node_title = node |> value("title") |> present_string() |> fallback("Key idea")
+
+    content_slides =
+      campaign
+      |> node_content(node)
+      |> Markdown.sections()
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {section, section_index} ->
+        section
+        |> short_video_section_pages(node_title, section_index)
+        |> Enum.map(fn blocks ->
+          %{
+            "kind" => "node_text",
+            "label" => "",
+            "title" => "",
+            "body" => Markdown.readable_text(blocks),
+            "blocks" => stringify_blocks(blocks)
+          }
+        end)
+      end)
+
+    [%{"kind" => "node_title", "label" => "", "title" => node_title, "body" => ""}] ++
+      content_slides ++ [cta_slide()]
+  end
+
+  defp short_video_section_pages(section, node_title, section_index) do
+    blocks = Markdown.presentation_blocks(section.blocks)
+
+    heading_pages =
+      if section_heading?(section.title, node_title, section_index) do
+        [[%{type: :heading, level: 2, text: presentation_heading(section.title)}]]
+      else
+        []
+      end
+
+    selected_pages =
+      if section_index == 0 do
+        blocks
+        |> Markdown.paginate_blocks(@short_video_max_characters)
+        |> Enum.take(1)
+      else
+        general_blocks = Enum.reject(blocks, &Map.has_key?(&1, :role))
+        connection_blocks = Enum.filter(blocks, &(&1[:role] == :connection))
+        question_blocks = Enum.filter(blocks, &(&1[:role] == :question))
+
+        take_pages(general_blocks, 1) ++
+          take_pages(connection_blocks, 2) ++ take_pages(question_blocks, 1)
+      end
+
+    heading_pages ++ selected_pages
+  end
+
+  defp take_pages(blocks, count) do
+    blocks
+    |> Markdown.paginate_blocks(@short_video_max_characters)
+    |> Enum.take(count)
+  end
+
+  defp reading_section_blocks(section, node_title, section_index) do
+    heading_blocks =
+      if section_heading?(section.title, node_title, section_index) do
+        [%{type: :heading, level: 2, text: presentation_heading(section.title)}]
+      else
+        []
+      end
+
+    heading_blocks ++ Markdown.presentation_blocks(section.blocks)
+  end
+
+  defp section_heading?("The argument", _node_title, _section_index), do: false
+
+  defp section_heading?(section_title, node_title, 0) do
+    normalize_heading(section_title) != normalize_heading(node_title)
+  end
+
+  defp section_heading?(_section_title, _node_title, _section_index), do: true
+
+  defp normalize_heading(value) do
+    value
+    |> Markdown.plain_inline()
+    |> String.downcase()
+    |> String.replace(~r/[^\p{L}\p{N}]+/u, " ")
+    |> String.trim()
+  end
+
+  defp presentation_heading(value) do
+    heading =
+      value
+      |> Markdown.plain_inline()
+      |> String.replace(~r/^\d+[.)]\s*/u, "")
+      |> String.replace(~r/[“”\"]/u, "")
+      |> String.trim()
+
+    case String.split(heading, ~r/\s*:\s*/u, parts: 2) do
+      [_category, subject] ->
+        if String.length(subject) >= 12, do: subject, else: heading
+
+      _parts ->
+        heading
+    end
+  end
 
   def curated_carousel_selected_slide_indexes(slides, selection \\ nil) when is_list(slides) do
     slide_count = length(slides)
