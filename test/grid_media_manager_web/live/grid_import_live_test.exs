@@ -13,7 +13,7 @@ defmodule GridMediaManagerWeb.GridImportLiveTest do
     assert has_element?(view, "#load-remote-grids-button", "Refresh grid list")
     assert has_element?(view, "#remote-grids-last-refreshed", "Saved locally")
     assert has_element?(view, "#remote-grid-#{summary.id}", "A surprising grid")
-    assert has_element?(view, "#preview-grid-#{summary.id}")
+    assert has_element?(view, "#import-remote-grid-#{summary.id}", "Open in studio")
   end
 
   test "filters the local grid stream by tag", %{conn: conn} do

@@ -2,6 +2,8 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
   use GridMediaManager.DataCase, async: false
 
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Campaigns.PostDraft
+  alias GridMediaManager.Repo
 
   @s3_environment_variables [
     "S3_BUCKET",
@@ -62,9 +64,7 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
 
   test "schedules a bounded draft through Buffer and persists the external post" do
     assert {:ok, campaign} = Campaigns.import_payload(payload(), "buffer-scheduling")
-
-    [draft | _] =
-      Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: "campaign")
+    draft = insert_text_draft(campaign)
 
     scheduled_for =
       DateTime.utc_now()
@@ -108,7 +108,7 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
     assert scheduled.error_message == nil
   end
 
-  test "uses PUBLIC_BASE_URL for a generated image" do
+  test "does not expose authenticated browser artifacts through PUBLIC_BASE_URL" do
     assert {:ok, campaign} = Campaigns.import_payload(payload(), "buffer-public-media")
     assert {:ok, asset} = Campaigns.generate_grid_asset(campaign)
 
@@ -116,35 +116,8 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
       Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: asset.id)
 
     System.put_env("PUBLIC_BASE_URL", "https://studio.example.com")
-    scheduled_for = future_schedule_time()
-
-    Req.Test.expect(__MODULE__, fn conn ->
-      {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
-      input = Jason.decode!(raw_body)["variables"]["input"]
-
-      assert input["assets"] == [
-               %{
-                 "image" => %{
-                   "url" => "https://studio.example.com/campaigns/#{campaign.id}/share-card.png"
-                 }
-               }
-             ]
-
-      Req.Test.json(conn, %{
-        "data" => %{
-          "createPost" => %{
-            "post" => %{
-              "id" => "buffer-image-post",
-              "status" => "scheduled",
-              "dueAt" => DateTime.to_iso8601(scheduled_for)
-            }
-          }
-        }
-      })
-    end)
-
-    assert {:ok, scheduled} = Campaigns.schedule_post_draft(draft.id, scheduled_for)
-    assert scheduled.external_post_id == "buffer-image-post"
+    assert {:error, message} = Campaigns.schedule_post_draft(draft.id, future_schedule_time())
+    assert message == "Browser-rendered media requires S3 publishing before it can be scheduled."
   end
 
   test "rejects generated images when the server only has a local URL" do
@@ -155,14 +128,12 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
       Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: asset.id)
 
     assert {:error, message} = Campaigns.schedule_post_draft(draft.id, future_schedule_time())
-    assert message =~ "Set PUBLIC_BASE_URL to a public HTTPS URL"
+    assert message =~ "requires S3 publishing"
   end
 
   test "rejects over-limit copy before calling Buffer" do
     assert {:ok, campaign} = Campaigns.import_payload(payload(), "buffer-over-limit")
-
-    [draft | _] =
-      Campaigns.list_post_drafts(campaign, platform: "x", media_asset_id: "campaign")
+    draft = insert_text_draft(campaign)
 
     assert {:ok, draft} =
              Campaigns.update_post_draft(draft, %{body: String.duplicate("a", 281)})
@@ -178,6 +149,18 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
     |> DateTime.add(3_600, :second)
     |> DateTime.truncate(:second)
     |> then(&%{&1 | second: 0})
+  end
+
+  defp insert_text_draft(campaign) do
+    %PostDraft{}
+    |> PostDraft.changeset(%{
+      campaign_id: campaign.id,
+      platform: "x",
+      angle: "discussion",
+      body: "A bounded text-only post.",
+      status: "draft"
+    })
+    |> Repo.insert!()
   end
 
   defp payload do

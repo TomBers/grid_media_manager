@@ -1,10 +1,11 @@
 const WIDTH = 1080
 const IMAGE_HEIGHT = 1350
 const VIDEO_HEIGHT = 1920
-const UI_FONT = "Arial, Helvetica, sans-serif"
-const QUOTE_FONT = "Georgia, Times New Roman, serif"
-const FONT_SIZES = [136, 128, 120, 112, 104, 96, 88, 80, 72, 64, 56, 52, 48, 44, 40, 36, 32]
-const TITLE_CASE_MINOR_WORDS = new Set(["a", "an", "and", "as", "at", "for", "in", "of", "on", "or", "the", "to"])
+const CANVAS_FONT_NAME = "Atkinson Hyperlegible Next"
+const UI_FONT = `"${CANVAS_FONT_NAME}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
+const QUOTE_FONT = UI_FONT
+const VIDEO_NODE_FONT_SIZES = [76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 18]
+const IMAGE_NODE_FONT_SIZES = [68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 18]
 
 const PALETTES = {
   minimal_light: {
@@ -67,16 +68,6 @@ const PALETTES = {
     muted: "#fdba74",
     accent: "#f59e0b",
   },
-  signal_red: {
-    canvas: ["#2b0709", "#7f1d1d", "#111827"],
-    card: "rgba(24,10,11,0.82)",
-    panel: "rgba(255,241,242,0.08)",
-    border: "rgba(254,205,211,0.2)",
-    text: "#fff7ed",
-    secondary: "#fecaca",
-    muted: "#fda4af",
-    accent: "#fb7185",
-  },
   deep_ocean: {
     canvas: ["#082f49", "#0f172a", "#164e63"],
     card: "rgba(6,17,31,0.84)",
@@ -88,14 +79,14 @@ const PALETTES = {
     accent: "#67e8f9",
   },
   newsprint: {
-    canvas: ["#f5f0e6", "#d6c8b6"],
-    card: "rgba(250,247,240,0.94)",
-    panel: "rgba(255,253,248,0.84)",
-    border: "rgba(120,113,108,0.62)",
+    canvas: ["#f7f1e5", "#d8c9b5", "#eee4d4"],
+    card: "rgba(255,252,245,0.94)",
+    panel: "rgba(250,246,237,0.9)",
+    border: "rgba(87,83,78,0.42)",
     text: "#1c1917",
     secondary: "#44403c",
     muted: "#78716c",
-    accent: "#991b1b",
+    accent: "#9f1239",
   },
 }
 
@@ -174,18 +165,6 @@ function cleanInlineMarkdown(value) {
     .trim()
 }
 
-function titleCase(value) {
-  return cleanInlineMarkdown(value)
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word, index) => {
-      const normalized = word.toLowerCase()
-      if (index > 0 && TITLE_CASE_MINOR_WORDS.has(normalized)) return normalized
-      return normalized.charAt(0).toUpperCase() + normalized.slice(1)
-    })
-    .join(" ")
-}
-
 function sentenceGroups(value, maxCharacters = 220) {
   const sentences = String(value || "").match(/[^.!?]+(?:[.!?]+|$)/g) || []
   const groups = []
@@ -219,10 +198,37 @@ function normalizedBlocks(slide) {
       .filter(block => block.text)
   }
 
-  return String(slide.body || "")
-    .split(/\n{2,}/)
-    .flatMap(text => sentenceGroups(text))
-    .map(text => ({type: "paragraph", text}))
+  const blocks = []
+  if (slide.title && !["cover", "node_title", "quote", "highlight", "cta"].includes(slide.kind)) {
+    blocks.push({type: "heading", text: cleanInlineMarkdown(slide.title)})
+  }
+
+  const lines = String(slide.body || "").replace(/\r\n/g, "\n").split("\n")
+  let paragraph = []
+  const flushParagraph = () => {
+    const text = cleanInlineMarkdown(paragraph.join(" "))
+    if (text) sentenceGroups(text).forEach(group => blocks.push({type: "paragraph", text: group}))
+    paragraph = []
+  }
+
+  lines.forEach(line => {
+    const trimmed = line.trim()
+    if (!trimmed) return flushParagraph()
+
+    const heading = trimmed.match(/^#{1,6}\s+(.+)$/)
+    const quote = trimmed.match(/^>\s*(.+)$/)
+    const bullet = trimmed.match(/^[-+*]\s+(.+)$/)
+    const numbered = trimmed.match(/^(\d+)[.)]\s+(.+)$/)
+
+    if (heading || quote || bullet || numbered) flushParagraph()
+    if (heading) blocks.push({type: "heading", text: cleanInlineMarkdown(heading[1])})
+    else if (quote) blocks.push({type: "blockquote", text: cleanInlineMarkdown(quote[1])})
+    else if (bullet) blocks.push({type: "list_item", marker: "•", text: cleanInlineMarkdown(bullet[1])})
+    else if (numbered) blocks.push({type: "list_item", marker: `${numbered[1]}.`, text: cleanInlineMarkdown(numbered[2])})
+    else paragraph.push(trimmed)
+  })
+  flushParagraph()
+  return blocks
 }
 
 function wrapText(context, text, maxWidth) {
@@ -241,24 +247,62 @@ function wrapText(context, text, maxWidth) {
   })
 
   if (line) lines.push(line)
+
+  for (let index = lines.length - 1; index > 0; index -= 1) {
+    const previousWords = lines[index - 1].split(" ")
+    let currentLine = lines[index]
+
+    while (previousWords.length > 1) {
+      const movedWord = previousWords.at(-1)
+      const previousLine = previousWords.join(" ")
+      const nextPreviousLine = previousWords.slice(0, -1).join(" ")
+      const nextCurrentLine = `${movedWord} ${currentLine}`
+
+      if (context.measureText(nextCurrentLine).width > maxWidth) break
+
+      const currentDifference = Math.abs(
+        context.measureText(previousLine).width - context.measureText(currentLine).width
+      )
+      const nextDifference = Math.abs(
+        context.measureText(nextPreviousLine).width - context.measureText(nextCurrentLine).width
+      )
+
+      if (nextDifference >= currentDifference) break
+
+      previousWords.pop()
+      currentLine = nextCurrentLine
+      lines[index - 1] = nextPreviousLine
+      lines[index] = currentLine
+    }
+  }
   return lines
+}
+
+function linesFit(context, lines, maxWidth) {
+  return lines.every(line => context.measureText(line).width <= maxWidth)
+}
+
+function hasReadableEnding(lines) {
+  return lines.length <= 1 || lines.at(-1).split(/\s+/).length > 1
 }
 
 function blockStyle(block, fontSize, palette) {
   if (block.type === "heading") {
-    return {size: fontSize + 5, lineHeight: (fontSize + 5) * 1.28, gap: 18, weight: 800, color: palette.text, family: UI_FONT}
+    const size = Math.min(fontSize + 8, 88)
+    return {size, lineHeight: size * 1.18, gap: 24, weight: 800, color: palette.text, family: UI_FONT}
   }
   if (block.type === "blockquote") {
-    return {size: fontSize, lineHeight: fontSize * 1.42, gap: 18, weight: 600, color: palette.secondary, family: QUOTE_FONT}
+    return {size: fontSize, lineHeight: fontSize * 1.36, gap: 22, weight: 650, color: palette.secondary, family: QUOTE_FONT}
   }
   if (block.type === "list_item") {
-    return {size: Math.max(fontSize - 1, 16), lineHeight: fontSize * 1.38, gap: 7, weight: 550, color: palette.secondary, family: UI_FONT}
+    return {size: Math.max(fontSize - 1, 16), lineHeight: fontSize * 1.36, gap: 12, weight: 550, color: palette.secondary, family: UI_FONT}
   }
-  return {size: fontSize, lineHeight: fontSize * 1.42, gap: 14, weight: 500, color: palette.secondary, family: UI_FONT}
+  return {size: fontSize, lineHeight: fontSize * 1.38, gap: 18, weight: 500, color: palette.secondary, family: UI_FONT}
 }
 
 function layoutBlocks(context, blocks, fontSize, palette, bodyWidth) {
   let y = 0
+  let fits = true
   const layout = []
 
   blocks.forEach(block => {
@@ -269,22 +313,37 @@ function layoutBlocks(context, blocks, fontSize, palette, bodyWidth) {
       ? Math.max(Math.ceil(context.measureText(block.marker).width + markerGap), 52)
       : 0
     const lines = wrapText(context, block.text, bodyWidth - indent)
+    fits = fits && linesFit(context, lines, bodyWidth - indent) && hasReadableEnding(lines)
     layout.push({block, style, indent, lines, y})
     y += lines.length * style.lineHeight + style.gap
   })
 
-  return {layout, height: Math.max(y - (layout.at(-1)?.style.gap || 0), 0)}
+  return {layout, height: Math.max(y - (layout.at(-1)?.style.gap || 0), 0), fits}
 }
 
 function nodeLayout(context, slide, palette, frame) {
   const blocks = normalizedBlocks(slide)
-  return FONT_SIZES.map(fontSize => layoutBlocks(context, blocks, fontSize, palette, frame.bodyWidth)).find(result => result.height <= frame.bodyMaxY - frame.bodyStartY) || layoutBlocks(context, blocks, FONT_SIZES[FONT_SIZES.length - 1], palette, frame.bodyWidth)
+  const fontSizes = frame.video ? VIDEO_NODE_FONT_SIZES : IMAGE_NODE_FONT_SIZES
+
+  return fontSizes
+    .map(fontSize => layoutBlocks(context, blocks, fontSize, palette, frame.bodyWidth))
+    .find(result => result.fits && result.height <= frame.bodyMaxY - frame.bodyStartY) ||
+    layoutBlocks(context, blocks, fontSizes.at(-1), palette, frame.bodyWidth)
 }
 
 function drawNode(context, slide, palette, frame) {
   const {layout, height} = nodeLayout(context, slide, palette, frame)
   const bodyHeight = frame.bodyMaxY - frame.bodyStartY
-  const startY = frame.bodyStartY + Math.max(Math.floor((bodyHeight - height) / 2), 0)
+  const standaloneHeading = layout.length === 1 && layout[0].block.type === "heading"
+  const headingAccentSpace = standaloneHeading ? 116 : 0
+  const contentHeight = height + headingAccentSpace
+  const contentTop = frame.bodyStartY + Math.max(Math.floor((bodyHeight - contentHeight) / 2), 0)
+  const startY = contentTop + headingAccentSpace
+
+  if (standaloneHeading) {
+    context.fillStyle = palette.accent
+    context.fillRect(frame.bodyX, contentTop, 120, 7)
+  }
 
   layout.forEach(({block, style, indent, lines, y}) => {
     context.font = `${style.weight} ${style.size}px ${style.family}`
@@ -311,15 +370,46 @@ function titleLayout(context, title, palette, maxWidth = 820) {
   for (const size of sizes) {
     context.font = `900 ${size}px ${UI_FONT}`
     const lines = wrapText(context, cleanInlineMarkdown(title), maxWidth)
-    if (lines.length * size * 1.18 <= 360) return {size, lines, lineHeight: size * 1.18}
+    if (
+      linesFit(context, lines, maxWidth) &&
+      hasReadableEnding(lines) &&
+      lines.length * size * 1.18 <= 360
+    ) {
+      return {size, lines, lineHeight: size * 1.18}
+    }
   }
   const size = 32
   context.font = `900 ${size}px ${UI_FONT}`
   return {size, lines: wrapText(context, cleanInlineMarkdown(title), maxWidth), lineHeight: size * 1.18}
 }
 
+function supportingLayout(context, body, maxWidth, maxHeight, options = {}) {
+  const sizes = options.sizes || [30, 28, 26, 24, 22, 20, 18]
+  const family = options.family || UI_FONT
+  const weight = options.weight || 600
+  const text = cleanInlineMarkdown(body)
+
+  for (const size of sizes) {
+    const lineHeight = size * 1.42
+    context.font = `${weight} ${size}px ${family}`
+    const lines = wrapText(context, text, maxWidth)
+    if (
+      linesFit(context, lines, maxWidth) &&
+      hasReadableEnding(lines) &&
+      lines.length * lineHeight <= maxHeight
+    ) {
+      return {size, lineHeight, lines, family, weight}
+    }
+  }
+
+  const size = sizes.at(-1)
+  const lineHeight = size * 1.42
+  context.font = `${weight} ${size}px ${family}`
+  return {size, lineHeight, lines: wrapText(context, text, maxWidth), family, weight}
+}
+
 function drawCover(context, slide, palette, frame, textColor = palette.text) {
-  const title = titleLayout(context, titleCase(slide.title), palette, frame.bodyWidth)
+  const title = titleLayout(context, slide.title, palette, frame.bodyWidth)
   const titleHeight = title.lines.length * title.lineHeight
   const titleAreaStart = frame.video ? 610 : 430
   const titleAreaHeight = frame.video ? 390 : 430
@@ -327,35 +417,66 @@ function drawCover(context, slide, palette, frame, textColor = palette.text) {
   context.fillStyle = textColor
   context.font = `900 ${title.size}px ${UI_FONT}`
   title.lines.forEach((line, index) => context.fillText(line, frame.bodyX, titleStartY + index * title.lineHeight))
-  if (!frame.video) {
-    context.fillStyle = palette.accent
-    context.fillRect(frame.bodyX, titleStartY + titleHeight + 46, 220, 7)
+
+  const lastTitleBaseline = titleStartY + Math.max(title.lines.length - 1, 0) * title.lineHeight
+  const accentY = lastTitleBaseline + Math.max(Math.round(title.size * 0.72), 38)
+  context.fillStyle = palette.accent
+  context.fillRect(frame.bodyX, accentY, 220, 7)
+
+  if (cleanInlineMarkdown(slide.body)) {
+    const bodyStartY = accentY + 62
+    const body = supportingLayout(
+      context,
+      slide.body,
+      frame.bodyWidth,
+      Math.max(frame.bodyMaxY - bodyStartY, 80),
+      {sizes: frame.video ? [34, 32, 30, 28, 26, 24, 22] : [28, 26, 24, 22, 20, 18]}
+    )
+    context.fillStyle = textColor
+    context.globalAlpha = 0.82
+    context.font = `${body.weight} ${body.size}px ${body.family}`
+    body.lines.forEach((line, index) => {
+      context.fillText(line, frame.bodyX, bodyStartY + index * body.lineHeight)
+    })
+    context.globalAlpha = 1
   }
 }
 
 function drawQuote(context, slide, palette, frame) {
-  const sizes = [72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32]
+  const sizes = frame.video
+    ? [72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28]
+    : [64, 60, 56, 52, 48, 44, 40, 36, 32, 28]
   const quoteText = cleanInlineMarkdown(slide.title)
+  const availableHeight = frame.bodyMaxY - frame.bodyStartY
+  const accentGap = frame.video ? 64 : 52
+  const accentHeight = 8
+  const maximumQuoteHeight = availableHeight - accentGap - accentHeight
+  const quoteWidth = frame.bodyWidth - 36
   let quote = null
 
   for (const size of sizes) {
     context.font = `700 ${size}px ${QUOTE_FONT}`
-    const lines = wrapText(context, quoteText, frame.bodyWidth)
-    if (lines.length * size * 1.18 <= 560) {
-      quote = {size, lines, lineHeight: size * 1.18}
+    const lines = wrapText(context, quoteText, quoteWidth)
+    if (
+      linesFit(context, lines, quoteWidth) &&
+      hasReadableEnding(lines) &&
+      lines.length * size * 1.24 <= maximumQuoteHeight
+    ) {
+      quote = {size, lines, lineHeight: size * 1.24}
       break
     }
   }
 
-  quote ||= {size: 32, lines: [quoteText], lineHeight: 38}
+  if (!quote) {
+    const size = sizes.at(-1)
+    context.font = `700 ${size}px ${QUOTE_FONT}`
+    quote = {size, lines: wrapText(context, quoteText, quoteWidth), lineHeight: size * 1.24}
+  }
+
   const quoteHeight = quote.lines.length * quote.lineHeight
-  const quoteAreaStart = frame.video ? 290 : 290
-  const quoteAreaHeight = frame.video ? 560 : 560
-  const contentHeight = quoteHeight + (frame.video ? 172 : 80)
-  const contentStart = frame.video
-    ? quoteAreaStart + Math.max(Math.floor((frame.bodyMaxY - quoteAreaStart - contentHeight) / 2), 0)
-    : quoteAreaStart
-  const quoteStartY = contentStart + (frame.video ? quote.size : Math.floor((quoteAreaHeight - quoteHeight) / 2) + quote.size)
+  const contentHeight = quoteHeight + accentGap + accentHeight
+  const contentStart = frame.bodyStartY + Math.max(Math.floor((availableHeight - contentHeight) / 2), 0)
+  const quoteStartY = contentStart + quote.size
   context.fillStyle = palette.text
   context.font = `700 ${quote.size}px ${QUOTE_FONT}`
   quote.lines.forEach((line, index) => {
@@ -364,18 +485,27 @@ function drawQuote(context, slide, palette, frame) {
     context.fillText(`${opening}${line}${closing}`, frame.bodyX, quoteStartY + index * quote.lineHeight)
   })
   context.fillStyle = palette.accent
-  const bodyStart = frame.video ? contentStart + quoteHeight + 92 : 930
-  context.fillRect(frame.bodyX, bodyStart - 72, 240, 8)
+  context.fillRect(frame.bodyX, contentStart + quoteHeight + accentGap, 240, accentHeight)
 }
 
-function drawCta(context, palette, logo, frame) {
+function drawCta(context, slide, palette, logo, frame) {
   if (logo) context.drawImage(logo, 420, frame.video ? 520 : 360, 240, 240)
   context.fillStyle = palette.text
   context.textAlign = "center"
-  context.font = `900 48px ${UI_FONT}`
-  context.fillText("Continue on", 540, frame.video ? 930 : 760)
+  const title = cleanInlineMarkdown(slide.title || "Continue on RationalGrid.ai")
   context.font = `900 54px ${UI_FONT}`
-  context.fillText("RationalGrid.ai", 540, frame.video ? 1000 : 830)
+  const lines = wrapText(context, title, 780)
+  const startY = frame.video ? 930 : 760
+  lines.forEach((line, index) => context.fillText(line, 540, startY + index * 66))
+  if (cleanInlineMarkdown(slide.body)) {
+    const bodyStartY = startY + lines.length * 66 + 38
+    const body = supportingLayout(context, slide.body, 780, frame.bodyMaxY - bodyStartY)
+    context.font = `${body.weight} ${body.size}px ${body.family}`
+    context.fillStyle = palette.secondary
+    body.lines.forEach((line, index) => {
+      context.fillText(line, 540, bodyStartY + index * body.lineHeight)
+    })
+  }
   context.textAlign = "left"
 }
 
@@ -397,44 +527,47 @@ function drawImageCover(context, image, width, height) {
   context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight)
 }
 
-function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverCard, videoCoverImage, video) {
+function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverImage, video) {
   const context = canvas.getContext("2d")
   const palette = paletteFor(style)
   const coverSlide = slideIndex === 1 && (slide.kind === "cover" || slide.kind === "node_title")
   const frame = {
     video,
     height: video ? VIDEO_HEIGHT : IMAGE_HEIGHT,
-    bodyX: 130,
-    bodyWidth: 820,
+    bodyX: 150,
+    bodyWidth: 780,
     bodyStartY: video ? 350 : 240,
     bodyMaxY: video ? 1620 : 1160,
   }
   canvas.width = WIDTH
   canvas.height = frame.height
   context.clearRect(0, 0, WIDTH, frame.height)
+  context.fontKerning = "normal"
   drawBackground(context, palette, frame)
 
   if (slide.kind === "cta" || slide.label === "Learn more") {
-    drawCta(context, palette, logo, frame)
+    drawCta(context, slide, palette, logo, frame)
     return
   }
 
-  if (slide.kind === "cover" && !video && coverCard) {
-    context.drawImage(coverCard, 0, 0, WIDTH, frame.height)
-    return
-  }
-
-  if (coverSlide && video && videoCoverImage) {
+  if (coverSlide && coverImage) {
     context.save()
-    roundedRect(context, 54, 64, 972, 1792, 48)
+    roundedRect(
+      context,
+      54,
+      frame.video ? 64 : 54,
+      972,
+      frame.video ? 1792 : 1242,
+      frame.video ? 48 : 44
+    )
     context.clip()
-    drawImageCover(context, videoCoverImage, WIDTH, frame.height)
+    drawImageCover(context, coverImage, WIDTH, frame.height)
     context.fillStyle = "rgba(2, 6, 23, 0.58)"
     context.fillRect(0, 0, WIDTH, frame.height)
     context.restore()
   }
 
-  const coverPhoto = coverSlide && video && videoCoverImage
+  const coverPhoto = coverSlide && coverImage
   const coverTextColor = coverPhoto ? "#fff7ed" : palette.text
   const coverMutedColor = coverPhoto ? "rgba(255,247,237,0.82)" : palette.muted
   drawHeader(context, palette, frame, coverPhoto ? "#fff7ed" : palette.text)
@@ -446,6 +579,15 @@ function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverCard
 
 function canvasBlob(canvas) {
   return new Promise(resolve => canvas.toBlob(resolve, "image/png"))
+}
+
+function copyCanvas(source, target) {
+  if (!(source instanceof HTMLCanvasElement) || !(target instanceof HTMLCanvasElement)) return
+  target.width = source.width
+  target.height = source.height
+  const context = target.getContext("2d")
+  context.clearRect(0, 0, target.width, target.height)
+  context.drawImage(source, 0, 0)
 }
 
 function loadImage(source) {
@@ -461,6 +603,15 @@ function loadImage(source) {
 function cacheBustedUrl(source) {
   const separator = source.includes("?") ? "&" : "?"
   return `${source}${separator}browser_frames=${Date.now()}`
+}
+
+async function loadCanvasFont() {
+  if (!document.fonts?.load) return
+
+  await Promise.all([
+    document.fonts.load(`500 76px "${CANVAS_FONT_NAME}"`),
+    document.fonts.load(`800 88px "${CANVAS_FONT_NAME}"`),
+  ])
 }
 
 export const CanvasSlideRenderer = {
@@ -483,10 +634,9 @@ export const CanvasSlideRenderer = {
       const control = event.target.closest("[data-carousel-preview]")
       if (!control || !this.root.contains(control)) return
 
-      const image = document.getElementById(control.dataset.previewTarget)
+      const preview = document.getElementById(control.dataset.previewTarget)
       const canvas = document.getElementById(control.dataset.previewCanvas)
-      if (image && canvas) image.src = canvas.toDataURL("image/png")
-      else if (image && control.dataset.previewUrl) image.src = control.dataset.previewUrl
+      if (preview && canvas) copyCanvas(canvas, preview)
 
       this.root.querySelectorAll("[data-carousel-preview]").forEach(item => {
         item.classList.remove("ring-2", "ring-sky-400/80")
@@ -497,7 +647,14 @@ export const CanvasSlideRenderer = {
     this.rootObserver = new MutationObserver(() => this.renderAll())
     this.rootObserver.observe(this.root, {
       attributes: true,
-      attributeFilter: ["data-slides", "data-selected-indexes", "data-preview-slide"],
+      attributeFilter: [
+        "data-slides",
+        "data-selected-indexes",
+        "data-preview-slide",
+        "data-style",
+        "data-video-frame",
+        "data-cover-image-url",
+      ],
       childList: true,
       subtree: true,
     })
@@ -525,12 +682,10 @@ export const CanvasSlideRenderer = {
       const slides = JSON.parse(this.root.dataset.slides || "[]")
       const style = this.root.dataset.style || "editorial_dark"
       const video = this.root.dataset.videoFrame === "true"
+      await loadCanvasFont()
       const logo = await loadImage(this.root.dataset.logoSrc || "/images/rg_logo.webp")
-      const coverCard = this.root.dataset.coverCardUrl
-        ? await loadImage(this.root.dataset.coverCardUrl)
-        : null
-      const videoCoverImage = video && this.root.dataset.videoCoverImageUrl
-        ? await loadImage(this.root.dataset.videoCoverImageUrl)
+      const coverImage = this.root.dataset.coverImageUrl
+        ? await loadImage(this.root.dataset.coverImageUrl)
         : null
       const targets = this.root.querySelectorAll("[data-canvas-slide]")
 
@@ -539,10 +694,7 @@ export const CanvasSlideRenderer = {
         const slide = slides[index - 1]
         const canvas = target
         if (!slide || !canvas) return
-        drawSlide(canvas, slide, index, slides.length, style, logo, coverCard, videoCoverImage, video)
-        canvas.classList.remove("hidden")
-        const image = target.parentElement?.querySelector("img")
-        if (image) image.classList.add("hidden")
+        drawSlide(canvas, slide, index, slides.length, style, logo, coverImage, video)
       })
 
       const previewIndex = Number(this.root.dataset.previewSlide || 1)
@@ -550,15 +702,35 @@ export const CanvasSlideRenderer = {
         target => Number(target.dataset.slideIndex) === previewIndex
       )
       const mainPreview = document.getElementById(this.root.dataset.mainPreviewId)
-      if (previewCanvas && mainPreview) mainPreview.src = previewCanvas.toDataURL("image/png")
+      if (previewCanvas && mainPreview) copyCanvas(previewCanvas, mainPreview)
 
       const status = this.root.querySelector("[data-browser-render-status]")
-      if (status && !this.uploadedFrameFingerprint) status.textContent = "Browser-rendered preview"
+      const fingerprint = `${this.root.dataset.slides}|${style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.coverImageUrl || ""}|${this.root.dataset.selectedIndexes || ""}`
+      if (this.root.dataset.artifactsReady === "true" && !this.uploadedFrameFingerprint) {
+        this.uploadedFrameFingerprint = fingerprint
+      }
+      if (this.uploadedFrameFingerprint !== fingerprint) {
+        const uploadButton = this.root.querySelector("[data-browser-render-upload]")
+        if (uploadButton) {
+          uploadButton.disabled = false
+          uploadButton.textContent = "Save finished assets"
+        }
+        if (status) status.textContent = "Unsaved browser preview"
+      } else {
+        const uploadButton = this.root.querySelector("[data-browser-render-upload]")
+        if (uploadButton) {
+          uploadButton.disabled = true
+          uploadButton.textContent = "Assets saved"
+        }
+        if (status) status.textContent = "Finished assets saved"
+      }
 
-      if (this.root.dataset.videoPreviewId) {
-        const fingerprint = `${this.root.dataset.slides}|${style}|${this.root.dataset.coverCardUrl || ""}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.videoCoverImageUrl || ""}`
+      const automaticSave = this.root.dataset.videoPreviewId || this.root.dataset.autoSave === "true"
+      if (automaticSave) {
         if (this.uploadedFrameFingerprint !== fingerprint && !this.uploadingFrames) {
           await this.uploadFrames({automatic: true, fingerprint})
+        } else if (this.root.dataset.videoPreviewId) {
+          this.loadVideoFallback()
         }
       }
     } catch (_error) {
@@ -580,10 +752,12 @@ export const CanvasSlideRenderer = {
     const uploadButton = this.root.querySelector("[data-browser-render-upload]")
     if (!uploadButton) return
     const automatic = options.automatic === true
-    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}|${this.root.dataset.coverCardUrl || ""}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.videoCoverImageUrl || ""}`
-    const slides = JSON.parse(this.root.dataset.slides || "[]")
-    const frameIndexes = slides.map((_slide, index) => index + 1)
+    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.coverImageUrl || ""}|${this.root.dataset.selectedIndexes || ""}`
     const targets = this.root.querySelectorAll("[data-canvas-slide]")
+    const selectedIndexes = JSON.parse(this.root.dataset.selectedIndexes || "[]").map(Number)
+    const frameIndexes = Array.from(targets)
+      .map(target => Number(target.dataset.slideIndex))
+      .filter(index => selectedIndexes.length === 0 || selectedIndexes.includes(index))
     const status = this.root.querySelector("[data-browser-render-status]")
     const uploadUrl = this.root.dataset.uploadUrl.startsWith("/api/")
       ? this.root.dataset.uploadUrl
@@ -600,11 +774,15 @@ export const CanvasSlideRenderer = {
         if (!canvas) continue
         const blob = await canvasBlob(canvas)
         const form = new FormData()
-        form.append("slide", String(index))
-        form.append("frame", blob, `slide-${index}.png`)
-        const response = await fetch(uploadUrl, {
+        form.append("artifact", blob, `slide-${index}.png`)
+        const csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute("content")
+        const response = await fetch(`${uploadUrl}/${index}`, {
           method: "POST",
-          headers: {accept: "application/json"},
+          headers: {
+            accept: "application/json",
+            "x-csrf-token": csrfToken || "",
+            "x-canvas-renderer-version": this.root.dataset.rendererVersion || "",
+          },
           body: form,
         })
         if (!response.ok) throw new Error(`Frame ${index} failed`)
@@ -612,16 +790,17 @@ export const CanvasSlideRenderer = {
 
       if (status) {
         status.textContent = this.root.dataset.videoPreviewId
-          ? "Video rebuilt from browser-rendered frames"
-          : "Browser frames saved for images and video"
+          ? "Finished frames saved; video is ready"
+          : "Finished PNG assets saved"
       }
-      uploadButton.textContent = "Browser frames saved"
+      uploadButton.textContent = "Assets saved"
       this.uploadedFrameFingerprint = fingerprint
+      this.pushEvent("artifacts_saved", {asset_id: this.root.dataset.assetId})
       this.reloadVideoFromBrowserFrames()
     } catch (_error) {
-      if (!automatic) this.uploadedFrameFingerprint = null
+      this.uploadedFrameFingerprint = null
       if (status) status.textContent = "Could not save browser frames"
-      uploadButton.textContent = "Retry browser render"
+      uploadButton.textContent = "Retry saving assets"
       uploadButton.disabled = false
       this.loadVideoFallback()
     } finally {

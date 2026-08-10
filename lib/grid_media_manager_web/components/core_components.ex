@@ -8,12 +8,8 @@ defmodule GridMediaManagerWeb.CoreComponents do
   with doc strings and declarative assigns. You may customize and style
   them in any way you want, based on your application growth and needs.
 
-  The foundation for styling is Tailwind CSS, a utility-first CSS framework,
-  augmented with daisyUI, a Tailwind CSS plugin that provides UI components
-  and themes. Here are useful references:
-
-    * [daisyUI](https://daisyui.com/docs/intro/) - a good place to get
-      started and see the available components.
+  The foundation for styling is Tailwind CSS with application-owned components
+  and theme tokens. Here are useful references:
 
     * [Tailwind CSS](https://tailwindcss.com) - the foundational framework
       we build on. You will use it for layout, sizing, flexbox, grid, and
@@ -56,13 +52,15 @@ defmodule GridMediaManagerWeb.CoreComponents do
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class="fixed right-4 top-4 z-50"
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
+        "flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-2xl backdrop-blur sm:w-96",
+        @kind == :info &&
+          "border-sky-500/25 bg-sky-50/95 text-sky-950 dark:bg-sky-950/95 dark:text-sky-50",
+        @kind == :error &&
+          "border-red-500/25 bg-red-50/95 text-red-950 dark:bg-red-950/95 dark:text-red-50"
       ]}>
         <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
         <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
@@ -94,11 +92,14 @@ defmodule GridMediaManagerWeb.CoreComponents do
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
+    variants = %{
+      "primary" => "bg-orange-600 text-white hover:bg-orange-500",
+      nil => "border border-base-content/15 bg-base-100 text-base-content hover:bg-base-200"
+    }
 
     assigns =
       assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns[:variant])]
+        "inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 #{Map.fetch!(variants, assigns[:variant])}"
       end)
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
@@ -185,17 +186,20 @@ defmodule GridMediaManagerWeb.CoreComponents do
       end)
 
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
+    <div class="mb-2">
+      <label class="block">
         <input type="hidden" name={@name} value="false" disabled={@rest[:disabled]} />
-        <span class="label">
+        <span class="flex items-center gap-2 text-sm font-semibold text-base-content/75">
           <input
             type="checkbox"
             id={@id}
             name={@name}
             value="true"
             checked={@checked}
-            class={@class || "checkbox checkbox-sm"}
+            class={
+              @class ||
+                "size-4 rounded border-base-content/25 bg-base-100 text-orange-600 accent-orange-600 focus:ring-2 focus:ring-orange-500/30"
+            }
             {@rest}
           />{@label}
         </span>
@@ -207,13 +211,20 @@ defmodule GridMediaManagerWeb.CoreComponents do
 
   def input(%{type: "select"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
+    <div class="mb-2">
+      <label class="block">
+        <span :if={@label} class="mb-1.5 block text-sm font-semibold text-base-content/75">
+          {@label}
+        </span>
         <select
           id={@id}
           name={@name}
-          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
+          class={[
+            @class ||
+              "w-full rounded-xl border border-base-content/15 bg-base-100 px-3 py-2.5 text-sm text-base-content shadow-sm outline-none transition focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/15",
+            @errors != [] &&
+              (@error_class || "border-red-500/60 focus:border-red-500 focus:ring-red-500/15")
+          ]}
           multiple={@multiple}
           {@rest}
         >
@@ -228,15 +239,19 @@ defmodule GridMediaManagerWeb.CoreComponents do
 
   def input(%{type: "textarea"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
+    <div class="mb-2">
+      <label class="block">
+        <span :if={@label} class="mb-1.5 block text-sm font-semibold text-base-content/75">
+          {@label}
+        </span>
         <textarea
           id={@id}
           name={@name}
           class={[
-            @class || "w-full textarea",
-            @errors != [] && (@error_class || "textarea-error")
+            @class ||
+              "w-full resize-y rounded-xl border border-base-content/15 bg-base-100 px-3 py-2.5 text-sm leading-6 text-base-content shadow-sm outline-none transition placeholder:text-base-content/35 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/15",
+            @errors != [] &&
+              (@error_class || "border-red-500/60 focus:border-red-500 focus:ring-red-500/15")
           ]}
           {@rest}
         >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
@@ -249,17 +264,21 @@ defmodule GridMediaManagerWeb.CoreComponents do
   # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
+    <div class="mb-2">
+      <label class="block">
+        <span :if={@label} class="mb-1.5 block text-sm font-semibold text-base-content/75">
+          {@label}
+        </span>
         <input
           type={@type}
           name={@name}
           id={@id}
           value={Phoenix.HTML.Form.normalize_value(@type, @value)}
           class={[
-            @class || "w-full input",
-            @errors != [] && (@error_class || "input-error")
+            @class ||
+              "w-full rounded-xl border border-base-content/15 bg-base-100 px-3 py-2.5 text-sm text-base-content shadow-sm outline-none transition placeholder:text-base-content/35 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/15",
+            @errors != [] &&
+              (@error_class || "border-red-500/60 focus:border-red-500 focus:ring-red-500/15")
           ]}
           {@rest}
         />
@@ -334,25 +353,29 @@ defmodule GridMediaManagerWeb.CoreComponents do
       end
 
     ~H"""
-    <table class="table table-zebra">
-      <thead>
+    <table class="w-full border-collapse text-left text-sm">
+      <thead class="border-b border-base-content/10 bg-base-200/70 text-xs uppercase tracking-wide text-base-content/55">
         <tr>
-          <th :for={col <- @col}>{col[:label]}</th>
+          <th :for={col <- @col} class="px-4 py-3">{col[:label]}</th>
           <th :if={@action != []}>
             <span class="sr-only">{gettext("Actions")}</span>
           </th>
         </tr>
       </thead>
       <tbody id={@id} phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}>
-        <tr :for={row <- @rows} id={@row_id && @row_id.(row)}>
+        <tr
+          :for={row <- @rows}
+          id={@row_id && @row_id.(row)}
+          class="border-b border-base-content/10 even:bg-base-200/35"
+        >
           <td
             :for={col <- @col}
             phx-click={@row_click && @row_click.(row)}
-            class={@row_click && "hover:cursor-pointer"}
+            class={["px-4 py-3", @row_click && "hover:cursor-pointer"]}
           >
             {render_slot(col, @row_item.(row))}
           </td>
-          <td :if={@action != []} class="w-0 font-semibold">
+          <td :if={@action != []} class="w-0 px-4 py-3 font-semibold">
             <div class="flex gap-4">
               <%= for action <- @action do %>
                 {render_slot(action, @row_item.(row))}
@@ -381,9 +404,9 @@ defmodule GridMediaManagerWeb.CoreComponents do
 
   def list(assigns) do
     ~H"""
-    <ul class="list">
-      <li :for={item <- @item} class="list-row">
-        <div class="list-col-grow">
+    <ul class="divide-y divide-base-content/10 overflow-hidden rounded-2xl border border-base-content/10">
+      <li :for={item <- @item} class="bg-base-100 px-4 py-3">
+        <div>
           <div class="font-bold">{item.title}</div>
           <div>{render_slot(item)}</div>
         </div>

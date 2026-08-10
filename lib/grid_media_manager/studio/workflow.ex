@@ -15,6 +15,7 @@ defmodule GridMediaManager.Studio.Workflow do
 
   def candidates(%Campaign{} = campaign) do
     recommended_question = Campaigns.recommended_question(campaign)
+    conversation_context = conversation_context(campaign)
 
     question_sources = campaign |> ShareCard.questions() |> prefer_sourced_questions()
     recommended_question_id = recommended_question_id(question_sources, recommended_question)
@@ -22,29 +23,18 @@ defmodule GridMediaManager.Studio.Workflow do
     questions =
       question_sources
       |> Enum.map(&question_candidate(&1, recommended_question_id))
-      |> Enum.sort_by(&if(&1.recommended?, do: 0, else: 1))
       |> Enum.take(@max_candidates_per_type)
 
-    {recommended_questions, other_questions} = Enum.split_with(questions, & &1.recommended?)
-
-    recommended_questions ++
-      highlight_candidates(campaign) ++
-      other_questions ++
-      key_node_candidates(campaign) ++
-      [grid_candidate(campaign)]
+    (questions ++
+       highlight_candidates(campaign) ++
+       key_node_candidates(campaign) ++
+       [grid_candidate(campaign)])
+    |> Enum.map(&attach_conversation_context(&1, conversation_context))
+    |> remove_duplicate_prompt_nodes()
+    |> cognitive_order()
   end
 
-  def default_selection(candidates) when is_list(candidates) do
-    candidate =
-      Enum.find(candidates, & &1.recommended?) ||
-        Enum.find(candidates, &(&1.type == "highlight")) ||
-        Enum.find(candidates, &(&1.type == "grid"))
-
-    case candidate do
-      nil -> MapSet.new()
-      candidate -> MapSet.new([candidate.key])
-    end
-  end
+  def default_selection(candidates) when is_list(candidates), do: MapSet.new()
 
   def selected_candidates(candidates, %MapSet{} = selected_keys) when is_list(candidates) do
     Enum.filter(candidates, &MapSet.member?(selected_keys, &1.key))
@@ -117,7 +107,7 @@ defmodule GridMediaManager.Studio.Workflow do
           }
       end
 
-    assign_generation_batch(result)
+    result
   end
 
   defp generate_text_carousel(campaign, candidates, style) do
@@ -131,17 +121,8 @@ defmodule GridMediaManager.Studio.Workflow do
     end
   end
 
-  defp assign_generation_batch(%{assets: []} = result), do: result
-
-  defp assign_generation_batch(%{assets: assets} = result) do
-    case Campaigns.assign_generation_batch(assets) do
-      {:ok, updated_assets} -> %{result | assets: updated_assets}
-      {:error, _reason} -> result
-    end
-  end
-
   defp generate_combined_carousel(campaign, candidates, style) do
-    case Campaigns.generate_curated_carousel(campaign, candidates, style) do
+    case Campaigns.generate_curated_carousel_bundle(campaign, candidates, style) do
       {:ok, carousel} ->
         case Campaigns.generate_curated_carousel_video(campaign, carousel) do
           {:ok, video} ->
@@ -197,24 +178,13 @@ defmodule GridMediaManager.Studio.Workflow do
   end
 
   defp generate_long_form_post(campaign, candidates, style) do
-    case Enum.filter(candidates, &(&1.type == "key_node")) do
-      [%{source_id: source_id} = candidate] ->
-        case Campaigns.generate_long_form_post(campaign, source_id, style) do
-          {:ok, asset} -> %{assets: [asset], errors: []}
-          {:error, reason} -> %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
-        end
+    case Campaigns.generate_long_form_post(campaign, candidates, style) do
+      {:ok, asset} ->
+        %{assets: [asset], errors: []}
 
-      [] ->
-        %{
-          assets: [],
-          errors: [%{candidate: List.first(candidates), reason: :requires_longer_answer}]
-        }
-
-      candidates ->
-        %{
-          assets: [],
-          errors: [%{candidate: List.first(candidates), reason: :one_longer_answer_required}]
-        }
+      {:error, reason} ->
+        candidate = List.first(candidates) || %{title: campaign.title}
+        %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
     end
   end
 
@@ -286,6 +256,7 @@ defmodule GridMediaManager.Studio.Workflow do
       signal: question_signal(kind, recommended?),
       character_count: String.length(text),
       slide_count: 1,
+      node_class: "question",
       recommended?: recommended?
     }
   end
@@ -312,6 +283,7 @@ defmodule GridMediaManager.Studio.Workflow do
           signal: "Human-curated signal",
           character_count: String.length(text),
           slide_count: 1,
+          node_class: "highlight",
           recommended?: false
         }
       end
@@ -337,10 +309,12 @@ defmodule GridMediaManager.Studio.Workflow do
       if source_id && is_binary(title) && String.trim(title) != "" do
         node_class = map_value(node, "class") || "node"
         reading_slides = ShareCard.node_reading_slides(campaign, node)
-        content_slides = Enum.reject(reading_slides, &(&1.kind in ["node_title", "cta"]))
+
+        content_slides =
+          Enum.reject(reading_slides, &(Map.get(&1, "kind") in ["node_title", "cta"]))
 
         character_count =
-          [title | Enum.map(content_slides, &Map.get(&1, :body, ""))]
+          [title | Enum.map(content_slides, &Map.get(&1, "body", ""))]
           |> Enum.join(" ")
           |> String.length()
 
@@ -352,10 +326,11 @@ defmodule GridMediaManager.Studio.Workflow do
           node_id: to_string(source_id),
           title: title,
           excerpt: present_string(map_value(node, "excerpt")),
-          label: "Longer answer",
-          signal: "#{node_class} · structural context",
+          label: node_label(node_class),
+          signal: node_signal(node_class),
           character_count: character_count,
           slide_count: max(length(content_slides), 1),
+          node_class: node_class,
           recommended?: false
         }
       end
@@ -376,25 +351,142 @@ defmodule GridMediaManager.Studio.Workflow do
       signal: "Broad entry point",
       character_count: String.length(campaign.title || ""),
       slide_count: 1,
+      node_class: "grid",
       recommended?: false
     }
   end
 
-  defp prefer_sourced_questions(questions) do
-    answer_question_texts =
-      questions
-      |> Enum.filter(&(map_value(&1, "kind") == "answer_question"))
-      |> Enum.map(&(map_value(&1, "question") |> normalize_question()))
-      |> MapSet.new()
+  defp node_label("origin"), do: "Origin question"
+  defp node_label(node_class) when node_class in ["question", "user"], do: "Question"
+  defp node_label("answer"), do: "Answer"
+  defp node_label(_node_class), do: "Node"
 
-    Enum.reject(questions, fn question ->
-      map_value(question, "kind") == "follow_up_question" and
-        MapSet.member?(
-          answer_question_texts,
-          question |> map_value("question") |> normalize_question()
-        )
+  defp node_signal("origin"), do: "Starting point"
+  defp node_signal(node_class) when node_class in ["question", "user"], do: "Prompt in stream"
+  defp node_signal("answer"), do: "Answer in stream"
+  defp node_signal(_node_class), do: "Structural context"
+
+  defp prefer_sourced_questions(questions) do
+    Enum.uniq_by(questions, &(map_value(&1, "question") |> normalize_question()))
+  end
+
+  defp conversation_context(%Campaign{raw_payload: payload}) do
+    graph = map_value(payload || %{}, "graph") || %{}
+    nodes = map_value(graph, "nodes") || []
+    edges = map_value(graph, "edges") || []
+
+    node_classes =
+      Map.new(nodes, fn node ->
+        {present_string(map_value(node, "id")),
+         node |> map_value("class") |> present_string() |> to_string() |> String.downcase()}
+      end)
+
+    answer_to_prompt =
+      Enum.reduce(edges, %{}, fn edge, pairs ->
+        edge = map_value(edge, "data") || edge
+        source = present_string(map_value(edge, "source"))
+        target = present_string(map_value(edge, "target"))
+
+        if Map.get(node_classes, source) in ["origin", "question", "user"] and
+             Map.get(node_classes, target) == "answer" do
+          Map.put(pairs, target, source)
+        else
+          pairs
+        end
+      end)
+
+    question_to_previous_answer =
+      Enum.reduce(edges, %{}, fn edge, pairs ->
+        edge = map_value(edge, "data") || edge
+        source = present_string(map_value(edge, "source"))
+        target = present_string(map_value(edge, "target"))
+
+        if Map.get(node_classes, source) == "answer" and
+             Map.get(node_classes, target) in ["question", "user"] do
+          Map.put(pairs, target, source)
+        else
+          pairs
+        end
+      end)
+
+    %{
+      answer_to_prompt: answer_to_prompt,
+      question_to_previous_answer: question_to_previous_answer
+    }
+  end
+
+  defp attach_conversation_context(%{node_id: node_id} = candidate, context)
+       when is_binary(node_id) and node_id != "" do
+    thread_id = Map.get(context.answer_to_prompt, node_id, node_id)
+    previous_answer_id = Map.get(context.question_to_previous_answer, node_id)
+
+    continues_from_thread_id =
+      if previous_answer_id do
+        Map.get(context.answer_to_prompt, previous_answer_id, previous_answer_id)
+      end
+
+    candidate
+    |> Map.put(:thread_id, thread_id)
+    |> Map.put(:continues_from_thread_id, continues_from_thread_id)
+  end
+
+  defp attach_conversation_context(candidate, _context) do
+    candidate
+    |> Map.put(:thread_id, nil)
+    |> Map.put(:continues_from_thread_id, nil)
+  end
+
+  defp remove_duplicate_prompt_nodes(candidates) do
+    question_node_ids =
+      candidates
+      |> Enum.filter(&(&1.type == "question" and is_binary(&1.node_id)))
+      |> MapSet.new(& &1.node_id)
+
+    Enum.reject(candidates, fn candidate ->
+      candidate.type == "key_node" and candidate.node_class in ["question", "user"] and
+        MapSet.member?(question_node_ids, candidate.node_id)
     end)
   end
+
+  defp cognitive_order(candidates) do
+    candidates
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {candidate, discovery_index} ->
+      {
+        stream_order(candidate.thread_id),
+        cognitive_role_order(candidate),
+        candidate_detail_order(candidate, discovery_index)
+      }
+    end)
+    |> Enum.map(&elem(&1, 0))
+  end
+
+  defp cognitive_role_order(candidate) do
+    cond do
+      candidate.type == "grid" -> 9
+      candidate.node_id == candidate.thread_id and candidate.type == "question" -> 0
+      candidate.node_id == candidate.thread_id and candidate.node_class == "origin" -> 0
+      candidate.type == "key_node" and candidate.node_class == "answer" -> 1
+      candidate.type == "highlight" -> 2
+      candidate.type == "question" -> 3
+      candidate.type == "key_node" -> 4
+      true -> 8
+    end
+  end
+
+  defp candidate_detail_order(%{type: "highlight", source_id: source_id}, _discovery_index),
+    do: stream_order(source_id)
+
+  defp candidate_detail_order(_candidate, discovery_index), do: {0, discovery_index}
+
+  defp stream_order(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} -> {0, integer}
+      _ -> {1, value}
+    end
+  end
+
+  defp stream_order(_value), do: {2, ""}
 
   defp recommended_question_id(questions, recommended_question) do
     matching_questions =

@@ -8,11 +8,10 @@ defmodule GridMediaManager.Social.Templates do
 
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
+  alias GridMediaManager.Promotion.Markdown
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.RationalGrid.MediaPayload
   alias GridMediaManager.Social.Platforms
-
-  @base_angles ~w(question explainer discussion)
 
   def body(%Campaign{} = campaign, asset, platform, angle) do
     platform = if angle == "long_form", do: platform, else: canonical_platform(platform)
@@ -20,36 +19,21 @@ defmodule GridMediaManager.Social.Templates do
   end
 
   def draft_attrs(%Campaign{} = campaign, media_assets) when is_list(media_assets) do
-    base_drafts =
-      for platform <- Platforms.ids(),
-          angle <- @base_angles do
+    media_assets
+    |> Enum.flat_map(fn asset ->
+      platforms = asset_platforms(asset)
+      angle = asset_angle(asset)
+
+      Enum.map(platforms, fn platform ->
         %{
-          media_asset_id: nil,
+          media_asset_id: asset.id,
           platform: platform,
           angle: angle,
-          body: body(campaign, nil, platform, angle),
+          body: body(campaign, asset, platform, angle),
           status: "draft"
         }
-      end
-
-    asset_drafts =
-      media_assets
-      |> Enum.flat_map(fn asset ->
-        platforms = asset_platforms(asset)
-        angle = asset_angle(asset)
-
-        Enum.map(platforms, fn platform ->
-          %{
-            media_asset_id: asset.id,
-            platform: platform,
-            angle: angle,
-            body: body(campaign, asset, platform, angle),
-            status: "draft"
-          }
-        end)
       end)
-
-    base_drafts ++ asset_drafts
+    end)
   end
 
   def draft_attrs_for_platforms(%Campaign{} = campaign, media_assets, platforms)
@@ -221,14 +205,14 @@ defmodule GridMediaManager.Social.Templates do
          platform,
          "long_form"
        ) do
-    answer =
+    source =
       asset.text
       |> fallback(asset.title)
       |> to_string()
-      |> String.trim()
       |> fallback(asset.title |> fallback("Long-form answer") |> to_string())
 
-    fit_long_form_to_platform(answer, platform, asset_link(campaign, asset))
+    sections = Markdown.social_sections(source)
+    fit_long_form_to_platform(sections, platform, asset_link(campaign, asset))
   end
 
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "visual") do
@@ -322,8 +306,8 @@ defmodule GridMediaManager.Social.Templates do
            node when is_map(node) <- ShareCard.find_key_node(campaign, node_id) do
         ShareCard.node_short_video_slides(campaign, node)
         |> Enum.drop(1)
-        |> Enum.reject(&(Map.get(&1, :label) == "Learn more"))
-        |> Enum.map(&Map.get(&1, :body, ""))
+        |> Enum.reject(&(Map.get(&1, "label") == "Learn more"))
+        |> Enum.map(&Map.get(&1, "body", ""))
         |> Enum.reject(&(String.trim(&1) == ""))
         |> Enum.join("\n\n")
       else
@@ -482,27 +466,75 @@ defmodule GridMediaManager.Social.Templates do
     end
   end
 
-  defp fit_long_form_to_platform(copy, platform, link) do
+  defp fit_long_form_to_platform(sections, platform, link) do
     cta = cta_line(link)
+    copy = Enum.join(sections, "\n\n")
     full_copy = copy <> "\n\n" <> cta
 
     if Platforms.within_limit?(full_copy, platform) do
       full_copy
     else
       limit = Platforms.max_chars(platform)
-      available = max(limit - String.length(cta) - 3, 0)
+      available = max(limit - String.length(cta) - 5, 0)
 
       shortened =
-        copy
-        |> String.slice(0, available)
-        |> String.trim_trailing()
-        |> Kernel.<>("…")
+        sections
+        |> complete_sections_within(available)
+        |> fallback(logical_blocks_within(copy, available))
 
-      shortened_copy = shortened <> "\n\n" <> cta
+      shortened_copy = shortened <> "\n\n…\n\n" <> cta
 
       if Platforms.within_limit?(shortened_copy, platform), do: shortened_copy, else: cta
     end
   end
+
+  defp complete_sections_within(sections, limit) do
+    sections
+    |> Enum.reduce_while([], fn section, selected ->
+      candidate = Enum.join(selected ++ [section], "\n\n")
+
+      if String.length(candidate) <= limit do
+        {:cont, selected ++ [section]}
+      else
+        {:halt, selected}
+      end
+    end)
+    |> Enum.join("\n\n")
+  end
+
+  defp logical_blocks_within(copy, limit) do
+    copy
+    |> String.split(~r/\n{2,}/u, trim: true)
+    |> group_list_blocks()
+    |> Enum.reduce_while([], fn block, selected ->
+      candidate = Enum.join(selected ++ [block], "\n\n")
+
+      if String.length(candidate) <= limit do
+        {:cont, selected ++ [block]}
+      else
+        {:halt, selected}
+      end
+    end)
+    |> Enum.join("\n\n")
+  end
+
+  defp group_list_blocks(blocks) do
+    {groups, list_items} =
+      Enum.reduce(blocks, {[], []}, fn block, {groups, list_items} ->
+        if list_block?(block) do
+          {groups, list_items ++ [block]}
+        else
+          {append_list_group(groups, list_items) ++ [block], []}
+        end
+      end)
+
+    append_list_group(groups, list_items)
+  end
+
+  defp list_block?(block), do: Regex.match?(~r/^(?:•|\d+[.)])\s+/u, block)
+
+  defp append_list_group(groups, []), do: groups
+  defp append_list_group(groups, items), do: groups ++ [Enum.join(items, "\n\n")]
 
   defp compact_fallback(link) when is_binary(link) and link != "" do
     cta_line(link)

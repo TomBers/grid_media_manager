@@ -39,6 +39,52 @@ defmodule GridMediaManager.Promotion.MarkdownTest do
            ] = Markdown.blocks(markdown)
   end
 
+  test "converts Markdown to social text while preserving visible link destinations" do
+    markdown = """
+    # A useful heading
+
+    A paragraph with **strong text**, *emphasis*, and <strong>HTML</strong>.
+
+    > A quoted claim
+
+    - First point
+    - [Explore the grid](https://rationalgrid.ai/g/collective)
+
+    | Claim | Confidence |
+    | --- | --- |
+    | Art matters | High |
+
+    ```text
+    A preserved fenced line
+    ```
+
+    <https://rationalgrid.ai/g/another-grid>
+    """
+
+    expected =
+      [
+        "A useful heading",
+        "",
+        "A paragraph with strong text, emphasis, and HTML.",
+        "",
+        "“A quoted claim”",
+        "",
+        "• First point",
+        "",
+        "• Explore the grid — https://rationalgrid.ai/g/collective",
+        "",
+        "• Claim: Art matters · Confidence: High",
+        "",
+        "A preserved fenced line",
+        "",
+        "https://rationalgrid.ai/g/another-grid"
+      ]
+      |> Enum.join("\n")
+
+    assert Markdown.social_text(markdown) == expected
+    assert Markdown.social_sections(markdown) == [expected]
+  end
+
   test "paginates long blocks only at complete sentence boundaries" do
     text =
       "First complete thought. Second complete thought. Third complete thought. Fourth complete thought."
@@ -49,6 +95,61 @@ defmodule GridMediaManager.Promotion.MarkdownTest do
     assert length(page_texts) > 1
     assert Enum.all?(page_texts, &String.ends_with?(&1, "."))
     assert Enum.join(page_texts, " ") == text
+  end
+
+  test "enforces the page limit when a single sentence is unusually long" do
+    text =
+      "A single sentence can contain enough subordinate clauses and descriptive language to overwhelm a social video frame even though it never reaches a full stop"
+
+    pages = Markdown.paginate_blocks([%{type: :paragraph, text: text}], 60)
+    page_texts = Enum.map(pages, &Markdown.readable_text/1)
+
+    assert length(page_texts) == 3
+    assert Enum.all?(page_texts, &(String.length(&1) <= 60))
+    assert Enum.join(page_texts, " ") == text
+  end
+
+  test "does not split common abbreviations into broken reading beats" do
+    text =
+      "Professional fasters like Dr. Henry Tanner became global attractions. Their performances drew paying crowds."
+
+    pages = Markdown.paginate_blocks([%{type: :paragraph, text: text}], 80)
+
+    assert Enum.map(pages, &Markdown.readable_text/1) == [
+             "Professional fasters like Dr. Henry Tanner became global attractions.",
+             "Their performances drew paying crowds."
+           ]
+  end
+
+  test "removes editorial scaffolding while retaining genuine lists" do
+    blocks = [
+      %{type: :list_item, marker: "•", text: "Category: Historical foundation"},
+      %{
+        type: :list_item,
+        marker: "•",
+        text: "The Non-Obvious Connection: Fasting became a public spectacle."
+      },
+      %{
+        type: :list_item,
+        marker: "•",
+        text: "Question/Insight Opened: What did the audience reward?"
+      },
+      %{type: :list_item, marker: "•", text: "A genuine list item"}
+    ]
+
+    assert Markdown.presentation_blocks(blocks) == [
+             %{
+               type: :paragraph,
+               role: :connection,
+               text: "Fasting became a public spectacle."
+             },
+             %{
+               type: :paragraph,
+               role: :question,
+               text: "What did the audience reward?"
+             },
+             %{type: :list_item, marker: "•", text: "A genuine list item"}
+           ]
   end
 
   test "groups Markdown into carousel-ready sections" do

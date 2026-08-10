@@ -14,6 +14,7 @@ defmodule GridMediaManager.Campaigns.Campaign do
     field :tags, {:array, :string}, default: []
     field :node_count, :integer
     field :raw_payload, :map, default: %{}
+    field :studio_state, :map, default: %{}
     field :fetched_at, :utc_datetime
 
     has_many :media_assets, MediaAsset
@@ -33,6 +34,7 @@ defmodule GridMediaManager.Campaigns.Campaign do
       :tags,
       :node_count,
       :raw_payload,
+      :studio_state,
       :fetched_at
     ])
     |> validate_required([:slug, :title, :raw_payload, :fetched_at])

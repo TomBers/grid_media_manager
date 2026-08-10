@@ -8,6 +8,7 @@ defmodule GridMediaManager.Campaigns do
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Campaigns.PostDraft
+  alias GridMediaManager.Promotion.ArtifactStore
   alias GridMediaManager.Promotion.AssetRenderer
   alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
@@ -79,13 +80,6 @@ defmodule GridMediaManager.Campaigns do
     |> Repo.all()
   end
 
-  def list_all_post_drafts do
-    PostDraft
-    |> order_by([d], asc: d.inserted_at, asc: d.id)
-    |> preload([:media_asset, :campaign])
-    |> Repo.all()
-  end
-
   def ensure_post_drafts_for_platforms(campaign, media_assets, platforms, opts \\ [])
 
   def ensure_post_drafts_for_platforms(%Campaign{} = campaign, media_assets, platforms, opts)
@@ -119,6 +113,99 @@ defmodule GridMediaManager.Campaigns do
   end
 
   def get_media_asset!(id), do: Repo.get!(MediaAsset, parse_integer(id))
+
+  def get_media_asset(id) do
+    case positive_integer(id) do
+      {:ok, parsed_id} -> Repo.get(MediaAsset, parsed_id)
+      {:error, _reason} -> nil
+    end
+  end
+
+  def update_media_asset_slide(%MediaAsset{} = asset, slide_index, attrs)
+      when is_map(attrs) do
+    with {:ok, slide_index} <- positive_integer(slide_index),
+         slides when is_list(slides) <- Map.get(asset.metadata || %{}, "slides"),
+         true <- slide_index <= length(slides) do
+      slide = Enum.at(slides, slide_index - 1)
+
+      updated_slide =
+        slide
+        |> put_slide_value("title", Map.get(attrs, "title"))
+        |> put_slide_value("body", Map.get(attrs, "body"))
+        |> Map.drop(["blocks", :blocks])
+
+      metadata =
+        (asset.metadata || %{})
+        |> Map.put("slides", List.replace_at(slides, slide_index - 1, updated_slide))
+        |> invalidate_rendered_media()
+        |> refresh_video_timing(asset)
+
+      asset
+      |> MediaAsset.changeset(%{metadata: metadata})
+      |> Repo.update()
+    else
+      _error -> {:error, :invalid_slide}
+    end
+  end
+
+  def store_client_artifact(%MediaAsset{} = asset, slide_index, body) when is_binary(body) do
+    store_client_artifact(asset, slide_index, body, ArtifactStore.renderer_version())
+  end
+
+  def store_client_artifact(%MediaAsset{} = asset, slide_index, body, renderer_version)
+      when is_binary(body) do
+    with {:ok, slide_index} <- positive_integer(slide_index),
+         true <- slide_index in media_asset_slide_indexes(asset),
+         {:ok, artifact} <-
+           ArtifactStore.put_png(asset, slide_index, body, renderer_version) do
+      old_path = get_in(asset.metadata || %{}, ["artifacts", to_string(slide_index), "path"])
+
+      metadata =
+        (asset.metadata || %{})
+        |> invalidate_published_media()
+        |> Map.update("artifacts", %{to_string(slide_index) => artifact}, fn artifacts ->
+          Map.put(artifacts || %{}, to_string(slide_index), artifact)
+        end)
+
+      result =
+        asset
+        |> MediaAsset.changeset(%{metadata: metadata})
+        |> Repo.update()
+
+      if match?({:ok, _asset}, result) and is_binary(old_path) and old_path != artifact["path"] do
+        File.rm(old_path)
+      end
+
+      result
+    else
+      false -> {:error, :invalid_slide}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def media_asset_slide_indexes(%MediaAsset{metadata: metadata}) when is_map(metadata) do
+    slides = Map.get(metadata, "slides", [])
+    slide_count = max(length(slides), Map.get(metadata, "slide_count", 0) || 0)
+
+    cond do
+      slide_count == 0 ->
+        [1]
+
+      is_list(Map.get(metadata, "selected_slide_indexes")) ->
+        ShareCard.curated_carousel_selected_slide_indexes(
+          slides,
+          Map.get(metadata, "selected_slide_indexes")
+        )
+
+      true ->
+        Enum.to_list(1..slide_count)
+    end
+  end
+
+  def media_asset_slide_indexes(%MediaAsset{}), do: [1]
+
+  def media_asset_artifact_url(%MediaAsset{id: id}, slide_index \\ 1),
+    do: "/media-assets/#{id}/artifacts/#{slide_index}"
 
   def get_curated_carousel_asset(%Campaign{id: campaign_id}, token) when is_binary(token) do
     Repo.get_by(MediaAsset,
@@ -169,6 +256,14 @@ defmodule GridMediaManager.Campaigns do
     |> Repo.update()
   end
 
+  def update_post_draft_body(%PostDraft{} = post_draft, body) when is_binary(body) do
+    if PostDraft.editable?(post_draft) do
+      update_post_draft(post_draft, %{body: body})
+    else
+      {:error, :invalid_transition}
+    end
+  end
+
   def mark_post_draft_published(id, published_at \\ DateTime.utc_now()) do
     draft = get_post_draft_with_asset!(id)
     published_at = DateTime.truncate(published_at, :second)
@@ -208,25 +303,6 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
-  def assign_generation_batch(assets) when is_list(assets) do
-    batch_id = Ecto.UUID.generate()
-    generated_at = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
-
-    Repo.transaction(fn ->
-      Enum.map(assets, fn asset ->
-        metadata =
-          Map.merge(asset.metadata || %{}, %{
-            "generation_batch_id" => batch_id,
-            "generated_at" => generated_at
-          })
-
-        asset
-        |> MediaAsset.changeset(%{metadata: metadata})
-        |> Repo.update!()
-      end)
-    end)
-  end
-
   def set_pexels_background(%Campaign{} = campaign, photo) when is_map(photo) do
     background =
       photo
@@ -243,65 +319,55 @@ defmodule GridMediaManager.Campaigns do
       ])
       |> Map.new(fn {key, value} -> {Atom.to_string(key), value} end)
 
-    raw_payload = campaign.raw_payload || %{}
-
-    share_studio =
-      raw_payload
-      |> Map.get("share_studio", %{})
+    studio_state =
+      (campaign.studio_state || %{})
       |> Map.put("pexels_background", background)
       |> Map.put("title_card_mode", "pexels")
 
-    raw_payload = Map.put(raw_payload, "share_studio", share_studio)
-
     campaign
-    |> Campaign.changeset(%{raw_payload: raw_payload})
+    |> Campaign.changeset(%{studio_state: studio_state})
     |> Repo.update()
   end
 
   def clear_pexels_background(%Campaign{} = campaign) do
-    raw_payload =
-      update_in(campaign.raw_payload || %{}, ["share_studio"], fn
-        studio when is_map(studio) ->
-          studio
-          |> Map.delete("pexels_background")
-          |> Map.put("title_card_mode", "text")
-
-        _studio ->
-          %{}
-      end)
+    studio_state =
+      (campaign.studio_state || %{})
+      |> Map.delete("pexels_background")
+      |> Map.put("title_card_mode", "text")
 
     campaign
-    |> Campaign.changeset(%{raw_payload: raw_payload})
+    |> Campaign.changeset(%{studio_state: studio_state})
     |> Repo.update()
   end
 
   def pexels_background(%Campaign{} = campaign) do
-    get_in(campaign.raw_payload || %{}, ["share_studio", "pexels_background"])
+    Map.get(campaign.studio_state || %{}, "pexels_background") ||
+      get_in(campaign.raw_payload || %{}, ["share_studio", "pexels_background"])
   end
 
   def title_card_mode(%Campaign{} = campaign) do
-    get_in(campaign.raw_payload || %{}, ["share_studio", "title_card_mode"]) || "text"
+    Map.get(campaign.studio_state || %{}, "title_card_mode") ||
+      get_in(campaign.raw_payload || %{}, ["share_studio", "title_card_mode"]) || "text"
   end
 
   def guided_studio_state(%Campaign{} = campaign) do
-    get_in(campaign.raw_payload || %{}, ["share_studio", "state"]) || %{}
+    Map.get(campaign.studio_state || %{}, "state") ||
+      get_in(campaign.raw_payload || %{}, ["share_studio", "state"]) || %{}
   end
 
   def save_guided_studio_state(%Campaign{} = campaign, state) when is_map(state) do
-    raw_payload = campaign.raw_payload || %{}
-    share_studio = raw_payload |> Map.get("share_studio", %{}) |> Map.put("state", state)
+    studio_state = Map.put(campaign.studio_state || %{}, "state", state)
 
     campaign
-    |> Campaign.changeset(%{raw_payload: Map.put(raw_payload, "share_studio", share_studio)})
+    |> Campaign.changeset(%{studio_state: studio_state})
     |> Repo.update()
   end
 
   def set_title_card_mode(%Campaign{} = campaign, mode) when mode in ["text", "pexels"] do
-    raw_payload = campaign.raw_payload || %{}
-    share_studio = raw_payload |> Map.get("share_studio", %{}) |> Map.put("title_card_mode", mode)
+    studio_state = Map.put(campaign.studio_state || %{}, "title_card_mode", mode)
 
     campaign
-    |> Campaign.changeset(%{raw_payload: Map.put(raw_payload, "share_studio", share_studio)})
+    |> Campaign.changeset(%{studio_state: studio_state})
     |> Repo.update()
   end
 
@@ -310,59 +376,20 @@ defmodule GridMediaManager.Campaigns do
     post_draft = get_post_draft!(id)
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-    update_post_draft(post_draft, %{status: "copied", copied_at: now})
-  end
-
-  def approve_post_draft(id) do
-    id
-    |> get_post_draft!()
-    |> update_post_draft(%{status: "approved"})
-  end
-
-  def approve_post_drafts(ids) when is_list(ids),
-    do: approve_post_drafts_query(ids)
-
-  def set_post_draft_suggestion(id, %DateTime{} = suggested_for) do
-    id
-    |> get_post_draft!()
-    |> update_post_draft(%{suggested_for: DateTime.truncate(suggested_for, :second)})
-  end
-
-  def delete_post_drafts(ids) when is_list(ids) do
-    ids = ids |> Enum.map(&parse_integer/1) |> Enum.reject(&is_nil/1)
-
-    if ids == [] do
-      {:ok, 0}
+    if PostDraft.editable?(post_draft) do
+      update_post_draft(post_draft, %{status: "copied", copied_at: now})
     else
-      Repo.transaction(fn ->
-        {count, _rows} =
-          PostDraft
-          |> where([d], d.id in ^ids)
-          |> where([d], d.status in ["draft", "copied", "failed"])
-          |> Repo.delete_all()
-
-        count
-      end)
+      {:error, :invalid_transition}
     end
   end
 
-  defp approve_post_drafts_query(ids) do
-    ids = ids |> Enum.map(&parse_integer/1) |> Enum.reject(&is_nil/1)
+  def approve_post_draft(id) do
+    post_draft = get_post_draft!(id)
 
-    if ids == [] do
-      {:ok, []}
+    if PostDraft.approvable?(post_draft) do
+      update_post_draft(post_draft, %{status: "approved"})
     else
-      Repo.transaction(fn ->
-        PostDraft
-        |> where([d], d.id in ^ids)
-        |> where([d], d.status in ["draft", "copied"])
-        |> Repo.all()
-        |> Enum.map(fn draft ->
-          draft
-          |> PostDraft.changeset(%{status: "approved"})
-          |> Repo.update!()
-        end)
-      end)
+      {:error, :invalid_transition}
     end
   end
 
@@ -370,7 +397,10 @@ defmodule GridMediaManager.Campaigns do
     draft = get_post_draft_with_asset!(id)
     campaign = get_campaign!(draft.campaign_id)
 
-    with %{api_key: api_key, channel_id: channel_id} <-
+    with true <-
+           PostDraft.schedulable?(draft) ||
+             {:error, "Only draft, approved, or failed posts can be scheduled."},
+         %{api_key: api_key, channel_id: channel_id} <-
            Buffer.account_for(draft.platform) ||
              {:error, "Buffer account is not configured for this channel."},
          true <-
@@ -385,7 +415,6 @@ defmodule GridMediaManager.Campaigns do
              api_key: api_key,
              channel_id: channel_id,
              media: media,
-             title: buffer_post_title(campaign, draft.media_asset),
              title: buffer_post_title(campaign, draft.media_asset)
            ) do
         {:ok, post} ->
@@ -417,7 +446,7 @@ defmodule GridMediaManager.Campaigns do
 
   def generate_curated_carousel(%Campaign{} = campaign, candidates, style)
       when is_list(candidates) and length(candidates) >= 1 do
-    generate_curated_carousel(campaign, candidates, style, :with_drafts)
+    generate_curated_carousel(campaign, candidates, style, :with_drafts, :full)
   end
 
   def generate_curated_carousel(%Campaign{}, _candidates, _style),
@@ -425,13 +454,24 @@ defmodule GridMediaManager.Campaigns do
 
   def generate_curated_carousel_for_video(%Campaign{} = campaign, candidates, style)
       when is_list(candidates) and length(candidates) >= 1 do
-    generate_curated_carousel(campaign, candidates, style, :without_drafts)
+    generate_curated_carousel(campaign, candidates, style, :without_drafts, :short_video)
   end
 
-  defp generate_curated_carousel(%Campaign{} = campaign, candidates, style, draft_mode) do
+  def generate_curated_carousel_bundle(%Campaign{} = campaign, candidates, style)
+      when is_list(candidates) and length(candidates) >= 1 do
+    generate_curated_carousel(campaign, candidates, style, :with_drafts, :short_video)
+  end
+
+  defp generate_curated_carousel(
+         %Campaign{} = campaign,
+         candidates,
+         style,
+         draft_mode,
+         reading_mode
+       ) do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
-    slides = SlideSequence.build(campaign, candidates)
+    slides = SlideSequence.build(campaign, candidates, reading_mode: reading_mode)
     token = curated_carousel_token(candidates, slides, style)
 
     attrs = %{
@@ -489,57 +529,6 @@ defmodule GridMediaManager.Campaigns do
   def update_curated_carousel_selection(%MediaAsset{}, _selection),
     do: {:error, :invalid_carousel_selection}
 
-  def store_curated_carousel_browser_frame(%Campaign{} = campaign, token, slide_index, body)
-      when is_binary(body) do
-    with %MediaAsset{} <- get_curated_carousel_asset(campaign, token),
-         {:ok, slide_index} <- positive_integer(slide_index),
-         true <- browser_frame_slide?(campaign, token, slide_index),
-         {:ok, path} <- persist_browser_frame(campaign, token, slide_index, body),
-         {:ok, assets} <- update_browser_frame_assets(campaign, token, slide_index, path) do
-      {:ok, List.first(assets)}
-    else
-      nil -> {:error, :not_found}
-      false -> {:error, :invalid_slide}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  def store_curated_carousel_browser_frame(_campaign, _token, _slide_index, _body),
-    do: {:error, :invalid_frame}
-
-  def store_key_node_video_browser_frame(campaign, node_id, slide_index, body, opts \\ [])
-
-  def store_key_node_video_browser_frame(
-        %Campaign{} = campaign,
-        node_id,
-        slide_index,
-        body,
-        opts
-      )
-      when is_binary(body) and is_list(opts) do
-    with %MediaAsset{} = asset <-
-           key_node_browser_frame_asset(campaign, node_id, Keyword.get(opts, :asset_id)),
-         {:ok, slide_index} <- positive_integer(slide_index),
-         true <- browser_frame_asset_slide?(asset, slide_index),
-         {:ok, path} <-
-           persist_browser_frame(
-             campaign,
-             "node-#{node_id}-asset-#{asset.id}",
-             slide_index,
-             body
-           ),
-         {:ok, asset} <- update_key_node_browser_frame(asset, slide_index, path) do
-      {:ok, asset}
-    else
-      nil -> {:error, :not_found}
-      false -> {:error, :invalid_slide}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  def store_key_node_video_browser_frame(_campaign, _node_id, _slide_index, _body, _opts),
-    do: {:error, :invalid_frame}
-
   def generate_curated_carousel_video(
         %Campaign{} = campaign,
         %MediaAsset{kind: "curated_carousel"} = carousel
@@ -547,146 +536,11 @@ defmodule GridMediaManager.Campaigns do
     campaign = get_campaign!(campaign.id)
     slides = Map.get(carousel.metadata || %{}, "slides", [])
 
-    with {:ok, _path} <-
-           CarouselVideo.render_curated(
-             campaign,
-             carousel.source_id,
-             slides,
-             carousel.style,
-             force: true
-           ) do
-      campaign
-      |> CarouselVideo.curated_asset_attr(
-        carousel.source_id,
-        slides,
-        carousel.style
-      )
-      |> then(&upsert_generated_asset_with_drafts(campaign, &1))
-    end
-  end
-
-  defp browser_frame_slide?(campaign, token, slide_index) do
-    case get_curated_carousel_asset(campaign, token) do
-      %MediaAsset{} = asset ->
-        browser_frame_asset_slide?(asset, slide_index)
-
-      _asset ->
-        false
-    end
-  end
-
-  defp browser_frame_asset_slide?(%MediaAsset{metadata: metadata}, slide_index) do
-    metadata = metadata || %{}
-
-    slide_count =
-      max(length(Map.get(metadata, "slides", [])), Map.get(metadata, "slide_count", 0))
-
-    slide_count > 0 and slide_index in 1..slide_count
-  end
-
-  defp key_node_browser_frame_asset(campaign, node_id, nil),
-    do: get_key_node_video_asset(campaign, node_id)
-
-  defp key_node_browser_frame_asset(%Campaign{} = campaign, node_id, asset_id) do
-    with {:ok, asset_id} <- positive_integer(asset_id),
-         %MediaAsset{} = asset <- Repo.get(MediaAsset, asset_id),
-         true <- asset.campaign_id == campaign.id,
-         true <- asset.kind == "key_node_video",
-         true <- asset.source_id == to_string(node_id) do
-      asset
-    else
-      _value -> nil
-    end
-  end
-
-  defp persist_browser_frame(campaign, token, slide_index, body) do
-    digest = :crypto.hash(:sha256, body) |> Base.encode16(case: :lower)
-    directory = browser_frame_directory(campaign, token)
-    path = Path.join(directory, "#{slide_index}-#{String.slice(digest, 0, 24)}.png")
-
-    with :ok <- File.mkdir_p(directory), :ok <- File.write(path, body) do
-      {:ok, path}
-    end
-  end
-
-  defp update_browser_frame_assets(campaign, token, slide_index, path) do
-    assets =
-      MediaAsset
-      |> where([asset], asset.campaign_id == ^campaign.id)
-      |> where([asset], asset.source_id == ^token)
-      |> where([asset], asset.kind in ["curated_carousel", "curated_carousel_video"])
-      |> Repo.all()
-
-    if assets == [] do
-      {:error, :not_found}
-    else
-      old_paths =
-        assets
-        |> Enum.map(&get_in(&1.metadata || %{}, ["browser_frame_paths", to_string(slide_index)]))
-        |> Enum.filter(&is_binary/1)
-        |> Enum.uniq()
-
-      updated_assets =
-        Repo.transaction(fn ->
-          Enum.map(assets, fn asset ->
-            metadata =
-              (asset.metadata || %{})
-              |> Map.get_and_update("browser_frame_paths", fn paths ->
-                paths = if is_map(paths), do: paths, else: %{}
-                {paths, Map.put(paths, to_string(slide_index), path)}
-              end)
-              |> elem(1)
-
-            asset
-            |> MediaAsset.changeset(%{metadata: metadata})
-            |> Repo.update!()
-          end)
-        end)
-
-      Enum.each(old_paths, fn old_path ->
-        if old_path != path, do: File.rm(old_path)
-      end)
-
-      updated_assets
-    end
-  end
-
-  defp update_key_node_browser_frame(asset, slide_index, path) do
-    old_path = get_in(asset.metadata || %{}, ["browser_frame_paths", to_string(slide_index)])
-
-    metadata =
-      (asset.metadata || %{})
-      |> Map.get_and_update("browser_frame_paths", fn paths ->
-        paths = if is_map(paths), do: paths, else: %{}
-        {paths, Map.put(paths, to_string(slide_index), path)}
-      end)
-      |> elem(1)
-
-    result =
-      asset
-      |> MediaAsset.changeset(%{metadata: metadata})
-      |> Repo.update()
-
-    if match?({:ok, _asset}, result) and is_binary(old_path) and old_path != path do
-      File.rm(old_path)
-    end
-
-    result
-  end
-
-  defp browser_frame_directory(campaign, token) do
-    safe_token =
-      token
-      |> to_string()
-      |> String.replace(~r/[^a-zA-Z0-9_-]/, "_")
-
-    Path.join([
-      System.tmp_dir!(),
-      "grid_media_manager",
-      "browser_frames",
-      to_string(campaign.id),
-      safe_token
-    ])
+    campaign
+    |> CarouselVideo.curated_asset_attr(carousel.source_id, slides, carousel.style,
+      selected_slide_indexes: Map.get(carousel.metadata || %{}, "selected_slide_indexes")
+    )
+    |> then(&upsert_generated_asset_with_drafts(campaign, &1))
   end
 
   defp maybe_filter_asset_style(query, style) when is_binary(style),
@@ -719,21 +573,16 @@ defmodule GridMediaManager.Campaigns do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
 
-    with highlight when is_map(highlight) <- ShareCard.find_highlight(campaign, highlight_id),
-         {:ok, _path} <-
-           CarouselVideo.render_static(
-             {:highlight, campaign.id, highlight_id, style, highlight},
-             fn ->
-               ShareCard.highlight_platform_image_png(campaign, highlight, style, "short")
-             end,
-             force: true
-           ) do
-      campaign
-      |> ShareCard.highlight_short_video_asset_attr(highlight, style)
+    with highlight when is_map(highlight) <- ShareCard.find_highlight(campaign, highlight_id) do
+      attrs =
+        campaign
+        |> ShareCard.highlight_short_video_asset_attr(highlight, style)
+        |> put_single_slide("highlight")
+
+      attrs
       |> then(&upsert_generated_asset_with_drafts(campaign, &1))
     else
       nil -> {:error, :not_found}
-      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -753,11 +602,24 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
-  def generate_long_form_post(
-        %Campaign{} = campaign,
-        node_id,
-        style \\ ShareCard.default_style()
-      ) do
+  def generate_long_form_post(campaign, source, style \\ ShareCard.default_style())
+
+  def generate_long_form_post(%Campaign{} = campaign, candidates, style)
+      when is_list(candidates) and candidates != [] do
+    campaign = get_campaign!(campaign.id)
+
+    with attrs when is_map(attrs) <-
+           ShareCard.long_form_asset_attr(campaign, candidates, style) do
+      upsert_generated_asset_with_drafts(campaign, attrs)
+    else
+      _ -> {:error, :unsupported_content}
+    end
+  end
+
+  def generate_long_form_post(%Campaign{}, candidates, _style) when is_list(candidates),
+    do: {:error, :not_enough_candidates}
+
+  def generate_long_form_post(%Campaign{} = campaign, node_id, style) do
     campaign = get_campaign!(campaign.id)
 
     with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
@@ -798,14 +660,12 @@ defmodule GridMediaManager.Campaigns do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
 
-    with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
-         {:ok, _video_path} <- CarouselVideo.render(campaign, node, style, force: true) do
+    with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id) do
       campaign
       |> CarouselVideo.asset_attr(node, style)
       |> then(&upsert_generated_asset_with_drafts(campaign, &1))
     else
       nil -> {:error, :not_found}
-      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -834,19 +694,16 @@ defmodule GridMediaManager.Campaigns do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
 
-    with question when is_map(question) <- ShareCard.find_question(campaign, question_id),
-         {:ok, _path} <-
-           CarouselVideo.render_static(
-             {:question, campaign.id, question_id, style, question},
-             fn -> ShareCard.question_platform_image_png(campaign, question, style, "short") end,
-             force: true
-           ) do
-      campaign
-      |> ShareCard.question_short_video_asset_attr(question, style)
+    with question when is_map(question) <- ShareCard.find_question(campaign, question_id) do
+      attrs =
+        campaign
+        |> ShareCard.question_short_video_asset_attr(question, style)
+        |> put_single_slide("quote")
+
+      attrs
       |> then(&upsert_generated_asset_with_drafts(campaign, &1))
     else
       nil -> {:error, :not_found}
-      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -960,7 +817,7 @@ defmodule GridMediaManager.Campaigns do
   defp upsert_media_asset(%Campaign{} = campaign, attrs) do
     attrs = Map.put(attrs, :campaign_id, campaign.id)
 
-    case Repo.get_by(MediaAsset, campaign_id: campaign.id, url: attrs.url) do
+    case existing_media_asset(campaign, attrs) do
       nil ->
         %MediaAsset{}
         |> MediaAsset.changeset(attrs)
@@ -972,6 +829,20 @@ defmodule GridMediaManager.Campaigns do
         |> Repo.update!()
     end
   end
+
+  defp existing_media_asset(%Campaign{} = campaign, %{source_type: source_type} = attrs)
+       when is_binary(source_type) and source_type != "" do
+    Repo.get_by(MediaAsset,
+      campaign_id: campaign.id,
+      kind: attrs.kind,
+      source_type: source_type,
+      source_id: attrs.source_id,
+      style: attrs.style
+    ) || Repo.get_by(MediaAsset, campaign_id: campaign.id, url: attrs.url)
+  end
+
+  defp existing_media_asset(%Campaign{} = campaign, attrs),
+    do: Repo.get_by(MediaAsset, campaign_id: campaign.id, url: attrs.url)
 
   defp maybe_where_stale_asset(query, []), do: query
 
@@ -1111,8 +982,9 @@ defmodule GridMediaManager.Campaigns do
               S3.configured?() ->
                 publish_media_assets(campaign, asset)
 
-              asset.kind == "curated_carousel" ->
-                {:error, "Combined carousel scheduling requires S3 media publishing."}
+              String.starts_with?(url, "/client-assets/") ->
+                {:error,
+                 "Browser-rendered media requires S3 publishing before it can be scheduled."}
 
               true ->
                 with {:ok, base_url} <- public_base_url(),
@@ -1277,6 +1149,68 @@ defmodule GridMediaManager.Campaigns do
 
   defp where_media_asset_id(query, media_asset_id),
     do: where(query, [d], d.media_asset_id == ^media_asset_id)
+
+  defp put_slide_value(slide, _key, nil), do: slide
+
+  defp put_slide_value(slide, key, value) when is_map(slide) and is_binary(value) do
+    atom_key = if(key == "title", do: :title, else: :body)
+
+    cond do
+      Map.has_key?(slide, key) -> Map.put(slide, key, value)
+      Map.has_key?(slide, atom_key) -> Map.put(slide, atom_key, value)
+      true -> Map.put(slide, key, value)
+    end
+  end
+
+  defp invalidate_rendered_media(metadata) do
+    metadata
+    |> Map.drop(["artifacts", "browser_frame_paths"])
+    |> invalidate_published_media()
+  end
+
+  defp refresh_video_timing(metadata, %MediaAsset{mime_type: "video/mp4"} = asset) do
+    slides = Map.get(metadata, "slides", [])
+    indexes = media_asset_slide_indexes(%{asset | metadata: metadata})
+    frame_durations = CarouselVideo.slide_durations(slides)
+
+    metadata
+    |> Map.put("frame_durations", frame_durations)
+    |> Map.put(
+      "duration_seconds",
+      slides |> CarouselVideo.slide_durations(indexes) |> CarouselVideo.duration_seconds()
+    )
+  end
+
+  defp refresh_video_timing(metadata, %MediaAsset{}), do: metadata
+
+  defp put_single_slide(attrs, kind) when is_map(attrs) do
+    slide = %{
+      "kind" => kind,
+      "label" => "",
+      "title" => Map.get(attrs, :text) || Map.get(attrs, :title) || "",
+      "body" => ""
+    }
+
+    metadata =
+      (Map.get(attrs, :metadata) || %{})
+      |> Map.put("slides", [slide])
+      |> Map.put("slide_count", 1)
+
+    Map.put(attrs, :metadata, metadata)
+  end
+
+  defp invalidate_published_media(metadata) do
+    Map.drop(metadata, [
+      "published_url",
+      "published_urls",
+      "s3_key",
+      "s3_keys",
+      "sha256",
+      "sha256s",
+      "s3_deleted_at",
+      "s3_retained"
+    ])
+  end
 
   defp parse_integer(value) when is_integer(value), do: value
 

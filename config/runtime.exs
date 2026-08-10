@@ -49,6 +49,20 @@ if System.get_env("PHX_SERVER") do
   config :grid_media_manager, GridMediaManagerWeb.Endpoint, server: true
 end
 
+studio_username = System.get_env("STUDIO_BASIC_AUTH_USER")
+studio_password = System.get_env("STUDIO_BASIC_AUTH_PASSWORD")
+
+if config_env() == :prod and (studio_username in [nil, ""] or studio_password in [nil, ""]) do
+  raise """
+  STUDIO_BASIC_AUTH_USER and STUDIO_BASIC_AUTH_PASSWORD are required in production.
+  Remove this standalone boundary only after the studio uses RationalGrid's authenticated user session.
+  """
+end
+
+config :grid_media_manager, :studio_basic_auth,
+  username: studio_username,
+  password: studio_password
+
 config :grid_media_manager, :buffer,
   api_key: System.get_env("BUFFER_API_KEY"),
   video_api_key: System.get_env("BUFFER_VIDEO_API_KEY"),
@@ -61,13 +75,10 @@ config :grid_media_manager, :buffer,
   text_channels: %{
     "x" => System.get_env("BUFFER_TEXT_CHANNEL_X"),
     "linkedin" => System.get_env("BUFFER_TEXT_CHANNEL_LINKEDIN"),
-    "facebook" => System.get_env("BUFFER_TEXT_CHANNEL_FACEBOOK"),
-    "bluesky" => System.get_env("BUFFER_TEXT_CHANNEL_BLUESKY"),
-    "substack" => System.get_env("BUFFER_TEXT_CHANNEL_SUBSTACK")
+    "facebook" => System.get_env("BUFFER_TEXT_CHANNEL_FACEBOOK")
   },
   channels: %{
     "x" => System.get_env("BUFFER_CHANNEL_X"),
-    "bluesky" => System.get_env("BUFFER_CHANNEL_BLUESKY"),
     "linkedin" => System.get_env("BUFFER_CHANNEL_LINKEDIN"),
     "instagram" => System.get_env("BUFFER_CHANNEL_INSTAGRAM"),
     "youtube" => System.get_env("BUFFER_CHANNEL_YOUTUBE"),

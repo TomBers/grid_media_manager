@@ -198,6 +198,48 @@ defmodule GridMediaManager.Social.TemplatesTest do
     assert Enum.all?(drafts, fn draft -> Platforms.within_limit?(draft.body, draft.platform) end)
   end
 
+  test "long-form drafts use social-safe plain text and retain RationalGrid links" do
+    campaign = campaign()
+
+    asset = %MediaAsset{
+      id: 1,
+      title: "A formatted answer",
+      kind: "long_form_post",
+      node_id: "node-1",
+      text: """
+      # A formatted answer
+
+      This has **strong emphasis** and <em>HTML emphasis</em>.
+
+      > A claim worth quoting
+
+      - First implication
+      - [Read the source](https://rationalgrid.ai/g/source-grid)
+
+      | Prediction | Confidence |
+      | --- | --- |
+      | Better comprehension | High |
+      """
+    }
+
+    for platform <- Platforms.long_form_ids() do
+      body = Templates.body(campaign, asset, platform, "long_form")
+
+      assert body =~ "A formatted answer"
+      assert body =~ "This has strong emphasis and HTML emphasis."
+      assert body =~ "“A claim worth quoting”"
+      assert body =~ "• First implication"
+      assert body =~ "Read the source — https://rationalgrid.ai/g/source-grid"
+      assert body =~ "• Prediction: Better comprehension · Confidence: High"
+      assert body =~ "Learn more at RationalGrid.ai:"
+      assert body =~ "https://rationalgrid.ai/g/collective?node=node-1"
+      refute body =~ "# A formatted answer"
+      refute body =~ "**strong emphasis**"
+      refute body =~ "<em>"
+      refute body =~ "| --- |"
+    end
+  end
+
   test "long-form copy uses LinkedIn and Facebook limits instead of the X limit" do
     campaign = campaign()
     answer = String.duplicate("A complete formatted paragraph.\n\n", 160)
@@ -211,6 +253,45 @@ defmodule GridMediaManager.Social.TemplatesTest do
     assert Platforms.within_limit?(facebook, "facebook")
     assert facebook =~ String.trim(answer)
     assert facebook =~ "https://rationalgrid.ai/g/collective?node=node-1"
+  end
+
+  test "LinkedIn long-form copy ends at a complete section before a trailing list" do
+    campaign = campaign()
+
+    complete_argument =
+      Enum.map_join(1..88, " ", fn index ->
+        "Complete argument sentence #{index}."
+      end)
+
+    follow_up = String.duplicate("This question needs its full context to remain readable. ", 4)
+
+    asset = %MediaAsset{
+      kind: "long_form_post",
+      node_id: "node-1",
+      text: """
+      # Main argument
+
+      #{complete_argument}
+
+      ## Follow-up questions
+
+      1. #{follow_up}
+      2. #{follow_up}
+      3. #{follow_up}
+      """
+    }
+
+    linkedin = Templates.body(campaign, asset, "linkedin", "long_form")
+    facebook = Templates.body(campaign, asset, "facebook", "long_form")
+
+    assert linkedin =~ "Complete argument sentence 88."
+    refute linkedin =~ "Follow-up questions"
+    refute linkedin =~ "1. This question"
+    assert linkedin =~ "\n\n…\n\nLearn more at RationalGrid.ai:"
+    assert linkedin =~ "https://rationalgrid.ai/g/collective?node=node-1"
+
+    assert facebook =~ "Follow-up questions"
+    assert facebook =~ "3. This question"
   end
 
   test "long-form posts never create blank drafts" do

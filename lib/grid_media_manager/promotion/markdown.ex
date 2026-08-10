@@ -2,15 +2,18 @@ defmodule GridMediaManager.Promotion.Markdown do
   @moduledoc """
   Extracts presentation-oriented block structure from RationalGrid Markdown.
 
-  The media pipeline renders SVG rather than browser HTML, so this module keeps
-  the semantic parts that improve card readability without depending on a DOM.
+  The browser canvas consumes these semantic blocks so editable text retains
+  headings, quotes, and list structure without depending on server rendering.
   """
+
+  @protected_period "\uE000"
 
   @type block :: %{
           required(:type) => :heading | :paragraph | :blockquote | :list_item,
           required(:text) => String.t(),
           optional(:level) => pos_integer(),
-          optional(:marker) => String.t()
+          optional(:marker) => String.t(),
+          optional(:role) => :connection | :question
         }
 
   @spec blocks(term()) :: [block()]
@@ -67,6 +70,22 @@ defmodule GridMediaManager.Promotion.Markdown do
 
   def paginate_blocks(_blocks, _max_characters), do: []
 
+  @doc """
+  Removes authoring scaffolding that is useful in Markdown but distracting on a slide.
+
+  Semantic lists remain lists. Editorial labels such as `Category` are removed,
+  while labelled explanation and question items become clean prose blocks.
+  """
+  @spec presentation_blocks([block()]) :: [block()]
+  def presentation_blocks(blocks) when is_list(blocks) do
+    Enum.flat_map(blocks, fn
+      %{type: :list_item, text: text} = block -> presentation_list_item(block, text)
+      block -> [block]
+    end)
+  end
+
+  def presentation_blocks(_blocks), do: []
+
   @spec readable_text([block()]) :: String.t()
   def readable_text(blocks) when is_list(blocks) do
     blocks
@@ -99,9 +118,45 @@ defmodule GridMediaManager.Promotion.Markdown do
 
   def plain_inline(text), do: text |> to_string() |> plain_inline()
 
+  @doc """
+  Converts authored Markdown into plain text suitable for social feed posts.
+
+  Block structure becomes whitespace, Unicode bullets, and typographic quotation
+  marks. Unlike slide-oriented text, link destinations remain visible because
+  Facebook and LinkedIn only make pasted URLs clickable.
+  """
+  @spec social_text(term()) :: String.t()
+  def social_text(markdown) when is_binary(markdown) do
+    markdown
+    |> social_sections()
+    |> Enum.join("\n\n")
+  end
+
+  def social_text(markdown), do: markdown |> to_string() |> social_text()
+
+  @doc """
+  Returns the same social-safe text grouped into complete authored sections.
+
+  These boundaries let character-limited platforms omit a complete trailing
+  section rather than cutting through one of its paragraphs or lists.
+  """
+  @spec social_sections(term()) :: [String.t()]
+  def social_sections(markdown) when is_binary(markdown) do
+    markdown
+    |> preserve_link_destinations()
+    |> prepare_social_blocks()
+    |> blocks()
+    |> group_social_sections()
+    |> Enum.map(&readable_text/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  def social_sections(markdown), do: markdown |> to_string() |> social_sections()
+
   defp split_block(%{text: text} = block, max_characters) do
     text
     |> complete_sentences()
+    |> Enum.flat_map(&split_long_text(&1, max_characters))
     |> Enum.reduce([], fn sentence, chunks ->
       append_sentence(chunks, sentence, max_characters)
     end)
@@ -110,15 +165,172 @@ defmodule GridMediaManager.Promotion.Markdown do
 
   defp split_block(_block, _max_characters), do: []
 
+  defp preserve_link_destinations(markdown) do
+    markdown =
+      Regex.replace(
+        ~r/!?\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/u,
+        markdown,
+        fn
+          _match, "", url -> url
+          _match, label, url when label == url -> url
+          _match, label, url -> "#{label} — #{url}"
+        end
+      )
+
+    Regex.replace(~r/<((?:https?:\/\/|mailto:)[^>]+)>/u, markdown, "\\1")
+  end
+
+  defp prepare_social_blocks(markdown) do
+    markdown
+    |> String.replace("\r\n", "\n")
+    |> String.split("\n")
+    |> Enum.reject(&Regex.match?(~r/^\s*```/u, &1))
+    |> social_table_lines()
+    |> Enum.join("\n")
+  end
+
+  defp social_table_lines([header, separator | rest]) do
+    if table_row?(header) and table_separator?(separator) do
+      {rows, remaining} = Enum.split_while(rest, &table_row?/1)
+      headers = table_cells(header)
+
+      ["" | Enum.map(rows, &social_table_row(headers, &1))] ++
+        ["" | social_table_lines(remaining)]
+    else
+      [header | social_table_lines([separator | rest])]
+    end
+  end
+
+  defp social_table_lines(lines), do: lines
+
+  defp table_row?(line) do
+    line = String.trim(line)
+    String.starts_with?(line, "|") and String.ends_with?(line, "|")
+  end
+
+  defp table_separator?(line) do
+    line
+    |> table_cells()
+    |> case do
+      [] -> false
+      cells -> Enum.all?(cells, &Regex.match?(~r/^:?-{3,}:?$/u, &1))
+    end
+  end
+
+  defp table_cells(line) do
+    line
+    |> String.trim()
+    |> String.trim("|")
+    |> String.split("|")
+    |> Enum.map(&String.trim/1)
+  end
+
+  defp social_table_row(headers, row) do
+    text =
+      headers
+      |> Enum.zip(table_cells(row))
+      |> Enum.reject(fn {_header, value} -> value == "" end)
+      |> Enum.map_join(" · ", fn
+        {"", value} -> value
+        {header, value} -> "#{header}: #{value}"
+      end)
+
+    "- #{text}"
+  end
+
+  defp group_social_sections(blocks) do
+    {sections, current, _heading_seen?} =
+      Enum.reduce(blocks, {[], [], false}, fn
+        %{type: :heading} = heading, {sections, current, false} ->
+          {sections, current ++ [heading], true}
+
+        %{type: :heading} = heading, {sections, current, true} ->
+          {append_social_section(sections, current), [heading], true}
+
+        block, {sections, current, heading_seen?} ->
+          {sections, current ++ [block], heading_seen?}
+      end)
+
+    append_social_section(sections, current)
+  end
+
+  defp append_social_section(sections, []), do: sections
+  defp append_social_section(sections, blocks), do: sections ++ [blocks]
+
+  defp presentation_list_item(_block, text) do
+    cond do
+      Regex.match?(~r/^category\s*:/iu, text) ->
+        []
+
+      match =
+          Regex.run(
+            ~r/^(?:the\s+)?(?:non-obvious\s+connection|question\/insight\s+opened|key\s+insight|connection)\s*:\s*(.+)$/iu,
+            text,
+            capture: :all_but_first
+          ) ->
+        role = if Regex.match?(~r/question\/insight/iu, text), do: :question, else: :connection
+
+        [
+          %{
+            type: :paragraph,
+            role: role,
+            text: match |> List.first() |> String.trim()
+          }
+        ]
+
+      true ->
+        [%{type: :list_item, marker: "•", text: text}]
+    end
+  end
+
+  defp split_long_text(text, max_characters) do
+    text
+    |> String.split(~r/\s+/u, trim: true)
+    |> Enum.reduce([], fn word, chunks ->
+      case List.pop_at(chunks, -1) do
+        {nil, []} ->
+          [word]
+
+        {current, previous} ->
+          combined = current <> " " <> word
+
+          if String.length(combined) <= max_characters do
+            previous ++ [combined]
+          else
+            chunks ++ [word]
+          end
+      end
+    end)
+  end
+
   defp complete_sentences(text) do
-    Regex.scan(~r/.+?(?:[.!?]+(?=\s|$)|$)/u, text)
+    text
+    |> protect_abbreviation_periods()
+    |> then(&Regex.scan(~r/.+?(?:[.!?]+(?=\s|$)|$)/u, &1))
     |> List.flatten()
+    |> Enum.map(&String.replace(&1, @protected_period, "."))
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
     |> case do
       [] -> [String.trim(text)]
       sentences -> sentences
     end
+  end
+
+  defp protect_abbreviation_periods(text) do
+    text
+    |> String.replace(
+      ~r/\b(Dr|Mr|Mrs|Ms|Prof|Sr|Jr|St)\./u,
+      "\\1" <> @protected_period
+    )
+    |> String.replace(
+      ~r/\b(e)\.(g)\./iu,
+      "\\1" <> @protected_period <> "\\2" <> @protected_period
+    )
+    |> String.replace(
+      ~r/\b(i)\.(e)\./iu,
+      "\\1" <> @protected_period <> "\\2" <> @protected_period
+    )
   end
 
   defp append_sentence([], sentence, _max_characters), do: [sentence]

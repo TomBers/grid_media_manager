@@ -26,6 +26,29 @@ import {hooks as colocatedHooks} from "phoenix-colocated/grid_media_manager"
 import topbar from "../vendor/topbar"
 import {CanvasSlideRenderer} from "./canvas_slide_renderer"
 
+const systemTheme = () => window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+
+const setTheme = theme => {
+  document.documentElement.setAttribute("data-theme-choice", theme)
+
+  if (theme === "system") {
+    localStorage.removeItem("phx:theme")
+    document.documentElement.setAttribute("data-theme", systemTheme())
+  } else {
+    localStorage.setItem("phx:theme", theme)
+    document.documentElement.setAttribute("data-theme", theme)
+  }
+}
+
+setTheme(localStorage.getItem("phx:theme") || "system")
+window.addEventListener("storage", event => {
+  if (event.key === "phx:theme") setTheme(event.newValue || "system")
+})
+window.addEventListener("phx:set-theme", event => setTheme(event.target.dataset.phxTheme))
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (!localStorage.getItem("phx:theme")) setTheme("system")
+})
+
 const Hooks = {...colocatedHooks, CanvasSlideRenderer}
 
 Hooks.CopyToClipboard = {
@@ -62,19 +85,12 @@ Hooks.CopyToClipboard = {
 
 Hooks.PreserveScrollPosition = {
   mounted() {
+    this.step = this.el.dataset.step
+
     this.el.addEventListener("click", event => {
       if (!event.target.closest("#content-candidates button")) return
 
-      const scrollY = window.scrollY
-      const restore = () => window.scrollTo({top: scrollY, left: window.scrollX, behavior: "instant"})
-
-      window.requestAnimationFrame(() => {
-        restore()
-        window.requestAnimationFrame(() => {
-          restore()
-          window.setTimeout(restore, 40)
-        })
-      })
+      this.restoreScroll(window.scrollY)
     }, true)
   },
 
@@ -83,15 +99,32 @@ Hooks.PreserveScrollPosition = {
   },
 
   updated() {
-    if (typeof this.scrollY === "number") {
-      const scrollY = this.scrollY
-      window.requestAnimationFrame(() => {
-        window.scrollTo({top: scrollY, left: window.scrollX, behavior: "instant"})
-      })
-      window.setTimeout(() => {
-        window.scrollTo({top: scrollY, left: window.scrollX, behavior: "instant"})
-      }, 0)
+    const stepChanged = this.el.dataset.step !== this.step
+    this.step = this.el.dataset.step
+
+    if (stepChanged) {
+      document.activeElement?.blur?.()
+      this.scrollY = 0
+      this.restoreScroll(0)
+      return
     }
+
+    if (typeof this.scrollY === "number") {
+      this.restoreScroll(this.scrollY)
+    }
+  },
+
+  restoreScroll(scrollY) {
+    const restore = () => window.scrollTo({top: scrollY, left: 0, behavior: "instant"})
+
+    restore()
+    window.requestAnimationFrame(() => {
+      restore()
+      window.requestAnimationFrame(() => {
+        restore()
+        window.setTimeout(restore, 40)
+      })
+    })
   },
 }
 
