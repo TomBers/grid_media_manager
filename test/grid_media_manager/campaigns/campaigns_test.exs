@@ -168,6 +168,8 @@ defmodule GridMediaManager.CampaignsTest do
     assert video.metadata["frame_durations"] ==
              CarouselVideo.slide_durations(video.metadata["slides"])
 
+    refute Map.has_key?(video.metadata, "background_audio")
+
     assert video.metadata["duration_seconds"] ==
              video.metadata["slides"]
              |> CarouselVideo.slide_durations(video.metadata["selected_slide_indexes"])

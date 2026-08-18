@@ -11,7 +11,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Promotion.ArtifactStore
-  alias GridMediaManager.Promotion.SeamlessAudioLoop
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.Social.Platforms
 
@@ -21,14 +20,10 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @maximum_frame_seconds 14.0
   @words_per_second 3.0
   @reading_buffer_seconds 1.75
-  @audio_fade_seconds 0.5
-  @audio_volume 0.18
-  @audio_bitrate "160k"
   @frame_rate 30
   @render_timeout 300_000
   @render_timeout_per_second 5_000
-  @cache_version 27
-  @default_background_audio_path "priv/static/sounds/rationalgrid_theme.mp4"
+  @cache_version 28
 
   def available?, do: is_binary(ffmpeg_path())
 
@@ -136,8 +131,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     |> duration_seconds()
   end
 
-  def background_audio_available?, do: is_binary(background_audio_path())
-
   @doc """
   Encodes finished client artifacts without changing their visual content.
   """
@@ -179,7 +172,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       "slide_count" => length(slides),
       "duration_seconds" => duration_seconds(frame_durations),
       "frame_durations" => frame_durations,
-      "background_audio" => background_audio_available?(),
       "slides" => slides
     }
   end
@@ -198,7 +190,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
         slide_paths = write_frames!(length(durations), frame_fun, work_dir)
         manifest_path = write_concat_manifest!(slide_paths, durations, work_dir)
         temporary_output = Path.join(work_dir, "artifact.mp4")
-        args = ffmpeg_args(manifest_path, background_audio_path(), temporary_output, durations)
+        args = ffmpeg_args(manifest_path, temporary_output, durations)
 
         case run_ffmpeg(ffmpeg, args, duration_seconds(durations)) do
           {:ok, _output} ->
@@ -251,10 +243,8 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   defp escape_concat_path(path), do: String.replace(path, "'", "'\\''")
 
-  defp ffmpeg_args(manifest_path, audio_path, output_path, durations) do
-    audio? = is_binary(audio_path)
+  defp ffmpeg_args(manifest_path, output_path, durations) do
     duration = duration_seconds(durations)
-    audio_filter = if(audio?, do: audio_filter(audio_path, duration))
 
     [
       "-y",
@@ -266,54 +256,30 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       "-safe",
       "0",
       "-i",
-      manifest_path
-    ] ++
-      SeamlessAudioLoop.input_args(audio_path) ++
-      ["-vf", video_filter(), "-map", "0:v:0"] ++
-      if(audio?,
-        do: [
-          "-filter_complex",
-          audio_filter,
-          "-map",
-          "[#{SeamlessAudioLoop.output_label()}]"
-        ],
-        else: ["-an"]
-      ) ++
-      [
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "20",
-        "-pix_fmt",
-        "yuv420p",
-        "-r",
-        Integer.to_string(@frame_rate),
-        "-t",
-        decimal(duration)
-      ] ++
-      if(audio?, do: ["-c:a", "aac", "-b:a", @audio_bitrate], else: []) ++
-      ["-movflags", "+faststart", "-f", "mp4", output_path]
-  end
-
-  defp audio_filter(audio_path, output_duration) do
-    case SeamlessAudioLoop.source_duration(audio_path) do
-      {:ok, source_duration} ->
-        SeamlessAudioLoop.filter(
-          source_duration,
-          output_duration,
-          @audio_volume,
-          @audio_fade_seconds
-        )
-
-      {:error, _reason} ->
-        SeamlessAudioLoop.fallback_filter(
-          output_duration,
-          @audio_volume,
-          @audio_fade_seconds
-        )
-    end
+      manifest_path,
+      "-vf",
+      video_filter(),
+      "-map",
+      "0:v:0",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "20",
+      "-pix_fmt",
+      "yuv420p",
+      "-r",
+      Integer.to_string(@frame_rate),
+      "-t",
+      decimal(duration),
+      "-movflags",
+      "+faststart",
+      "-f",
+      "mp4",
+      output_path
+    ]
   end
 
   defp video_filter do
@@ -365,8 +331,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     signature = Enum.map(artifacts, &Map.take(&1, ["sha256", "byte_size"]))
 
     digest =
-      {@cache_version, asset.id, indexes, signature, durations, video_filter(),
-       background_audio_signature()}
+      {@cache_version, asset.id, indexes, signature, durations, video_filter()}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))
       |> Base.url_encode64(padding: false)
@@ -392,27 +357,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       {:ok, %{type: :regular, size: size}} when size > 0 -> true
       _result -> false
     end
-  end
-
-  defp background_audio_signature do
-    case background_audio_path() do
-      nil ->
-        :no_audio
-
-      path ->
-        case File.stat(path) do
-          {:ok, stat} -> {path, stat.size, stat.mtime, @audio_volume}
-          {:error, _reason} -> :no_audio
-        end
-    end
-  end
-
-  defp background_audio_path do
-    path =
-      Application.get_env(:grid_media_manager, :video_background_audio_path) ||
-        Application.app_dir(:grid_media_manager, @default_background_audio_path)
-
-    if is_binary(path) and File.regular?(path), do: path
   end
 
   defp ffmpeg_timeout(expected_duration) do
