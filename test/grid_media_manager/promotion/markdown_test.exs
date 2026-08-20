@@ -184,6 +184,23 @@ defmodule GridMediaManager.Promotion.MarkdownTest do
     assert Enum.at(sections, 1).text == "What would change your mind?"
   end
 
+  test "keeps headings that only begin with a reference label" do
+    markdown = """
+    # Sources of uncertainty
+
+    This discussion belongs in the public content.
+
+    ## References
+
+    - A private source
+    """
+
+    assert [%{title: "Sources of uncertainty", text: text}] =
+             Markdown.presentation_sections(markdown)
+
+    assert text == "This discussion belongs in the public content."
+  end
+
   test "recognises reference labels authored as list items or trailing prose" do
     assert [%{text: "A useful conclusion."}] =
              Markdown.presentation_sections("""

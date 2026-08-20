@@ -2,10 +2,12 @@ defmodule GridMediaManager.AutomationTest do
   use GridMediaManager.DataCase
 
   alias GridMediaManager.Automation
+  alias GridMediaManager.Automation.EditorialBatch
   alias GridMediaManager.AutomationRendererStub
   alias GridMediaManager.Campaigns
   alias GridMediaManager.EditorialSelectorStub
   alias GridMediaManager.RationalGrid.GridIndex
+  alias GridMediaManager.Repo
 
   test "plans three grounded stories and persists their selected candidate keys" do
     topics = ["Collective intelligence", "Digital identity", "Future education"]
@@ -76,6 +78,20 @@ defmodule GridMediaManager.AutomationTest do
 
     assert {:error, changeset} = Automation.create_batch(Enum.map(1..11, &"Topic #{&1}"))
     assert "must be less than or equal to 10" in errors_on(changeset).requested_count
+
+    assert {:error, changeset} = Automation.create_batch(nil)
+    assert "can't be blank" in errors_on(changeset).topics
+  end
+
+  test "does not start a batch that another runner has already claimed" do
+    assert {:ok, batch} = Automation.create_batch(["Claimed topic"])
+
+    batch
+    |> EditorialBatch.changeset(%{status: "planning"})
+    |> Repo.update!()
+
+    assert {:error, :editorial_batch_already_running} = Automation.run_batch(batch)
+    assert Automation.get_batch(batch.id).status == "planning"
   end
 
   test "autopilot chooses the requested number of topics and preserves the theme" do

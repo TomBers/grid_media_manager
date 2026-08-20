@@ -524,10 +524,10 @@ defmodule GridMediaManagerWeb.GridImportLive do
   defp automation_error(changeset) do
     case Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end) do
       %{topics: [message | _rest]} ->
-        "Topics #{message}. Enter exactly three topics, one per line."
+        "Topics #{message}. Enter between one and ten different topics, one per line."
 
       _errors ->
-        "Enter exactly three different topics, one per line."
+        "Enter between one and ten different topics, one per line."
     end
   end
 end

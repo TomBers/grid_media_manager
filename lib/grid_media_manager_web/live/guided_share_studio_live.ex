@@ -98,7 +98,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     selected_keys = restored_selected_keys(candidates, studio_state, planned_keys)
 
     selected_order =
-      restored_selected_order(candidates, selected_keys, studio_state)
+      restored_selected_order(candidates, selected_keys, studio_state, planned_keys)
 
     expanded_thread_ids = initial_expanded_thread_ids(candidates, selected_keys)
 
@@ -2526,10 +2526,22 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp restored_candidate_key(_key, _candidates, _candidates_by_key), do: nil
 
-  defp restored_selected_order(candidates, selected_keys, state) do
-    order = Map.get(state, "selected_keys", [])
+  defp restored_selected_order(candidates, selected_keys, state, planned_keys) do
+    candidates_by_key = Map.new(candidates, &{&1.key, &1})
+
+    order =
+      if planned_keys == [],
+        do: Map.get(state, "selected_keys", []),
+        else: planned_keys
+
+    restored_order =
+      order
+      |> Enum.map(&restored_candidate_key(&1, candidates, candidates_by_key))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.filter(&MapSet.member?(selected_keys, &1))
+
     selected = Workflow.selected_candidates(candidates, selected_keys) |> Enum.map(& &1.key)
-    Enum.uniq(Enum.filter(order, &MapSet.member?(selected_keys, &1)) ++ selected)
+    Enum.uniq(restored_order ++ selected)
   end
 
   defp move_to_step(socket, step) do

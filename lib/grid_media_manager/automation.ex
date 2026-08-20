@@ -43,9 +43,15 @@ defmodule GridMediaManager.Automation do
   end
 
   def create_batch(_topics) do
-    %EditorialBatch{}
-    |> EditorialBatch.changeset(%{topics: [], requested_count: 3, status: "pending"})
-    |> Repo.insert()
+    changeset =
+      EditorialBatch.changeset(%EditorialBatch{}, %{
+        topics: nil,
+        requested_count: 1,
+        status: "pending",
+        model: LLMSelector.model()
+      })
+
+    {:error, changeset}
   end
 
   def create_autopilot_batch(count, theme) do
@@ -83,12 +89,22 @@ defmodule GridMediaManager.Automation do
   end
 
   def run_batch(%EditorialBatch{} = batch, opts \\ []) do
+    claim_statuses =
+      if Keyword.get(opts, :retry, false),
+        do: ["pending", "partial", "failed", "completed"],
+        else: ["pending"]
+
+    case claim_batch(batch.id, claim_statuses) do
+      {:ok, claimed_batch} -> run_claimed_batch(claimed_batch, opts)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp run_claimed_batch(batch, opts) do
     selector = Keyword.get(opts, :selector, LLMSelector)
     cover_search? = Keyword.get(opts, :cover_search, selector == LLMSelector)
-    batch = Repo.get!(EditorialBatch, batch.id)
 
-    with {:ok, batch} <- update_batch(batch, %{status: "planning", error_message: nil}),
-         {:ok, batch, topic_inputs} <- prepare_topic_inputs(batch, selector) do
+    with {:ok, batch, topic_inputs} <- prepare_topic_inputs(batch, selector) do
       results =
         topic_inputs
         |> Task.async_stream(
@@ -140,6 +156,20 @@ defmodule GridMediaManager.Automation do
       {:error, error}
   end
 
+  defp claim_batch(batch_id, statuses) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    {claimed_count, _result} =
+      EditorialBatch
+      |> where([batch], batch.id == ^batch_id and batch.status in ^statuses)
+      |> Repo.update_all(set: [status: "planning", error_message: nil, updated_at: now])
+
+    case claimed_count do
+      1 -> {:ok, Repo.get!(EditorialBatch, batch_id)}
+      0 -> {:error, :editorial_batch_already_running}
+    end
+  end
+
   def selected_keys_for_campaign(plan_id, %Campaign{id: campaign_id}) do
     case get_plan(plan_id) do
       %EditorialPlan{campaign_id: ^campaign_id, status: "planned", selected_keys: keys} -> keys
@@ -184,16 +214,23 @@ defmodule GridMediaManager.Automation do
          {:ok, batch} <- prepare_asset_batch(batch, opts) do
       plans = Enum.sort_by(batch.plans, & &1.position)
 
+      plan_positions = Map.new(Enum.with_index(plans), fn {plan, index} -> {plan.id, index} end)
+
+      campaign_plan_groups = plans |> Enum.group_by(& &1.campaign_id) |> Map.values()
+
       plan_results =
-        plans
+        campaign_plan_groups
         |> Task.async_stream(
-          &generate_plan_assets(&1, renderer, renderer_opts),
+          fn campaign_plans ->
+            Enum.map(campaign_plans, &generate_plan_assets(&1, renderer, renderer_opts))
+          end,
           ordered: true,
           max_concurrency: max_concurrency,
           timeout: :infinity
         )
-        |> Enum.zip(plans)
-        |> Enum.map(&normalize_plan_task/1)
+        |> Enum.zip(campaign_plan_groups)
+        |> Enum.flat_map(&normalize_plan_group_task/1)
+        |> Enum.sort_by(&Map.fetch!(plan_positions, &1.plan_id))
 
       {:ok,
        %{
@@ -277,7 +314,9 @@ defmodule GridMediaManager.Automation do
 
     cond do
       batch.status == "pending" or Keyword.get(opts, :replan, false) ->
-        planning_opts = Keyword.take(opts, [:selector, :cover_search])
+        planning_opts =
+          opts |> Keyword.take([:selector, :cover_search]) |> Keyword.put(:retry, true)
+
         run_batch(batch, planning_opts)
 
       batch.status == "planning" ->
@@ -386,8 +425,11 @@ defmodule GridMediaManager.Automation do
     }
   end
 
-  defp normalize_plan_task({{:ok, result}, _plan}), do: result
-  defp normalize_plan_task({{:exit, reason}, plan}), do: failed_plan(plan, {:task_exit, reason})
+  defp normalize_plan_group_task({{:ok, results}, _campaign_plans}), do: results
+
+  defp normalize_plan_group_task({{:exit, reason}, campaign_plans}) do
+    Enum.map(campaign_plans, &failed_plan(&1, {:task_exit, reason}))
+  end
 
   defp aggregate_status([]), do: :failed
 

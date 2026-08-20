@@ -36,13 +36,17 @@ defmodule GridMediaManager.Studio.PackageBuilderTest do
              )
 
     candidates = Workflow.candidates(campaign)
-    selected_keys = candidates |> Enum.take(2) |> Enum.map(& &1.key)
+    standalone_candidate = List.last(candidates)
+    other_candidate = Enum.find(candidates, &(&1.key != standalone_candidate.key))
+    selected_candidates = [other_candidate, standalone_candidate]
+    selected_keys = Enum.map(selected_candidates, & &1.key)
 
     plan = %{
       recommended_format: "portrait",
       selected_keys: selected_keys,
       selection_details: %{
         "visual_style" => "deep_ocean",
+        "text_visual_key" => List.last(selected_keys),
         "cover" => %{
           "mode" => "photo",
           "status" => "selected",
@@ -61,6 +65,7 @@ defmodule GridMediaManager.Studio.PackageBuilderTest do
 
     assert asset.style == "deep_ocean"
     assert asset.kind == "curated_carousel"
+    assert Enum.at(asset.metadata["slides"], 1)["title"] == List.last(selected_candidates).title
 
     campaign = Campaigns.get_campaign!(campaign.id)
     assert Campaigns.title_card_mode(campaign) == "pexels"
@@ -71,5 +76,10 @@ defmodule GridMediaManager.Studio.PackageBuilderTest do
 
     assert Enum.any?(complete_assets, &(&1.mime_type == "image/png"))
     assert Enum.any?(complete_assets, &(&1.mime_type == "video/mp4"))
+
+    video = Enum.find(complete_assets, &(&1.mime_type == "video/mp4"))
+    content_titles = video.metadata["slides"] |> Enum.drop(1) |> Enum.map(& &1["title"])
+    refute List.first(content_titles) == standalone_candidate.title
+    assert standalone_candidate.title in content_titles
   end
 end

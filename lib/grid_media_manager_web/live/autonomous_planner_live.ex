@@ -20,7 +20,7 @@ defmodule GridMediaManagerWeb.AutonomousPlannerLive do
           socket
           |> assign(:page_title, "Autonomous editorial plan")
           |> assign(:batch, batch)
-          |> assign(:planning?, false)
+          |> assign(:planning?, batch.status == "planning")
           |> stream_configure(:editorial_plans, dom_id: &"editorial-plan-#{&1.id}")
           |> stream(:editorial_plans, batch.plans)
 
@@ -50,7 +50,28 @@ defmodule GridMediaManagerWeb.AutonomousPlannerLive do
 
   @impl true
   def handle_event("retry_planning", _params, socket) do
-    {:noreply, start_planning(socket)}
+    {:noreply, start_planning(socket, retry: true)}
+  end
+
+  @impl true
+  def handle_info(:refresh_planning, socket) do
+    batch = Automation.get_batch(socket.assigns.batch.id)
+
+    if batch.status == "planning" do
+      schedule_planning_refresh()
+
+      {:noreply,
+       socket
+       |> assign(:batch, batch)
+       |> assign(:planning?, true)
+       |> stream(:editorial_plans, batch.plans, reset: true)}
+    else
+      {:noreply,
+       socket
+       |> assign(:batch, batch)
+       |> assign(:planning?, false)
+       |> stream(:editorial_plans, batch.plans, reset: true)}
+    end
   end
 
   @impl true
@@ -283,21 +304,29 @@ defmodule GridMediaManagerWeb.AutonomousPlannerLive do
   end
 
   defp maybe_start_planning(socket) do
-    if connected?(socket) and socket.assigns.batch.status in ["pending", "planning"] do
-      start_planning(socket)
-    else
-      socket
+    cond do
+      connected?(socket) and socket.assigns.batch.status == "pending" ->
+        start_planning(socket)
+
+      connected?(socket) and socket.assigns.batch.status == "planning" ->
+        schedule_planning_refresh()
+        assign(socket, :planning?, true)
+
+      true ->
+        socket
     end
   end
 
-  defp start_planning(%{assigns: %{planning?: true}} = socket), do: socket
-
-  defp start_planning(socket) do
+  defp start_planning(socket, opts \\ []) do
     batch = socket.assigns.batch
 
     socket
     |> assign(:planning?, true)
-    |> start_async(:plan_batch, fn -> Automation.run_batch(batch) end)
+    |> start_async(:plan_batch, fn -> Automation.run_batch(batch, opts) end)
+  end
+
+  defp schedule_planning_refresh do
+    Process.send_after(self(), :refresh_planning, 1_000)
   end
 
   defp confidence_label(confidence) when is_number(confidence) do

@@ -42,7 +42,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
   test "opens an autonomous plan with its story selected for all-channel output", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-planned")
-    selected_keys = campaign |> Workflow.candidates() |> Enum.take(2) |> Enum.map(& &1.key)
+    candidates = Workflow.candidates(campaign)
+    selected_candidates = candidates |> Enum.take(2) |> Enum.reverse()
+    selected_keys = Enum.map(selected_candidates, & &1.key)
+
+    assert {:ok, campaign} =
+             Campaigns.save_guided_studio_state(campaign, %{
+               "selected_keys" => selected_keys |> Enum.reverse()
+             })
 
     assert {:ok, batch} = Automation.create_batch(["Agency", "Comfort", "Freedom"])
 
@@ -83,6 +90,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#guided-share-studio", "2 selected")
     assert has_element?(view, "#content-mode-bundle", "Video + carousel")
     assert has_element?(view, "#guided-share-studio[data-selected-style='deep_ocean']")
+
+    assert has_element?(
+             view,
+             "#selected-aspects > :first-child",
+             List.first(selected_candidates).title
+           )
 
     assert has_element?(
              view,

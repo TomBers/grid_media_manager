@@ -340,7 +340,7 @@ defmodule GridMediaManager.Promotion.Markdown do
     title = normalize(title)
 
     Regex.match?(
-      ~r/^(?:references?|bibliography|works cited|reading list|further (?:reading|references)|recommended (?:reading|sources)|sources?(?: and further reading)?)(?:\b|\s)/u,
+      ~r/^(?:references?|key references|bibliography|works cited|reading list|references for further reading|further reading(?: references)?|further references|recommended (?:reading|sources)|sources?(?: and further reading)?)$/u,
       title
     )
   end

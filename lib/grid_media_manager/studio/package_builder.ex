@@ -43,13 +43,12 @@ defmodule GridMediaManager.Studio.PackageBuilder do
         Campaigns.title_card_mode(campaign)
       )
 
-    selected_keys = prioritize_text_visual(plan.selected_keys, plan.selection_details)
-
-    generate(campaign, all_candidates, selected_keys,
+    generate(campaign, all_candidates, plan.selected_keys,
       content_mode: mode,
       style: style,
       format: Keyword.get(opts, :format, PackageDefinition.format_for_mode(mode)),
-      cover: cover
+      cover: cover,
+      text_visual_key: Map.get(plan.selection_details || %{}, "text_visual_key")
     )
   end
 
@@ -59,12 +58,17 @@ defmodule GridMediaManager.Studio.PackageBuilder do
     style = Keyword.fetch!(opts, :style)
     cover = Keyword.get(opts, :cover, %{"mode" => "text"})
 
+    format = Keyword.get(opts, :format, PackageDefinition.format_for_mode(mode))
+
     candidates =
       all_candidates
       |> Workflow.selected_candidates(selected_order)
-      |> candidates_for_mode(mode, all_candidates)
-
-    format = Keyword.get(opts, :format, PackageDefinition.format_for_mode(mode))
+      |> candidates_for_output(
+        mode,
+        format,
+        all_candidates,
+        Keyword.get(opts, :text_visual_key)
+      )
 
     case VisualDirection.apply(campaign, cover) do
       {:ok, campaign} ->
@@ -78,7 +82,15 @@ defmodule GridMediaManager.Studio.PackageBuilder do
     end
   end
 
-  defp candidates_for_mode(candidates, "text", all_candidates) do
+  defp candidates_for_output(candidates, _mode, "portrait", _all_candidates, text_visual_key)
+       when is_binary(text_visual_key) do
+    case Enum.find(candidates, &(&1.key == text_visual_key)) do
+      nil -> candidates
+      candidate -> [candidate]
+    end
+  end
+
+  defp candidates_for_output(candidates, "text", "portrait", all_candidates, _text_visual_key) do
     quote_candidates = Enum.filter(candidates, &quote_candidate?/1)
 
     cond do
@@ -93,25 +105,13 @@ defmodule GridMediaManager.Studio.PackageBuilder do
     end
   end
 
-  defp candidates_for_mode(candidates, _mode, _all_candidates), do: candidates
+  defp candidates_for_output(candidates, _mode, _format, _all_candidates, _text_visual_key),
+    do: candidates
 
   defp quote_candidate?(%{type: type}) when type in ["question", "highlight", "key_node"],
     do: true
 
   defp quote_candidate?(_candidate), do: false
-
-  defp prioritize_text_visual(selected_keys, details)
-       when is_list(selected_keys) and is_map(details) do
-    case Map.get(details, "text_visual_key") do
-      key when is_binary(key) ->
-        if key in selected_keys, do: [key | List.delete(selected_keys, key)], else: selected_keys
-
-      _key ->
-        selected_keys
-    end
-  end
-
-  defp prioritize_text_visual(selected_keys, _details), do: selected_keys
 
   defp maybe_add_companion(formats, true, format), do: formats ++ [format]
   defp maybe_add_companion(formats, false, _format), do: formats

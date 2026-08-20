@@ -12,5 +12,5 @@ defmodule GridMediaManager.Automation.Renderer do
   @type details :: map()
   @type result :: {:ok, details()} | {:pending, details()} | {:error, term()}
 
-  @callback render(Campaign.t(), MediaAsset.t(), keyword()) :: result()
+  @callback render(%Campaign{}, %MediaAsset{}, keyword()) :: result()
 end
