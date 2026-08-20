@@ -1,149 +1,269 @@
-# One-Week Content Runbook for Future Agents
+# Automatic Post Asset Generation
 
-This is the efficient path for creating and scheduling a week of RationalGrid content. Use it as a checklist and preserve completed work if a session is interrupted.
+This guide covers the pipeline that turns RationalGrid source material into generated post drafts and finished media assets. Buffer scheduling, queue mutation, publishing calendars, and deletion of existing posts are out of scope; a small read-only Buffer feedback stage is included only to inform generation volume and themes.
 
-## 1. Establish the exact workload
+Buffer can still provide a small, read-only feedback signal before asset generation. It determines how many packages are useful and which themes deserve consideration; it does not own asset composition or mutate a queue during this DAG.
 
-Start with read-only checks:
+## Optional stage 0: Buffer queue and performance feedback
 
-1. Confirm today's date, timezone, requested start date, and number of days.
-2. Query Buffer for every configured channel and count only currently queued posts.
-3. Treat 10 queued posts per channel as the maximum. Calculate vacancies before generating anything.
-4. Leave published posts untouched. Record the external IDs and `dueAt` values of queued posts that may need editing.
-5. Fetch recent Buffer performance data once. Summarise the strongest topics, hooks, formats, weekdays, and posting times; do not repeatedly call the API for the same analysis.
+The six supported destinations are returned by `GridMediaManager.Social.Platforms.ids/0`:
 
-For a standard full week, aim for one coordinated topic per day:
+```text
+x, linkedin, facebook, tiktok, instagram, youtube
+```
 
-- One short-form video adapted for Instagram, TikTok, and YouTube Shorts.
-- One text/image treatment adapted for Facebook, LinkedIn, and X.
+For each platform, call `GridMediaManager.Social.Buffer.account_for/1` and fail the preflight visibly when credentials or a channel ID are missing. Text and video destinations can use different API keys and Buffer organizations, so group queries by account instead of assuming all six channels share one credential.
 
-If a channel has fewer vacancies, generate only what can be scheduled.
+Call the implemented queue snapshot API, which fetches every currently `scheduled` post for the six channel IDs and follows cursor pagination until complete:
 
-## 2. Select the week's topics in one batch
+```elixir
+platforms = GridMediaManager.Social.Platforms.ids()
+{:ok, queue} = GridMediaManager.Social.Buffer.queue_snapshot(platforms)
+```
 
-Load candidate grid content and metadata before asking the LLM to decide. Distinguish human questions, highlights, and AI answers using node metadata.
+The result is keyed by platform and includes `channel_id`, normalized `posts`, `scheduled_count`, and `vacancies`. It applies the project limit of ten queued posts per channel:
 
-Make one structured LLM selection call for the whole week rather than one call per topic. Ask for:
+```text
+vacancies[channel] = max(10 - scheduled_count[channel], 0)
+```
 
-- Ranked topic and source-node IDs.
-- Opening question or hook.
-- Why the topic should interest the audience.
-- Best supported format.
-- Strongest supporting excerpt or key quote.
-- Suggested Pexels search query and visual mood.
-- Risk notes: weak evidence, repetition, sensitive claims, or distracting grounding references.
+For a package intended for all six destinations, the safe generation count is bounded by the smallest vacancy. For destination-specific generation, use the vacancy of only the channels served by that format. A full channel is not permission to delete, replace, or duplicate anything; it simply contributes zero available slots.
 
-Require diversity across the week. Reject near-duplicate subjects and generic hooks. The useful code starts in:
+Fetch recent `sent` posts with `dueAt`, `text`, `channelId`, and `metrics` once for the same channels, normally over a 60–90 day window:
 
-- `lib/grid_media_manager/automation/llm_selector.ex`
-- `lib/grid_media_manager/automation/editorial_guidance.ex`
-- `lib/grid_media_manager/automation/editorial_batch.ex`
+```elixir
+until = DateTime.utc_now()
+since = DateTime.add(until, -90 * 86_400, :second)
 
-Save the resulting plan before media generation so the run can resume without another LLM call.
+{:ok, performance} =
+  GridMediaManager.Social.Buffer.performance_snapshot(platforms,
+    since: since,
+    until: until
+  )
+```
 
-## 3. Clean and quality-check all copy together
+The function follows cursor pagination and rejects windows longer than Buffer's documented 365-day maximum. Buffer exposes normalized per-post metrics, but available metric names differ by network, so rank content within each channel rather than comparing raw impressions or reactions across platforms. Record sample sizes and avoid treating one unusually successful post as a durable trend.
 
-Generate platform copy as a batch, then run a second batch editorial pass over all titles and posts.
+Derive a compact read-only editorial brief:
 
-The pass should check:
+```elixir
+%{
+  vacancies: %{platform => non_neg_integer},
+  strong_themes: [%{theme: String.t(), platforms: [String.t()], evidence: map()}],
+  saturated_themes: [String.t()],
+  best_windows: %{platform => [%{weekday: String.t(), local_hour: 0..23}]},
+  sample_sizes: %{platform => non_neg_integer}
+}
+```
 
-- Spelling, grammar, punctuation, and natural title capitalisation.
-- Whether the opening line creates curiosity without overstating the evidence.
-- Removal of inline search-grounding markers and distracting citation tokens.
-- A clear reason to continue to RationalGrid.ai.
-- Native length and tone for X, LinkedIn, and Facebook.
-- No duplicated wording across consecutive days.
+Use `vacancies` to choose the requested batch count and use the strongest well-supported themes to construct the `theme` passed to `Automation.create_autopilot_batch/2`. Keep `best_windows` as scheduling metadata for a later publishing stage; it must not alter slides, rendering, or artifact identity. Preserve some exploration instead of generating only historically successful subjects.
 
-Do not make three identical captions with different platform labels. Use `lib/grid_media_manager/social/templates.ex` as the common copy layer.
+Both snapshot functions are read-only and use the existing `Req` client. They require every requested platform to have credentials and a channel ID. Configure `organization_id` for a shared Buffer organization or `text_organization_id` and `video_organization_id` for separate accounts. If omitted, the client discovers the organization only when that authenticated account has exactly one; multiple organizations return an explicit ambiguity error.
 
-## 4. Select imagery efficiently
+Official references: [Buffer posts by channel](https://developers.buffer.com/examples/get-posts-for-channels.html), [posts with metrics](https://developers.buffer.com/examples/get-posts-with-metrics.html), and the [Buffer data model](https://developers.buffer.com/guides/data-model.html).
 
-Run one Pexels search per selected topic using the LLM's visual query. Prefer images with:
+## Canonical entrypoints
 
-- A clear subject or visual metaphor.
-- Space for a large question.
-- Strong contrast after a dark overlay.
-- Editorial relevance rather than literal keyword matching.
+Use `GridMediaManager.Automation` as the public orchestration boundary. Do not reproduce its planning logic in a LiveView, script, Mix task, or alternate media pipeline.
 
-Choose the best candidate from each result set, store the Pexels attribution metadata, and avoid downloading alternatives that will not be used.
+For automatic topic discovery:
 
-## 5. Generate complete media packages
+```elixir
+{:ok, batch} = GridMediaManager.Automation.create_autopilot_batch(count, theme)
+{:ok, result} = GridMediaManager.Automation.generate_batch_assets(batch)
+```
 
-Build packages through the shared Studio contexts, not through LiveView-specific functions:
+For caller-supplied topics, replace the first call with:
 
-- `lib/grid_media_manager/studio/package_builder.ex`
-- `lib/grid_media_manager/studio/workflow.ex`
-- `lib/grid_media_manager/studio/visual_direction.ex`
+```elixir
+{:ok, batch} = GridMediaManager.Automation.create_batch(topics)
+```
 
-For every text post, generate and save exactly two ordered PNGs:
+`count` must be between 1 and 10. `GridMediaManager.RationalGrid.GridIndex` must already contain source summaries, and the OpenAI editorial selector must be configured for production use.
 
-1. Branded opening-question cover using a darkened Pexels background and RationalGrid.ai logo. Do not add an “OPEN QUESTION” pill.
-2. RationalGrid.ai follow-up card with a direct visit CTA.
+`result.status` is one of `:complete`, `:awaiting_artifacts`, `:partial`, or `:failed`. When it is `:awaiting_artifacts`, load each returned asset's `output.render_path` in a browser worker, wait for its canvas uploads, and call `generate_batch_assets/2` again. The second call resumes the existing batch and assets without repeating successful planning.
 
-For every video, include the opening hook, selected evidence, and the canonical final “Continue on RationalGrid.ai” frame.
+## Function DAG
 
-The canonical sequence is in `lib/grid_media_manager/promotion/slide_sequence.ex`; browser composition is in `assets/js/canvas_slide_renderer.js`. Save finished Canvas artifacts through `GridMediaManager.Promotion.ArtifactStore`. Never silently substitute the raw Pexels image when a composed artifact is missing.
+```mermaid
+%% title: Automatic post asset generation DAG
+flowchart TD
+    F0[Platforms.ids/0]
+    F1[Buffer.account_for/1 for six channels]
+    F2[Buffer GraphQL scheduled and sent posts]
+    F3[Queue capacity and editorial feedback brief]
+    A[Automation.create_autopilot_batch/2<br/>or create_batch/1]
+    A2[Automation.generate_batch_assets/2]
+    B[Automation.run_batch/2]
+    C{Topics supplied?}
+    D[Automation.discovery_sources/1]
+    E[LLMSelector.select_topics/3]
+    F[Automation.shortlist_grids/1]
+    G[LLMSelector.select_grid/2]
+    H[Campaigns.get_campaign_by_slug/1<br/>or Campaigns.import_grid/1]
+    I[Workflow.candidates/1]
+    J[Automation.shortlist_candidates/2]
+    K[LLMSelector.select_story/3]
+    L[VisualDirection.resolve_cover/4]
+    M[Persist EditorialPlan]
+    N[Automation.generate_plan_package/1]
+    O[PackageBuilder.generate_complete_plan/4]
+    P[PackageBuilder.generate_plan/4]
+    Q[VisualDirection.apply/2]
+    R[Workflow.generate/3]
+    S[SlideSequence.build/3]
+    T[StoryPackage.build/3]
+    U[Persist MediaAsset and PostDraft rows]
+    U2[BrowserRenderer.render/3]
+    U3{All artifacts ready?}
+    V[CanvasSlideRenderer.renderAll]
+    W[CanvasSlideRenderer.uploadFrames]
+    X[PromotionAssetController.client_artifact/2]
+    Y[Campaigns.store_client_artifact/4]
+    Z[ArtifactStore.put_png/4]
+    AA{Asset MIME type}
+    AB[ArtifactStore.read_all/2]
+    AC[CarouselVideo.render_artifacts/2]
+    AD[Finished ordered PNGs]
+    AE[Finished H.264 MP4]
 
-Generate packages topic-by-topic with bounded concurrency. Keep source selection sequential only where later decisions depend on earlier results; parallelise independent Pexels downloads, rendering, and uploads.
+    F0 --> F1 --> F2 --> F3
+    F3 -. count and theme .-> A
+    A --> A2 --> B --> C
+    C -- no: autopilot --> D --> E --> H
+    C -- yes: explicit topics --> F --> G --> H
+    H --> I --> J --> K --> L --> M
+    M --> N --> O --> P --> Q --> R --> S --> T --> U
+    U --> U2 --> U3
+    U3 -- no --> V --> W --> X --> Y --> Z --> A2
+    U3 -- yes --> AA
+    AA -- image/carousel --> AB --> AD
+    AA -- video --> AC --> AE
+```
 
-## 6. Perform one review pass
+The DAG shows conceptual ownership. Some internal calls are private and are reached through the public orchestration entrypoints rather than called directly.
 
-Before touching Buffer, review the whole week together. Check representative previews and inspect every long title for overflow.
+## Stage contracts
 
-The approval view should make it easy to verify:
+### 1. Plan topics and sources
 
-- Day and posting time.
-- Topic and source rationale.
-- Opening cover and final CTA.
-- Video preview.
-- Copy for each destination.
-- Any editorial warnings.
+`Automation.run_batch/2` owns the entire grounded planning phase.
 
-Fix issues in the saved plan or shared package, then regenerate affected outputs only. Do not restart the whole week for one bad cover.
+- Autopilot uses `Automation.discovery_sources/1` and `LLMSelector.select_topics/3` to choose distinct topics and source grids in one structured call.
+- Explicit topics use `Automation.shortlist_grids/1` and `LLMSelector.select_grid/2` to choose a source.
+- The selected grid is loaded with `Campaigns.get_campaign_by_slug/1` or imported with `Campaigns.import_grid/1`.
+- Never allow the model to invent source slugs or candidate keys. The selector schemas constrain it to supplied values.
 
-## 7. Publish assets before scheduling
+Output: one persisted `EditorialPlan` per topic, with a campaign, grounded selected keys, narrative order, format, visual style, cover direction, and confidence.
 
-Upload finished artifacts to stable S3 URLs. Preserve carousel ordering in `published_urls`: cover first and CTA last.
+### 2. Select the story
 
-Verify a representative URL is public, returns the expected MIME type, and is not a local `/client-assets/` path. Reuse the already-uploaded asset for all platforms sharing the same creative.
+For each chosen campaign, `Automation.run_batch/2` performs:
 
-## 8. Schedule through Buffer
+1. `Workflow.candidates/1` to discover questions, highlights, key nodes, and grid material.
+2. `Automation.shortlist_candidates/2` to bound the material passed to the model.
+3. `LLMSelector.select_story/3` to choose two to six candidate keys in narrative order.
+4. `VisualDirection.resolve_cover/4` to choose a text cover or a selected Pexels image.
 
-Use `GridMediaManager.Social.Buffer.account_for/1` because text and video platforms may use different credentials.
+The plan's `selected_keys` order is significant and must survive every later stage.
 
-Schedule successive days using the intended local timezone, converted deliberately to UTC. Apply the performance-informed posting time unless it would create a collision.
+### 3. Generate the complete package
 
-Operational rules:
+Call only `Automation.generate_batch_assets(batch_or_id, opts)` for a complete run. It plans pending batches, processes plans with bounded concurrency, and internally delegates each planned item through `Automation.generate_plan_package/1`:
 
-- Use modest concurrency and transient retries to respect Buffer limits.
-- Facebook posts require `%{facebook: %{type: "post"}}` metadata.
-- If replacing a queued post, use Buffer's edit mutation to preserve its external ID and `dueAt`.
-- Never create a duplicate merely because a response timed out. Query Buffer first and reconcile by external ID or schedule slot.
-- Record each success immediately so a partial batch can resume safely.
+```text
+PackageBuilder.generate_complete_plan/4
+└── PackageBuilder.generate_plan/4
+    ├── VisualDirection.style_for_plan/2
+    ├── VisualDirection.cover_for_plan/3
+    ├── VisualDirection.apply/2
+    └── Workflow.generate/3
+```
 
-## 9. Audit the live result
+`generate_complete_plan/4` creates the plan's primary format and any missing companion format needed to cover both text and video destinations. Do not separately invoke format generators unless diagnosing a specific branch.
 
-Do not declare completion from local database state alone. Query Buffer and verify:
+The orchestrator accepts a module implementing `GridMediaManager.Automation.Renderer` through its `:renderer` option. The default is `GridMediaManager.Automation.BrowserRenderer`. Tests and other execution environments can inject a renderer without changing planning or package generation.
 
-- Expected count per channel and no channel above 10.
-- Exact external IDs and scheduled times.
-- Two PNG assets on every text post.
-- Video asset on every video post.
-- RationalGrid CTA present in every generated package.
-- No duplicate topic/date combinations.
+`Workflow.generate/3` dispatches formats as follows:
 
-Report successful counts per platform and list any exceptions explicitly.
+| Format | Canonical generator |
+| --- | --- |
+| `portrait` | `Campaigns.generate_curated_carousel/3` |
+| `story_video` | `Campaigns.generate_story_video/3` |
+| `combined_carousel` | `Campaigns.generate_curated_carousel_bundle/3`, then `Campaigns.generate_curated_carousel_video/2` |
+| `long_form` | `Campaigns.generate_long_form_post/3` |
 
-## 10. Leave a resumable checkpoint
+These calls upsert `MediaAsset` rows and automatically create or refresh deterministic `PostDraft` rows through `Social.Templates`. At this point the post copy and media specification exist, but the PNG bytes do not.
 
-At the end of the session, record:
+### 4. Build one canonical slide sequence
 
-- Plan or campaign IDs.
-- Local draft IDs and Buffer external IDs.
-- S3 asset URLs.
-- Scheduled dates and channels.
-- Failed or unfilled slots and the reason.
+Every carousel and video must have this shape:
 
-This checkpoint prevents the next agent from repeating LLM selection, Pexels searches, uploads, or Buffer mutations.
+```text
+thumbnail-ready cover
+→ one or more variable editorial text/quote/highlight cards
+→ fixed CTA
+```
 
-After source-code changes, run focused tests and finish with `mix precommit`. For UI behaviour, analyse source first and use Tidewave `browser_eval` snapshots. Do not restart Phoenix for ordinary code changes.
+`SlideSequence.build/3` owns content selection and normalisation. `StoryPackage.build/3` owns the outer cover/content/CTA invariant. Formats must consume this sequence rather than independently creating covers, text cards, or closing frames.
+
+The CTA slide metadata identifies and orders the frame. Its visual source of truth is always:
+
+```text
+priv/static/images/rationalgrid-follow-up.png
+```
+
+The approved CTA is 1080 × 1350. Portrait output uses it edge-to-edge. A 1080 × 1920 video frame centers it without stretching on `#081323`. Never add another generated, server-rendered, or platform-specific CTA path.
+
+### 5. Render and persist browser artifacts
+
+`assets/js/canvas_slide_renderer.js` is the only visual compositor.
+
+1. `CanvasSlideRenderer.renderAll()` renders every slide at 1080 × 1350 for image assets or 1080 × 1920 for video assets.
+2. `CanvasSlideRenderer.uploadFrames()` posts each selected PNG to `POST /api/media-assets/:id/artifacts/:index` with the current `x-canvas-renderer-version` header.
+3. `PromotionAssetController.client_artifact/2` validates the upload.
+4. `Campaigns.store_client_artifact/4` persists artifact metadata on the asset.
+5. `ArtifactStore.put_png/4` stores the finished bytes.
+
+This is currently a required client-side stage. `BrowserRenderer.render/3` returns `{:pending, details}` with exact required indexes, missing indexes, and a Studio `render_path` until every frame exists. An unattended browser worker should load those paths; the caller then invokes `Automation.generate_batch_assets/2` again. Do not work around this boundary by adding an Elixir image renderer; that would recreate the duplicate pipeline that was intentionally removed.
+
+### 6. Assemble final media
+
+For image assets, the ordered PNGs in `ArtifactStore` are the finished output. Read them with `ArtifactStore.read_all/2` using `Campaigns.media_asset_slide_indexes/1`.
+
+For video assets, call `CarouselVideo.render_artifacts/2` with those same selected indexes. ffmpeg only concatenates the finished PNG frames, applies their calculated durations, and emits H.264 MP4. It must never lay out text, regenerate slides, or replace missing frames.
+
+`AssetRenderer.render_all/2` is the unified downstream read boundary when a caller needs finished media bodies regardless of type:
+
+- Image/carousel: returns ordered PNG bodies.
+- Video: runs ffmpeg assembly and returns one MP4 body.
+
+## Idempotency and resume rules
+
+- Batches and plans are persisted. Resume them instead of repeating LLM calls.
+- Generated assets are upserted by campaign, kind, source type, source ID, and style.
+- Every generated asset stores a render signature covering visual metadata, style, campaign cover state, and renderer version. Identical regeneration preserves completed artifacts; changed visual inputs invalidate them.
+- Draft copy refreshes only while a draft remains editable; do not overwrite published state.
+- Inspect `generate_batch_assets/2`'s uniform batch, plan, and asset statuses. Partial companion generation must not discard successful assets.
+- Before rendering, calculate required indexes with `Campaigns.media_asset_slide_indexes/1`.
+- Before ffmpeg or downstream delivery, require `ArtifactStore.ready?/2` for every required index.
+- Never substitute a raw Pexels image when a composed artifact is missing.
+
+## Renderer invalidation
+
+`ArtifactStore.renderer_version/0` is currently version 9. Bump it whenever canvas composition or a fixed visual asset changes. Stale artifacts are deliberately ignored. The renderer version and CTA source path are included in the browser fingerprint so changed media is saved again.
+
+## Verification checklist
+
+For each planned topic, verify:
+
+- `EditorialPlan.status == "planned"` and selected keys are grounded in `Workflow.candidates/1`.
+- `Automation.generate_batch_assets/2` returns a uniform status for the batch, every plan, and every asset.
+- Both text and video destination coverage exists when a complete package is requested.
+- Every asset has a cover, at least one content frame, and the CTA last.
+- Every required artifact index is current and present.
+- Every portrait CTA uses `rationalgrid-follow-up.png` exactly.
+- Every video is assembled only after all required PNGs exist.
+- Corresponding `PostDraft` rows contain platform-appropriate deterministic copy.
+
+After code changes, run focused tests, `mix assets.build`, and `mix precommit`. For Studio behaviour, inspect source first and verify with Tidewave `browser_eval`. Do not restart Phoenix for ordinary code changes.

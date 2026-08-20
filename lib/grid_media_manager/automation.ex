@@ -7,6 +7,7 @@ defmodule GridMediaManager.Automation do
 
   alias GridMediaManager.Automation.EditorialBatch
   alias GridMediaManager.Automation.EditorialPlan
+  alias GridMediaManager.Automation.BrowserRenderer
   alias GridMediaManager.Automation.LLMSelector
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Campaigns.Campaign
@@ -164,6 +165,52 @@ defmodule GridMediaManager.Automation do
     end
   end
 
+  @doc """
+  Plans, generates, and finalizes every asset in an editorial batch.
+
+  The function is resumable. A pending batch is planned once, generated assets are
+  upserted, and renderer results distinguish completed output from browser frames
+  that are still required. Pass a module implementing `Automation.Renderer` to
+  `:renderer` when a different execution environment owns finalization.
+  """
+  def generate_batch_assets(batch_or_id, opts \\ [])
+
+  def generate_batch_assets(%EditorialBatch{} = batch, opts) when is_list(opts) do
+    renderer = Keyword.get(opts, :renderer, BrowserRenderer)
+    max_concurrency = opts |> Keyword.get(:max_concurrency, 3) |> normalize_concurrency()
+    renderer_opts = Keyword.get(opts, :renderer_options, [])
+
+    with :ok <- validate_renderer(renderer),
+         {:ok, batch} <- prepare_asset_batch(batch, opts) do
+      plans = Enum.sort_by(batch.plans, & &1.position)
+
+      plan_results =
+        plans
+        |> Task.async_stream(
+          &generate_plan_assets(&1, renderer, renderer_opts),
+          ordered: true,
+          max_concurrency: max_concurrency,
+          timeout: :infinity
+        )
+        |> Enum.zip(plans)
+        |> Enum.map(&normalize_plan_task/1)
+
+      {:ok,
+       %{
+         batch_id: batch.id,
+         status: aggregate_status(plan_results),
+         plans: plan_results
+       }}
+    end
+  end
+
+  def generate_batch_assets(batch_id, opts) when is_list(opts) do
+    case get_batch(batch_id) do
+      %EditorialBatch{} = batch -> generate_batch_assets(batch, opts)
+      nil -> {:error, :editorial_batch_not_found}
+    end
+  end
+
   def platforms_for_format("story_video"), do: ["tiktok", "instagram", "youtube"]
   def platforms_for_format("portrait"), do: ["x", "linkedin", "facebook"]
   def platforms_for_format("long_form"), do: ["linkedin", "facebook"]
@@ -224,6 +271,151 @@ defmodule GridMediaManager.Automation do
   defp prepare_topic_inputs(%EditorialBatch{} = batch, _selector) do
     {:ok, batch, Enum.map(batch.topics, &%{topic: &1, source_choice: nil, source: nil})}
   end
+
+  defp prepare_asset_batch(%EditorialBatch{} = batch, opts) do
+    batch = get_batch(batch.id)
+
+    cond do
+      batch.status == "pending" or Keyword.get(opts, :replan, false) ->
+        planning_opts = Keyword.take(opts, [:selector, :cover_search])
+        run_batch(batch, planning_opts)
+
+      batch.status == "planning" ->
+        {:error, :editorial_batch_already_running}
+
+      true ->
+        {:ok, batch}
+    end
+  end
+
+  defp generate_plan_assets(%EditorialPlan{status: "planned"} = plan, renderer, renderer_opts) do
+    case generate_plan_package(plan.id) do
+      %{assets: assets, errors: generation_errors} ->
+        asset_results = Enum.map(assets, &render_asset(plan, &1, renderer, renderer_opts))
+        render_errors = render_errors(asset_results)
+        errors = Enum.map(generation_errors, &generation_error/1) ++ render_errors
+
+        %{
+          plan_id: plan.id,
+          topic: plan.topic,
+          status: plan_status(asset_results, errors),
+          assets: asset_results,
+          errors: errors
+        }
+    end
+  rescue
+    error -> failed_plan(plan, {:exception, Exception.message(error)})
+  end
+
+  defp generate_plan_assets(%EditorialPlan{} = plan, _renderer, _renderer_opts) do
+    failed_plan(plan, plan.error_message || :editorial_plan_not_ready)
+  end
+
+  defp render_asset(plan, asset, renderer, renderer_opts) do
+    campaign = Campaigns.get_campaign!(plan.campaign_id)
+
+    base = asset_result_base(asset)
+
+    case renderer.render(campaign, asset, renderer_opts) do
+      {:ok, details} when is_map(details) ->
+        Map.merge(base, %{status: :complete, output: details, error: nil})
+
+      {:pending, details} when is_map(details) ->
+        Map.merge(base, %{status: :awaiting_artifacts, output: details, error: nil})
+
+      {:error, reason} ->
+        Map.merge(base, %{status: :failed, output: nil, error: reason})
+
+      response ->
+        Map.merge(base, %{
+          status: :failed,
+          output: nil,
+          error: {:invalid_renderer_response, response}
+        })
+    end
+  rescue
+    error ->
+      Map.merge(asset_result_base(asset), %{
+        status: :failed,
+        output: nil,
+        error: {:renderer_exception, Exception.message(error)}
+      })
+  end
+
+  defp asset_result_base(asset) do
+    %{
+      asset_id: asset.id,
+      kind: asset.kind,
+      mime_type: asset.mime_type
+    }
+  end
+
+  defp generation_error(%{candidate: candidate, reason: reason}) do
+    %{stage: :generation, candidate: candidate, reason: reason}
+  end
+
+  defp generation_error(error), do: %{stage: :generation, reason: error}
+
+  defp render_errors(asset_results) do
+    for %{status: :failed, asset_id: asset_id, error: reason} <- asset_results do
+      %{stage: :rendering, asset_id: asset_id, reason: reason}
+    end
+  end
+
+  defp plan_status([], _errors), do: :failed
+
+  defp plan_status(asset_results, errors) do
+    statuses = Enum.map(asset_results, & &1.status)
+
+    cond do
+      errors != [] and Enum.all?(statuses, &(&1 == :failed)) -> :failed
+      errors != [] -> :partial
+      Enum.any?(statuses, &(&1 == :awaiting_artifacts)) -> :awaiting_artifacts
+      Enum.all?(statuses, &(&1 == :complete)) -> :complete
+      true -> :partial
+    end
+  end
+
+  defp failed_plan(plan, reason) do
+    %{
+      plan_id: plan.id,
+      topic: plan.topic,
+      status: :failed,
+      assets: [],
+      errors: [%{stage: :planning, reason: reason}]
+    }
+  end
+
+  defp normalize_plan_task({{:ok, result}, _plan}), do: result
+  defp normalize_plan_task({{:exit, reason}, plan}), do: failed_plan(plan, {:task_exit, reason})
+
+  defp aggregate_status([]), do: :failed
+
+  defp aggregate_status(plan_results) do
+    statuses = Enum.map(plan_results, & &1.status)
+
+    cond do
+      Enum.all?(statuses, &(&1 == :complete)) -> :complete
+      Enum.all?(statuses, &(&1 == :failed)) -> :failed
+      Enum.any?(statuses, &(&1 in [:failed, :partial])) -> :partial
+      Enum.any?(statuses, &(&1 == :awaiting_artifacts)) -> :awaiting_artifacts
+      true -> :partial
+    end
+  end
+
+  defp validate_renderer(renderer) when is_atom(renderer) do
+    with {:module, ^renderer} <- Code.ensure_loaded(renderer),
+         true <- function_exported?(renderer, :render, 3) do
+      :ok
+    else
+      _error -> {:error, :invalid_renderer}
+    end
+  end
+
+  defp validate_renderer(_renderer), do: {:error, :invalid_renderer}
+
+  defp normalize_concurrency(value) when is_integer(value) and value > 0, do: min(value, 10)
+  defp normalize_concurrency(_value), do: 3
 
   defp plan_topic(input, selector, cover_search?) do
     topic = input.topic

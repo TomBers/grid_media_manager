@@ -7,19 +7,90 @@ defmodule GridMediaManager.Social.Buffer do
       config :grid_media_manager, :buffer,
         api_key: "...",
         text_api_key: "...",
+        organization_id: "...",
+        text_organization_id: "...",
+        video_organization_id: "...",
         text_channels: %{"x" => "...", "linkedin" => "..."},
         endpoint: "https://api.buffer.com"
 
   Video platforms use `api_key`/`video_api_key` and `video_channels`. Text-first
   platforms use `text_api_key` and `text_channels` when configured.
+  Organization IDs may be shared through `organization_id` or configured per
+  account. When omitted, snapshots discover the organization and require the
+  authenticated account to contain exactly one.
 
   The endpoint defaults to `https://api.buffer.com`. A `:plug` option may be
   configured for `Req.Test` without allowing test requests onto the network.
   """
 
   alias GridMediaManager.Campaigns.PostDraft
+  alias GridMediaManager.Social.Platforms
 
   @default_endpoint "https://api.buffer.com"
+  @queue_limit 10
+  @page_size 50
+  @maximum_pages 100
+
+  @organizations_query """
+  query BufferOrganizations {
+    account {
+      organizations {
+        id
+        name
+      }
+    }
+  }
+  """
+
+  @queue_posts_query """
+  query BufferQueuePosts($after: String, $first: Int!, $input: PostsInput!) {
+    posts(after: $after, first: $first, input: $input) {
+      edges {
+        node {
+          id
+          text
+          status
+          dueAt
+          channelId
+          createdAt
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+  """
+
+  @performance_posts_query """
+  query BufferPerformancePosts($after: String, $first: Int!, $input: PostsInput!) {
+    posts(after: $after, first: $first, input: $input) {
+      edges {
+        node {
+          id
+          text
+          status
+          dueAt
+          sentAt
+          channelId
+          createdAt
+          metrics {
+            type
+            name
+            value
+            unit
+          }
+          metricsUpdatedAt
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+  """
 
   @create_post_mutation """
   mutation CreatePost($input: CreatePostInput!) {
@@ -59,6 +130,48 @@ defmodule GridMediaManager.Social.Buffer do
   end
 
   def account_for(_platform), do: nil
+
+  @doc """
+  Returns the complete scheduled queue for each requested Buffer platform.
+
+  The result includes normalized posts, scheduled counts, and vacancies against
+  the project's ten-post queue limit. All requested platforms must be configured.
+  """
+  def queue_snapshot(platforms) when is_list(platforms) do
+    with {:ok, accounts} <- snapshot_accounts(platforms),
+         {:ok, posts} <- fetch_account_posts(accounts, :scheduled, nil) do
+      {:ok,
+       %{
+         fetched_at: DateTime.utc_now() |> DateTime.truncate(:second),
+         queue_limit: @queue_limit,
+         platforms: platform_snapshots(accounts, posts, :queue)
+       }}
+    end
+  end
+
+  def queue_snapshot(_platforms), do: {:error, :invalid_platforms}
+
+  @doc """
+  Returns sent Buffer posts and their normalized per-post metrics.
+
+  Options accept `:since` and `:until` UTC `DateTime` values. The default window
+  is the 90 days ending now and the maximum supported window is 365 days.
+  """
+  def performance_snapshot(platforms, opts) when is_list(platforms) and is_list(opts) do
+    with {:ok, range} <- performance_range(opts),
+         {:ok, accounts} <- snapshot_accounts(platforms),
+         {:ok, posts} <- fetch_account_posts(accounts, :sent, range) do
+      {:ok,
+       %{
+         fetched_at: DateTime.utc_now() |> DateTime.truncate(:second),
+         since: range.since,
+         until: range.until,
+         platforms: platform_snapshots(accounts, posts, :performance)
+       }}
+    end
+  end
+
+  def performance_snapshot(_platforms, _opts), do: {:error, :invalid_options}
 
   @doc "Returns the configured Buffer channel ID for a social platform."
   def channel_id(platform) when is_binary(platform) do
@@ -126,6 +239,276 @@ defmodule GridMediaManager.Social.Buffer do
     request_options
     |> Req.post()
     |> handle_response()
+  end
+
+  defp snapshot_accounts(platforms) do
+    platforms = Enum.uniq(platforms)
+    invalid = Enum.reject(platforms, &(&1 in Platforms.ids()))
+
+    cond do
+      platforms == [] ->
+        {:error, :invalid_platforms}
+
+      invalid != [] ->
+        {:error, {:unsupported_platforms, invalid}}
+
+      true ->
+        accounts =
+          Enum.map(platforms, fn platform ->
+            case account_for(platform) do
+              %{api_key: key, channel_id: channel_id} ->
+                %{
+                  platform: platform,
+                  api_key: key,
+                  channel_id: channel_id,
+                  account_kind: account_kind(platform)
+                }
+
+              nil ->
+                nil
+            end
+          end)
+
+        missing =
+          accounts
+          |> Enum.zip(platforms)
+          |> Enum.filter(fn {account, _platform} -> is_nil(account) end)
+          |> Enum.map(fn {_account, platform} -> platform end)
+
+        if missing == [],
+          do: {:ok, accounts},
+          else: {:error, {:platforms_not_configured, missing}}
+    end
+  end
+
+  defp fetch_account_posts(accounts, status, range) do
+    accounts
+    |> Enum.group_by(&{&1.api_key, &1.account_kind})
+    |> Enum.reduce_while({:ok, []}, fn {{key, account_kind}, group}, {:ok, all_posts} ->
+      channel_ids = Enum.map(group, & &1.channel_id)
+
+      with {:ok, organization_id} <- resolve_organization_id(key, account_kind),
+           {:ok, posts} <- fetch_posts(key, organization_id, channel_ids, status, range) do
+        {:cont, {:ok, all_posts ++ posts}}
+      else
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp resolve_organization_id(key, account_kind) do
+    case configured_organization_id(account_kind) do
+      nil -> fetch_single_organization_id(key, account_kind)
+      organization_id -> {:ok, organization_id}
+    end
+  end
+
+  defp fetch_single_organization_id(key, account_kind) do
+    with {:ok, %{"account" => %{"organizations" => organizations}}} <-
+           graphql_request(key, @organizations_query, %{}) do
+      case organizations do
+        [%{"id" => id}] when is_binary(id) ->
+          {:ok, id}
+
+        [] ->
+          {:error, {:buffer_organization_not_found, account_kind}}
+
+        organizations when is_list(organizations) ->
+          {:error,
+           {:buffer_organization_ambiguous, account_kind, Enum.map(organizations, & &1["id"])}}
+
+        _other ->
+          {:error, {:invalid_buffer_organizations_response, account_kind}}
+      end
+    else
+      {:ok, _unexpected} -> {:error, {:invalid_buffer_organizations_response, account_kind}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp fetch_posts(key, organization_id, channel_ids, status, range) do
+    query = if(status == :sent, do: @performance_posts_query, else: @queue_posts_query)
+    input = posts_input(organization_id, channel_ids, status, range)
+    fetch_post_pages(key, query, input, nil, [], 0)
+  end
+
+  defp fetch_post_pages(_key, _query, _input, _after, _posts, @maximum_pages),
+    do: {:error, :buffer_pagination_limit_exceeded}
+
+  defp fetch_post_pages(key, query, input, after_cursor, posts, page_count) do
+    variables = %{
+      "after" => after_cursor,
+      "first" => @page_size,
+      "input" => input
+    }
+
+    with {:ok, %{"posts" => %{"edges" => edges, "pageInfo" => page_info}}} <-
+           graphql_request(key, query, variables),
+         true <- is_list(edges) and is_map(page_info) do
+      with {:ok, page_posts} <- normalize_post_edges(edges) do
+        accumulated = posts ++ page_posts
+
+        case page_info do
+          %{"hasNextPage" => true, "endCursor" => cursor} when is_binary(cursor) ->
+            fetch_post_pages(key, query, input, cursor, accumulated, page_count + 1)
+
+          %{"hasNextPage" => false} ->
+            {:ok, accumulated}
+
+          _invalid_page_info ->
+            {:error, :invalid_buffer_pagination_response}
+        end
+      end
+    else
+      false -> {:error, :invalid_buffer_posts_response}
+      {:ok, _unexpected} -> {:error, :invalid_buffer_posts_response}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp posts_input(organization_id, channel_ids, status, range) do
+    filter =
+      %{
+        "status" => [Atom.to_string(status)],
+        "channelIds" => channel_ids
+      }
+      |> maybe_put_date_range(range)
+
+    %{
+      "organizationId" => organization_id,
+      "filter" => filter,
+      "sort" => [
+        %{
+          "field" => "dueAt",
+          "direction" => if(status == :sent, do: "desc", else: "asc")
+        }
+      ]
+    }
+  end
+
+  defp maybe_put_date_range(filter, nil), do: filter
+
+  defp maybe_put_date_range(filter, range) do
+    filter
+    |> Map.put("startDate", DateTime.to_iso8601(range.since))
+    |> Map.put("endDate", DateTime.to_iso8601(range.until))
+  end
+
+  defp normalize_post_edge(%{"node" => post}) when is_map(post) do
+    {:ok,
+     %{
+       id: post["id"],
+       text: post["text"],
+       status: post["status"],
+       due_at: post["dueAt"],
+       sent_at: post["sentAt"],
+       created_at: post["createdAt"],
+       channel_id: post["channelId"],
+       metrics_updated_at: post["metricsUpdatedAt"],
+       metrics: Enum.map(post["metrics"] || [], &normalize_metric/1)
+     }}
+  end
+
+  defp normalize_post_edge(_edge), do: {:error, :invalid_buffer_posts_response}
+
+  defp normalize_post_edges(edges) do
+    Enum.reduce_while(edges, {:ok, []}, fn edge, {:ok, posts} ->
+      case normalize_post_edge(edge) do
+        {:ok, post} -> {:cont, {:ok, [post | posts]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, posts} -> {:ok, Enum.reverse(posts)}
+      error -> error
+    end
+  end
+
+  defp normalize_metric(metric) when is_map(metric) do
+    %{
+      type: metric["type"],
+      name: metric["name"],
+      value: metric["value"],
+      unit: metric["unit"]
+    }
+  end
+
+  defp platform_snapshots(accounts, posts, mode) do
+    Map.new(accounts, fn account ->
+      channel_posts = Enum.filter(posts, &(&1.channel_id == account.channel_id))
+
+      snapshot = %{
+        channel_id: account.channel_id,
+        post_count: length(channel_posts),
+        posts: channel_posts
+      }
+
+      snapshot =
+        if mode == :queue do
+          snapshot
+          |> Map.put(:scheduled_count, length(channel_posts))
+          |> Map.put(:vacancies, max(@queue_limit - length(channel_posts), 0))
+        else
+          snapshot
+        end
+
+      {account.platform, snapshot}
+    end)
+  end
+
+  defp performance_range(opts) do
+    until = Keyword.get(opts, :until, DateTime.utc_now())
+    since = Keyword.get(opts, :since, default_since(until))
+
+    with true <- match?(%DateTime{}, since) and match?(%DateTime{}, until),
+         :lt <- DateTime.compare(since, until),
+         seconds when seconds <= 365 * 86_400 <- DateTime.diff(until, since, :second) do
+      {:ok,
+       %{
+         since: DateTime.truncate(since, :second),
+         until: DateTime.truncate(until, :second)
+       }}
+    else
+      _invalid -> {:error, :invalid_performance_window}
+    end
+  end
+
+  defp default_since(%DateTime{} = until), do: DateTime.add(until, -90 * 86_400, :second)
+  defp default_since(_until), do: nil
+
+  defp graphql_request(key, query, variables) do
+    request_options =
+      [
+        url: endpoint(),
+        headers: [{"authorization", "Bearer #{key}"}],
+        json: %{"query" => query, "variables" => variables},
+        receive_timeout: receive_timeout(),
+        retry: false
+      ]
+      |> maybe_put(:plug, config_value(:plug))
+
+    case Req.post(request_options) do
+      {:ok, %{status: status, body: body}} when status in 200..299 ->
+        case decode_body(body) do
+          %{"errors" => errors} when is_list(errors) and errors != [] ->
+            {:error, "Buffer GraphQL error: #{join_error_messages(errors)}"}
+
+          %{"data" => data} when is_map(data) ->
+            {:ok, data}
+
+          _unexpected ->
+            {:error, "Buffer API returned an unexpected response"}
+        end
+
+      {:ok, %{status: status, body: body}} ->
+        case response_error_message(decode_body(body)) do
+          nil -> {:error, "Buffer API request failed with HTTP status #{status}"}
+          message -> {:error, "Buffer API request failed (HTTP #{status}): #{message}"}
+        end
+
+      {:error, reason} ->
+        {:error, "Buffer API request failed: #{request_error_message(reason)}"}
+    end
   end
 
   defp handle_response({:ok, %{status: status, body: body}}) when status in 200..299 do
@@ -374,6 +757,23 @@ defmodule GridMediaManager.Social.Buffer do
       key -> key
     end
   end
+
+  defp account_kind(platform) when platform in ["x", "linkedin", "facebook"], do: :text
+  defp account_kind(_platform), do: :video
+
+  defp configured_organization_id(account_kind) do
+    account_kind
+    |> organization_config_key()
+    |> config_value()
+    |> string_value()
+    |> case do
+      nil -> config_value(:organization_id) |> string_value()
+      organization_id -> organization_id
+    end
+  end
+
+  defp organization_config_key(:text), do: :text_organization_id
+  defp organization_config_key(:video), do: :video_organization_id
 
   defp account_channels(platform) do
     case config_value(account_channels_key(platform)) do

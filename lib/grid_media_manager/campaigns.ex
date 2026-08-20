@@ -673,6 +673,7 @@ defmodule GridMediaManager.Campaigns do
 
   defp upsert_generated_asset_with_drafts(%Campaign{} = campaign, attrs) do
     Repo.transaction(fn ->
+      attrs = put_generated_render_signature(campaign, attrs)
       asset = upsert_media_asset(campaign, attrs)
       ensure_post_drafts(campaign, [asset], refresh: true)
       asset
@@ -704,6 +705,8 @@ defmodule GridMediaManager.Campaigns do
         |> Repo.insert!()
 
       %MediaAsset{} = media_asset ->
+        attrs = preserve_generated_metadata(media_asset, attrs)
+
         media_asset
         |> MediaAsset.changeset(attrs)
         |> Repo.update!()
@@ -723,6 +726,41 @@ defmodule GridMediaManager.Campaigns do
 
   defp existing_media_asset(%Campaign{} = campaign, attrs),
     do: Repo.get_by(MediaAsset, campaign_id: campaign.id, url: attrs.url)
+
+  defp preserve_generated_metadata(%MediaAsset{} = asset, attrs) do
+    previous_signature = Map.get(asset.metadata || %{}, "render_signature")
+    next_signature = attrs |> Map.get(:metadata, %{}) |> Map.get("render_signature")
+
+    if generated_media_asset?(asset) and is_binary(previous_signature) and
+         previous_signature == next_signature do
+      Map.update(attrs, :metadata, asset.metadata || %{}, fn metadata ->
+        Map.merge(asset.metadata || %{}, metadata || %{})
+      end)
+    else
+      attrs
+    end
+  end
+
+  defp put_generated_render_signature(%Campaign{} = campaign, attrs) do
+    metadata = Map.get(attrs, :metadata, %{}) || %{}
+
+    signature_input = %{
+      asset:
+        Map.take(attrs, [:title, :kind, :text, :node_id, :highlight_id, :style, :source_type]),
+      metadata: invalidate_rendered_media(metadata),
+      title_card_mode: title_card_mode(campaign),
+      pexels_background: pexels_background(campaign),
+      renderer_version: ArtifactStore.renderer_version()
+    }
+
+    signature =
+      signature_input
+      |> :erlang.term_to_binary()
+      |> then(&:crypto.hash(:sha256, &1))
+      |> Base.encode16(case: :lower)
+
+    Map.put(attrs, :metadata, Map.put(metadata, "render_signature", signature))
+  end
 
   defp maybe_where_stale_asset(query, []), do: query
 

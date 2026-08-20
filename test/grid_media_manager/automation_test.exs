@@ -2,6 +2,7 @@ defmodule GridMediaManager.AutomationTest do
   use GridMediaManager.DataCase
 
   alias GridMediaManager.Automation
+  alias GridMediaManager.AutomationRendererStub
   alias GridMediaManager.Campaigns
   alias GridMediaManager.EditorialSelectorStub
   alias GridMediaManager.RationalGrid.GridIndex
@@ -118,6 +119,98 @@ defmodule GridMediaManager.AutomationTest do
     failed = Automation.get_batch(batch.id)
     assert failed.status == "failed"
     assert failed.error_message == "No RationalGrid sources are available."
+  end
+
+  test "plans and generates a complete batch through one resumable entrypoint" do
+    topic = "Programmatic generation"
+    prepare_source(topic)
+
+    assert {:ok, batch} = Automation.create_batch([topic])
+
+    assert {:ok, result} =
+             Automation.generate_batch_assets(batch,
+               selector: EditorialSelectorStub,
+               renderer: AutomationRendererStub,
+               renderer_options: [status: :complete]
+             )
+
+    assert result.batch_id == batch.id
+    assert result.status == :complete
+    assert [%{status: :complete, assets: assets, errors: []}] = result.plans
+    assert length(assets) == 2
+    assert Enum.all?(assets, &(&1.status == :complete))
+
+    completed = Automation.get_batch(batch.id)
+    campaign = List.first(completed.plans).campaign
+    assert Campaigns.list_post_drafts(campaign) != []
+  end
+
+  test "reports browser artifacts as resumable work" do
+    topic = "Browser artifact boundary"
+    prepare_source(topic)
+
+    assert {:ok, batch} = Automation.create_batch([topic])
+
+    assert {:ok, result} =
+             Automation.generate_batch_assets(batch,
+               selector: EditorialSelectorStub,
+               renderer: AutomationRendererStub,
+               renderer_options: [status: :pending]
+             )
+
+    assert result.status == :awaiting_artifacts
+
+    assert [%{status: :awaiting_artifacts, assets: assets, errors: []}] = result.plans
+
+    assert Enum.all?(assets, fn asset ->
+             asset.status == :awaiting_artifacts and asset.output.missing_indexes == [1]
+           end)
+
+    assert {:ok, resumed} =
+             Automation.generate_batch_assets(batch.id,
+               renderer: AutomationRendererStub,
+               renderer_options: [status: :complete]
+             )
+
+    assert resumed.status == :complete
+    assert [%{status: :complete}] = resumed.plans
+  end
+
+  test "contains renderer failures in a uniform per-plan result" do
+    topic = "Contained renderer failure"
+    prepare_source(topic)
+
+    assert {:ok, batch} = Automation.create_batch([topic])
+
+    assert {:ok, result} =
+             Automation.generate_batch_assets(batch,
+               selector: EditorialSelectorStub,
+               renderer: AutomationRendererStub,
+               renderer_options: [status: :failed]
+             )
+
+    assert result.status == :failed
+    assert [%{status: :failed, assets: assets, errors: errors}] = result.plans
+    assert Enum.all?(assets, &(&1.status == :failed))
+    assert Enum.all?(errors, &(&1.stage == :rendering))
+  end
+
+  defp prepare_source(topic) do
+    source_slug = slug(topic)
+    assert {:ok, _campaign} = Campaigns.import_payload(payload(topic, source_slug), source_slug)
+
+    assert {:ok, _summaries} =
+             GridIndex.replace_all([
+               %{
+                 slug: source_slug,
+                 title: topic,
+                 url: "https://rationalgrid.ai/g/#{source_slug}",
+                 graph_url: nil,
+                 tags: [topic],
+                 node_count: 3,
+                 source: source_slug
+               }
+             ])
   end
 
   defp slug(topic), do: topic |> String.downcase() |> String.replace(" ", "-")

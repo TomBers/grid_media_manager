@@ -221,6 +221,27 @@ defmodule GridMediaManager.CampaignsTest do
     assert ArtifactStore.ready?(asset, Campaigns.media_asset_slide_indexes(asset))
   end
 
+  test "regenerating an identical asset preserves completed browser artifacts" do
+    campaign = import_campaign("artifact-resume")
+    assert {:ok, asset} = Campaigns.generate_grid_asset(campaign)
+    assert {:ok, asset} = Campaigns.store_client_artifact(asset, 1, @png)
+
+    assert {:ok, regenerated} = Campaigns.generate_grid_asset(campaign)
+    assert regenerated.id == asset.id
+    assert ArtifactStore.ready?(regenerated, [1])
+    assert ArtifactStore.artifact(regenerated, 1) == ArtifactStore.artifact(asset, 1)
+
+    assert {:ok, campaign} =
+             Campaigns.set_pexels_background(campaign, %{
+               id: 42,
+               portrait_url: "https://images.example/new-cover.jpg"
+             })
+
+    assert {:ok, changed_cover} = Campaigns.generate_grid_asset(campaign)
+    refute ArtifactStore.ready?(changed_cover, [1])
+    refute Map.has_key?(changed_cover.metadata, "artifacts")
+  end
+
   test "editing slide text invalidates rendered and published media" do
     campaign = import_campaign("edit-slide")
     assert {:ok, asset} = Campaigns.generate_grid_asset(campaign)
