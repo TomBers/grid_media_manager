@@ -11,7 +11,7 @@ defmodule GridMediaManager.Studio.Workflow do
   alias GridMediaManager.Promotion.ShareCard
 
   @max_candidates_per_type 24
-  @formats ~w(landscape linkedin portrait carousel combined_carousel story_video long_form)
+  @formats ~w(landscape linkedin portrait combined_carousel story_video long_form)
 
   def candidates(%Campaign{} = campaign) do
     recommended_question = Campaigns.recommended_question(campaign)
@@ -144,36 +144,13 @@ defmodule GridMediaManager.Studio.Workflow do
   end
 
   defp generate_story_video(campaign, candidates, style) do
-    case candidates do
-      [%{type: "key_node", source_id: source_id} = candidate] ->
-        case Campaigns.generate_key_node_video(campaign, source_id, style) do
-          {:ok, video} ->
-            %{assets: [video], errors: []}
-
-          {:error, reason} ->
-            %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
-        end
-
-      _ ->
-        generate_story_video_from_carousel(campaign, candidates, style)
-    end
-  end
-
-  defp generate_story_video_from_carousel(campaign, candidates, style) do
-    case Campaigns.generate_curated_carousel_for_video(campaign, candidates, style) do
-      {:ok, carousel} ->
-        case Campaigns.generate_curated_carousel_video(campaign, carousel) do
-          {:ok, video} ->
-            %{assets: [video], errors: []}
-
-          {:error, reason} ->
-            candidate = List.first(candidates) || %{title: campaign.title}
-            %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
-        end
+    case Campaigns.generate_story_video(campaign, candidates, style) do
+      {:ok, video} ->
+        %{assets: [video], errors: []}
 
       {:error, reason} ->
         candidate = List.first(candidates) || %{title: campaign.title}
-        %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
+        %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
     end
   end
 
@@ -192,44 +169,12 @@ defmodule GridMediaManager.Studio.Workflow do
     Campaigns.generate_grid_asset(campaign, style)
   end
 
-  defp generate_candidate(campaign, %{type: "question", source_id: source_id}, style, "carousel") do
-    with {:ok, image} <- Campaigns.generate_question_asset(campaign, source_id, style, "portrait") do
-      case Campaigns.generate_question_short_video(campaign, source_id, style) do
-        {:ok, video} -> {:ok, [image, video]}
-        {:error, reason} -> {:partial, [image], {:video, reason}}
-      end
-    end
-  end
-
   defp generate_candidate(campaign, %{type: "question", source_id: source_id}, style, format) do
     Campaigns.generate_question_asset(campaign, source_id, style, format)
   end
 
-  defp generate_candidate(campaign, %{type: "highlight", source_id: source_id}, style, "carousel") do
-    with {:ok, image} <-
-           Campaigns.generate_highlight_asset(campaign, source_id, style, "portrait") do
-      case Campaigns.generate_highlight_short_video(campaign, source_id, style) do
-        {:ok, video} -> {:ok, [image, video]}
-        {:error, reason} -> {:partial, [image], {:video, reason}}
-      end
-    end
-  end
-
   defp generate_candidate(campaign, %{type: "highlight", source_id: source_id}, style, format) do
     Campaigns.generate_highlight_asset(campaign, source_id, style, format)
-  end
-
-  defp generate_candidate(campaign, %{type: "key_node", source_id: source_id}, style, "carousel") do
-    case Campaigns.generate_key_node_carousel(campaign, source_id, style) do
-      {:ok, slides} ->
-        case Campaigns.generate_key_node_video(campaign, source_id, style) do
-          {:ok, video} -> {:ok, slides ++ [video]}
-          {:error, reason} -> {:partial, slides, {:video, reason}}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
-    end
   end
 
   defp generate_candidate(campaign, %{type: "key_node", source_id: source_id}, style, format) do

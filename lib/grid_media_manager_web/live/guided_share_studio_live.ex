@@ -2031,7 +2031,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         data-style={@asset.style}
         data-video-frame={if(browser_canvas_video?(@asset), do: "true", else: "false")}
         data-cover-image-url={@cover_image_url}
-        data-logo-src="/images/rg_logo.webp"
+        data-cta-image-src="/images/rationalgrid-follow-up.png"
         data-upload-url={client_artifact_upload_url(@asset)}
         data-asset-id={@asset.id}
         data-auto-save={if(@auto_save, do: "true", else: "false")}
@@ -3166,10 +3166,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp positive_integer(_value), do: {:error, :invalid_index}
 
   defp carousel_selected_slide_indexes(%MediaAsset{
-         kind: kind,
+         kind: "curated_carousel_video",
          metadata: metadata
-       })
-       when kind in ["curated_carousel_video", "key_node_video"] do
+       }) do
     metadata = metadata || %{}
 
     case Map.get(metadata, "selected_slide_indexes") do
@@ -3575,19 +3574,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       else: Campaigns.media_asset_artifact_url(asset, slide_index)
   end
 
-  defp canvas_slides(campaign, %MediaAsset{kind: "key_node_video"} = asset) do
-    case Map.get(asset.metadata || %{}, "slides", []) do
-      [] ->
-        case ShareCard.find_key_node(campaign, asset.node_id) do
-          node when is_map(node) -> ShareCard.node_short_video_slides(campaign, node)
-          _node -> []
-        end
-
-      slides ->
-        slides
-    end
-  end
-
   defp canvas_slides(_campaign, %MediaAsset{} = asset) do
     case Map.get(asset.metadata || %{}, "slides", []) do
       [] ->
@@ -3637,18 +3623,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp asset_kind_label(%MediaAsset{kind: "curated_carousel_video"} = asset),
     do: "Story Short · #{video_duration_seconds(asset)}s · 1080 × 1920"
-
-  defp asset_kind_label(%MediaAsset{kind: "key_node_carousel_slide", metadata: metadata}),
-    do: "Carousel · slide #{Map.get(metadata, "slide_index")}"
-
-  defp asset_kind_label(%MediaAsset{kind: "key_node_video"} = asset),
-    do: "Short video · #{video_duration_seconds(asset)}s · 1080 × 1920"
-
-  defp asset_kind_label(%MediaAsset{kind: "question_video"}),
-    do: "Question Short · 6s · 1080 × 1920"
-
-  defp asset_kind_label(%MediaAsset{kind: "highlight_video"}),
-    do: "Highlight Reel · 6s · 1080 × 1920"
 
   defp asset_kind_label(%MediaAsset{kind: "key_node_card", metadata: %{"format" => "portrait"}}),
     do: "Portrait card · 1080 × 1350"

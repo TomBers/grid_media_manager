@@ -10,7 +10,7 @@ defmodule GridMediaManager.Promotion.ArtifactStore do
   alias GridMediaManager.Campaigns.MediaAsset
 
   @png_signature <<137, 80, 78, 71, 13, 10, 26, 10>>
-  @renderer_version 6
+  @renderer_version 9
 
   def renderer_version, do: @renderer_version
 

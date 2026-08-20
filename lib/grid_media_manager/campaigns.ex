@@ -207,41 +207,6 @@ defmodule GridMediaManager.Campaigns do
   def media_asset_artifact_url(%MediaAsset{id: id}, slide_index \\ 1),
     do: "/media-assets/#{id}/artifacts/#{slide_index}"
 
-  def get_curated_carousel_asset(%Campaign{id: campaign_id}, token) when is_binary(token) do
-    Repo.get_by(MediaAsset,
-      campaign_id: campaign_id,
-      kind: "curated_carousel",
-      source_type: "curated_carousel",
-      source_id: token
-    ) || get_curated_carousel_video_asset(%Campaign{id: campaign_id}, token)
-  end
-
-  def get_curated_carousel_video_asset(%Campaign{id: campaign_id}, token)
-      when is_binary(token) do
-    Repo.get_by(MediaAsset,
-      campaign_id: campaign_id,
-      kind: "curated_carousel_video",
-      source_type: "curated_carousel_video",
-      source_id: token
-    )
-  end
-
-  def get_key_node_video_asset(%Campaign{} = campaign, node_id) do
-    get_key_node_video_asset(campaign, node_id, nil)
-  end
-
-  def get_key_node_video_asset(%Campaign{id: campaign_id}, node_id, style) do
-    MediaAsset
-    |> where([asset], asset.campaign_id == ^campaign_id)
-    |> where([asset], asset.kind == "key_node_video")
-    |> where([asset], asset.source_type == "key_node_video")
-    |> where([asset], asset.source_id == ^to_string(node_id))
-    |> maybe_filter_asset_style(style)
-    |> order_by([asset], desc: asset.id)
-    |> limit(1)
-    |> Repo.one()
-  end
-
   def get_post_draft!(id), do: Repo.get!(PostDraft, parse_integer(id))
 
   def get_post_draft_with_asset!(id) do
@@ -446,35 +411,39 @@ defmodule GridMediaManager.Campaigns do
 
   def generate_curated_carousel(%Campaign{} = campaign, candidates, style)
       when is_list(candidates) and length(candidates) >= 1 do
-    generate_curated_carousel(campaign, candidates, style, :with_drafts, :full)
+    generate_curated_carousel(campaign, candidates, style, :full)
   end
 
   def generate_curated_carousel(%Campaign{}, _candidates, _style),
     do: {:error, :not_enough_candidates}
 
-  def generate_curated_carousel_for_video(%Campaign{} = campaign, candidates, style)
-      when is_list(candidates) and length(candidates) >= 1 do
-    generate_curated_carousel(campaign, candidates, style, :without_drafts, :short_video)
-  end
-
   def generate_curated_carousel_bundle(%Campaign{} = campaign, candidates, style)
       when is_list(candidates) and length(candidates) >= 1 do
-    generate_curated_carousel(campaign, candidates, style, :with_drafts, :short_video)
+    generate_curated_carousel(campaign, candidates, style, :short_video)
   end
 
-  defp generate_curated_carousel(
-         %Campaign{} = campaign,
-         candidates,
-         style,
-         draft_mode,
-         reading_mode
-       ) do
+  def generate_story_video(%Campaign{} = campaign, candidates, style)
+      when is_list(candidates) and length(candidates) >= 1 do
+    campaign = get_campaign!(campaign.id)
+    style = ShareCard.normalize_style(style)
+    slides = SlideSequence.build(campaign, candidates, reading_mode: :short_video)
+    token = curated_carousel_token(candidates, slides, style)
+
+    campaign
+    |> CarouselVideo.curated_asset_attr(token, slides, style)
+    |> then(&upsert_generated_asset_with_drafts(campaign, &1))
+  end
+
+  def generate_story_video(%Campaign{}, _candidates, _style),
+    do: {:error, :not_enough_candidates}
+
+  defp generate_curated_carousel(%Campaign{} = campaign, candidates, style, reading_mode) do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
     slides = SlideSequence.build(campaign, candidates, reading_mode: reading_mode)
     token = curated_carousel_token(candidates, slides, style)
 
-    attrs = %{
+    %{
       title: "#{campaign.title} · Story carousel",
       kind: "curated_carousel",
       url: ShareCard.curated_carousel_image_path(campaign, token, 1, style),
@@ -495,11 +464,7 @@ defmodule GridMediaManager.Campaigns do
         "selected_slide_indexes" => ShareCard.curated_carousel_selected_slide_indexes(slides)
       }
     }
-
-    case draft_mode do
-      :with_drafts -> upsert_generated_asset_with_drafts(campaign, attrs)
-      :without_drafts -> Repo.transaction(fn -> upsert_media_asset(campaign, attrs) end)
-    end
+    |> then(&upsert_generated_asset_with_drafts(campaign, &1))
   end
 
   def update_curated_carousel_selection(%MediaAsset{kind: "curated_carousel"} = asset, selection)
@@ -543,11 +508,6 @@ defmodule GridMediaManager.Campaigns do
     |> then(&upsert_generated_asset_with_drafts(campaign, &1))
   end
 
-  defp maybe_filter_asset_style(query, style) when is_binary(style),
-    do: where(query, [asset], asset.style == ^ShareCard.normalize_style(style))
-
-  defp maybe_filter_asset_style(query, _style), do: query
-
   def generate_highlight_asset(
         %Campaign{} = campaign,
         highlight_id,
@@ -562,27 +522,6 @@ defmodule GridMediaManager.Campaigns do
       upsert_generated_asset_with_drafts(campaign, attrs)
     else
       _ -> {:error, :not_found}
-    end
-  end
-
-  def generate_highlight_short_video(
-        %Campaign{} = campaign,
-        highlight_id,
-        style \\ ShareCard.default_style()
-      ) do
-    campaign = get_campaign!(campaign.id)
-    style = ShareCard.normalize_style(style)
-
-    with highlight when is_map(highlight) <- ShareCard.find_highlight(campaign, highlight_id) do
-      attrs =
-        campaign
-        |> ShareCard.highlight_short_video_asset_attr(highlight, style)
-        |> put_single_slide("highlight")
-
-      attrs
-      |> then(&upsert_generated_asset_with_drafts(campaign, &1))
-    else
-      nil -> {:error, :not_found}
     end
   end
 
@@ -631,44 +570,6 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
-  def generate_key_node_carousel(
-        %Campaign{} = campaign,
-        node_id,
-        style \\ ShareCard.default_style()
-      ) do
-    campaign = get_campaign!(campaign.id)
-
-    with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
-         attrs when is_list(attrs) <-
-           ShareCard.key_node_carousel_asset_attrs(campaign, node, style) do
-      Repo.transaction(fn ->
-        assets = Enum.map(attrs, &upsert_media_asset(campaign, &1))
-        [cover | _] = assets
-        ensure_post_drafts(campaign, [cover])
-        assets
-      end)
-    else
-      _ -> {:error, :not_found}
-    end
-  end
-
-  def generate_key_node_video(
-        %Campaign{} = campaign,
-        node_id,
-        style \\ ShareCard.default_style()
-      ) do
-    campaign = get_campaign!(campaign.id)
-    style = ShareCard.normalize_style(style)
-
-    with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id) do
-      campaign
-      |> CarouselVideo.asset_attr(node, style)
-      |> then(&upsert_generated_asset_with_drafts(campaign, &1))
-    else
-      nil -> {:error, :not_found}
-    end
-  end
-
   def generate_question_asset(
         %Campaign{} = campaign,
         question_id,
@@ -683,27 +584,6 @@ defmodule GridMediaManager.Campaigns do
       upsert_generated_asset_with_drafts(campaign, attrs)
     else
       _ -> {:error, :not_found}
-    end
-  end
-
-  def generate_question_short_video(
-        %Campaign{} = campaign,
-        question_id,
-        style \\ ShareCard.default_style()
-      ) do
-    campaign = get_campaign!(campaign.id)
-    style = ShareCard.normalize_style(style)
-
-    with question when is_map(question) <- ShareCard.find_question(campaign, question_id) do
-      attrs =
-        campaign
-        |> ShareCard.question_short_video_asset_attr(question, style)
-        |> put_single_slide("quote")
-
-      attrs
-      |> then(&upsert_generated_asset_with_drafts(campaign, &1))
-    else
-      nil -> {:error, :not_found}
     end
   end
 
@@ -1182,22 +1062,6 @@ defmodule GridMediaManager.Campaigns do
   end
 
   defp refresh_video_timing(metadata, %MediaAsset{}), do: metadata
-
-  defp put_single_slide(attrs, kind) when is_map(attrs) do
-    slide = %{
-      "kind" => kind,
-      "label" => "",
-      "title" => Map.get(attrs, :text) || Map.get(attrs, :title) || "",
-      "body" => ""
-    }
-
-    metadata =
-      (Map.get(attrs, :metadata) || %{})
-      |> Map.put("slides", [slide])
-      |> Map.put("slide_count", 1)
-
-    Map.put(attrs, :metadata, metadata)
-  end
 
   defp invalidate_published_media(metadata) do
     Map.drop(metadata, [

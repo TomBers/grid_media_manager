@@ -68,56 +68,6 @@ defmodule GridMediaManager.Social.Templates do
     angle |> String.replace("_", " ") |> String.capitalize()
   end
 
-  defp body_for_platform(
-         %Campaign{} = campaign,
-         %MediaAsset{kind: "highlight_video"} = asset,
-         platform,
-         "highlight"
-       ) do
-    link = asset_link(campaign, asset)
-    title = caption_title(campaign.title)
-    quote = asset.text |> fallback(title)
-
-    copy =
-      case platform do
-        "instagram" ->
-          "A moment worth sitting with:\n\n“#{quote}”\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
-
-        "youtube" ->
-          "Can this idea change how you see #{title}?\n\n“#{quote}”\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
-
-        _ ->
-          "#{quote}\n\n#{cta_line(link)}"
-      end
-
-    fit_to_platform(copy, platform, link)
-  end
-
-  defp body_for_platform(
-         %Campaign{} = campaign,
-         %MediaAsset{kind: "question_video"} = asset,
-         platform,
-         "question_quote"
-       ) do
-    link = asset_link(campaign, asset)
-    title = caption_title(campaign.title)
-    question = asset.text |> fallback(title)
-
-    copy =
-      case platform do
-        "instagram" ->
-          "Pause on this question, then take a position:\n\n#{question}\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
-
-        "youtube" ->
-          "A question about #{title}:\n\n#{question}\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
-
-        _ ->
-          "#{question}\n\n#{cta_line(link)}"
-      end
-
-    fit_to_platform(copy, platform, link)
-  end
-
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "highlight") do
     link = asset_link(campaign, asset)
     title = caption_title(campaign.title)
@@ -316,8 +266,6 @@ defmodule GridMediaManager.Social.Templates do
       with node_id when is_binary(node_id) and node_id != "" <- asset.node_id,
            node when is_map(node) <- ShareCard.find_key_node(campaign, node_id) do
         ShareCard.node_short_video_slides(campaign, node)
-        |> Enum.drop(1)
-        |> Enum.reject(&(Map.get(&1, "label") == "Learn more"))
         |> Enum.map(&Map.get(&1, "body", ""))
         |> Enum.reject(&(String.trim(&1) == ""))
         |> Enum.join("\n\n")
@@ -340,14 +288,13 @@ defmodule GridMediaManager.Social.Templates do
        when kind in ["curated_carousel", "curated_carousel_video"],
        do: "visual"
 
-  defp asset_angle(%MediaAsset{kind: kind}) when kind in ["key_node_card", "key_node_video"],
+  defp asset_angle(%MediaAsset{kind: "key_node_card"}),
     do: "key_node"
 
   defp asset_angle(%MediaAsset{kind: "long_form_post"}), do: "long_form"
 
-  defp asset_angle(%MediaAsset{kind: kind})
-       when kind in ["question_quote_card", "question_video"],
-       do: "question_quote"
+  defp asset_angle(%MediaAsset{kind: "question_quote_card"}),
+    do: "question_quote"
 
   defp asset_angle(%MediaAsset{text: text}) when text in [nil, ""], do: "visual"
   defp asset_angle(%MediaAsset{}), do: "highlight"
@@ -355,15 +302,6 @@ defmodule GridMediaManager.Social.Templates do
   defp asset_platforms(%MediaAsset{mime_type: "video/mp4"}), do: Platforms.video_ids()
 
   defp asset_platforms(%MediaAsset{kind: "long_form_post"}), do: Platforms.long_form_ids()
-
-  defp asset_platforms(%MediaAsset{kind: kind})
-       when kind in [
-              "question_video",
-              "highlight_video",
-              "key_node_video",
-              "curated_carousel_video"
-            ],
-       do: Platforms.video_ids()
 
   defp asset_platforms(%MediaAsset{}), do: Platforms.text_ids()
 

@@ -11,7 +11,6 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Promotion.ArtifactStore
-  alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.Social.Platforms
 
   @width 1080
@@ -27,33 +26,10 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   def available?, do: is_binary(ffmpeg_path())
 
-  def asset_attr(%Campaign{} = campaign, node, style) when is_map(node) do
-    style = ShareCard.normalize_style(style)
-    node_id = node |> value("id") |> to_string()
-    node_title = node |> value("title") |> present_string() |> fallback("Key idea")
-    slides = ShareCard.node_short_video_slides(campaign, node)
-
-    %{
-      title: "#{node_title} · Short video",
-      kind: "key_node_video",
-      url: identity_url(campaign, "node", node_id, style),
-      mime_type: "video/mp4",
-      text: node |> value("excerpt") |> present_string() |> fallback(node_title),
-      node_id: node_id,
-      highlight_id: nil,
-      recommended_platforms: Platforms.video_ids(),
-      style: style,
-      source_type: "key_node_video",
-      source_id: node_id,
-      metadata: video_metadata(slides)
-    }
-  end
-
   def curated_asset_attr(%Campaign{} = campaign, token, slides, style, opts \\ [])
       when is_list(slides) and is_list(opts) do
-    style = ShareCard.normalize_style(style)
     selection = Keyword.get(opts, :selected_slide_indexes)
-    indexes = ShareCard.curated_carousel_selected_slide_indexes(slides, selection)
+    indexes = selected_slide_indexes(slides, selection)
 
     metadata =
       slides
@@ -178,8 +154,20 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   defp identity_url(%Campaign{id: campaign_id}, kind, source_id, style) do
     source_id = URI.encode(to_string(source_id), &URI.char_unreserved?/1)
-    query = URI.encode_query(%{style: ShareCard.normalize_style(style)})
+    query = URI.encode_query(%{style: style})
     "/client-assets/campaigns/#{campaign_id}/videos/#{kind}/#{source_id}?#{query}"
+  end
+
+  defp selected_slide_indexes(slides, nil), do: Enum.to_list(1..length(slides))
+
+  defp selected_slide_indexes(slides, selection) when is_list(selection) do
+    last_index = length(slides)
+
+    selection
+    |> Enum.filter(&is_integer/1)
+    |> Enum.uniq()
+    |> Enum.filter(&(&1 >= 1 and &1 < last_index))
+    |> then(&(&1 ++ [last_index]))
   end
 
   defp encode_frames(ffmpeg, durations, cache_dir, output_path, frame_fun) do
@@ -379,17 +367,4 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   defp decimal(value) when is_float(value), do: :erlang.float_to_binary(value, decimals: 2)
 
   defp value(map, key), do: Map.get(map, key) || Map.get(map, String.to_existing_atom(key))
-
-  defp present_string(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      present -> present
-    end
-  end
-
-  defp present_string(_value), do: nil
-
-  defp fallback(nil, fallback), do: fallback
-  defp fallback("", fallback), do: fallback
-  defp fallback(value, _fallback), do: value
 end

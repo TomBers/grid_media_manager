@@ -77,8 +77,8 @@ defmodule GridMediaManager.CampaignsTest do
     node = ShareCard.find_key_node(campaign, "answer-1")
     slides = ShareCard.node_reading_slides(campaign, node)
 
-    assert List.first(slides)["title"] == "A structured answer"
-    assert List.last(slides)["kind"] == "cta"
+    assert Enum.all?(slides, &(&1["kind"] == "node_text"))
+    refute Enum.any?(slides, &(&1["kind"] == "cta"))
 
     content = Enum.filter(slides, &(&1["kind"] == "node_text"))
     assert Enum.any?(content, &String.contains?(&1["body"], "First claim"))
@@ -105,6 +105,8 @@ defmodule GridMediaManager.CampaignsTest do
 
     assert long_form.kind == "long_form_post"
     assert long_form.text =~ "First claim"
+    assert Enum.map(long_form.metadata["slides"], & &1["kind"]) == ["cover", "cta"]
+    assert List.last(long_form.metadata["slides"])["title"] == "Where do you stand?"
 
     assert Campaigns.list_post_drafts(campaign, media_asset_id: long_form.id)
            |> Enum.map(& &1.platform)
@@ -130,6 +132,8 @@ defmodule GridMediaManager.CampaignsTest do
     assert asset.text =~ question.title
     assert asset.text =~ "First claim: confidence should follow evidence."
     assert asset.text =~ highlight.title
+    assert asset.metadata["slide_count"] == 2
+    assert List.last(asset.metadata["slides"])["body"] =~ "contribute your perspective"
 
     assert Enum.map(asset.metadata["sources"], & &1["type"]) == [
              "question",
@@ -160,7 +164,9 @@ defmodule GridMediaManager.CampaignsTest do
     assert carousel.mime_type == "image/png"
     assert video.mime_type == "video/mp4"
     assert carousel.metadata["slides"] == video.metadata["slides"]
+    assert List.first(carousel.metadata["slides"])["kind"] == "cover"
     assert List.last(carousel.metadata["slides"])["kind"] == "cta"
+    assert List.last(carousel.metadata["slides"])["body"] =~ "contribute your perspective"
 
     assert video.metadata["selected_slide_indexes"] ==
              carousel.metadata["selected_slide_indexes"]
@@ -174,6 +180,22 @@ defmodule GridMediaManager.CampaignsTest do
              video.metadata["slides"]
              |> CarouselVideo.slide_durations(video.metadata["selected_slide_indexes"])
              |> CarouselVideo.duration_seconds()
+  end
+
+  test "video-only generation creates one canonical asset without an intermediate carousel" do
+    campaign = import_campaign("single-video-path")
+    candidates = Workflow.candidates(campaign) |> Enum.take(2)
+
+    assert %{assets: [video], errors: []} =
+             Workflow.generate(campaign, candidates,
+               style: "deep_ocean",
+               format: "story_video"
+             )
+
+    assert video.kind == "curated_carousel_video"
+    assert List.first(video.metadata["slides"])["kind"] == "cover"
+    assert List.last(video.metadata["slides"])["kind"] == "cta"
+    refute Enum.any?(Campaigns.list_media_assets(campaign), &(&1.kind == "curated_carousel"))
   end
 
   test "stores selected browser artifacts and rejects unselected frames" do

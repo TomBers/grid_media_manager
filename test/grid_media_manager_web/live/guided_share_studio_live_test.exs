@@ -106,7 +106,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     view |> element("#create-story-package") |> render_click()
     await_generation(view)
 
-    assert Enum.any?(Campaigns.list_media_assets(campaign), &(&1.kind == "curated_carousel"))
+    assert Enum.any?(
+             Campaigns.list_media_assets(campaign),
+             &(&1.kind == "curated_carousel_video")
+           )
   end
 
   test "orders signals as question and answer threads using the node stream", %{conn: conn} do
@@ -268,7 +271,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assets = Campaigns.list_media_assets(campaign)
     assert [%{kind: "curated_carousel", style: "warm_paper"} = carousel] = assets
     assert carousel.metadata["slide_count"] >= 3
-    assert List.last(carousel.metadata["slides"])["label"] == "Learn more"
+    assert List.last(carousel.metadata["slides"])["label"] == "Join the conversation"
     last_slide = carousel.metadata["slide_count"]
     assert carousel.metadata["selected_slide_indexes"] == Enum.to_list(1..last_slide)
     assert has_element?(view, "#curated-carousel-order-#{carousel.id}")
@@ -336,6 +339,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert asset.text =~ "If a drug like soma existed today"
     assert asset.text =~ "Perfect comfort can become a cage."
     assert asset.text =~ "Long answer"
+    assert Enum.map(asset.metadata["slides"], & &1["kind"]) == ["cover", "cta"]
+    assert List.last(asset.metadata["slides"])["title"] == "Where do you stand?"
 
     assert Enum.map(asset.metadata["sources"], & &1["type"]) == [
              "question",
@@ -361,11 +366,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     await_generation(view)
 
     assets = Campaigns.list_media_assets(campaign)
-    carousel = Enum.find(assets, &(&1.kind == "curated_carousel"))
-    assert carousel
-    assert carousel.metadata["slide_count"] >= 4
+    video = Enum.find(assets, &(&1.kind == "curated_carousel_video"))
+    assert video
+    assert video.metadata["slide_count"] >= 4
+    refute Enum.any?(assets, &(&1.kind == "curated_carousel"))
 
-    assert List.last(carousel.metadata["slides"])["title"] == "Continue on RationalGrid.ai"
+    assert List.last(video.metadata["slides"])["title"] == "Where do you stand?"
   end
 
   test "creates video and image outputs together from one design", %{conn: conn} do
@@ -422,15 +428,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     view |> element("#create-story-package") |> render_click()
     await_generation(view)
 
-    hidden_carousel =
-      Campaigns.list_media_assets(campaign) |> Enum.find(&(&1.kind == "curated_carousel"))
-
-    assert hidden_carousel
-
-    refute Enum.any?(
-             Campaigns.list_post_drafts(campaign),
-             &(&1.media_asset_id == hidden_carousel.id)
-           )
+    refute Enum.any?(Campaigns.list_media_assets(campaign), &(&1.kind == "curated_carousel"))
 
     assert has_element?(view, "#create-companion-carousel", "Create image carousel")
     view |> element("#create-companion-carousel") |> render_click()

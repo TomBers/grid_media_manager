@@ -83,23 +83,22 @@ defmodule GridMediaManager.Social.TemplatesTest do
     end)
   end
 
-  test "video assets receive distinct copy from their companion image" do
+  test "story video copy is adapted for each video platform" do
     campaign = campaign()
 
-    image = %MediaAsset{
-      id: 1,
-      title: "Question quote",
-      kind: "question_quote_card",
-      text: "What should we value?"
+    video = %MediaAsset{
+      id: 2,
+      title: "What should we value?",
+      kind: "curated_carousel_video",
+      mime_type: "video/mp4"
     }
 
-    video = %{image | id: 2, kind: "question_video"}
+    instagram_copy = Templates.body(campaign, video, "instagram", "visual")
+    youtube_copy = Templates.body(campaign, video, "youtube", "visual")
 
-    image_copy = Templates.body(campaign, image, "instagram", "question_quote")
-    video_copy = Templates.body(campaign, video, "instagram", "question_quote")
-
-    refute image_copy == video_copy
-    assert video_copy =~ "Pause on this question"
+    refute instagram_copy == youtube_copy
+    assert instagram_copy =~ "#"
+    assert youtube_copy =~ "RationalGrid.ai"
   end
 
   test "adapts copy within each supported platform group" do
@@ -115,7 +114,7 @@ defmodule GridMediaManager.Social.TemplatesTest do
     video_asset = %MediaAsset{
       id: 2,
       title: "A useful highlight",
-      kind: "highlight_video",
+      kind: "curated_carousel_video",
       mime_type: "video/mp4",
       text: "The important idea is easier to see when the pieces are connected."
     }
@@ -134,7 +133,13 @@ defmodule GridMediaManager.Social.TemplatesTest do
     campaign = campaign()
 
     image = %MediaAsset{id: 1, kind: "highlight_card", mime_type: "image/png", text: "A quote"}
-    video = %MediaAsset{id: 2, kind: "highlight_video", mime_type: "video/mp4", text: "A quote"}
+
+    video = %MediaAsset{
+      id: 2,
+      kind: "curated_carousel_video",
+      mime_type: "video/mp4",
+      text: "A quote"
+    }
 
     drafts = Templates.draft_attrs_for_platforms(campaign, [image, video], Platforms.ids())
 
