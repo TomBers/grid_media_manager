@@ -157,7 +157,7 @@ defmodule GridMediaManager.Automation do
     case get_plan(plan_id) do
       %EditorialPlan{status: "planned", campaign_id: campaign_id} = plan ->
         campaign = Campaigns.get_campaign!(campaign_id)
-        PackageBuilder.generate_plan(campaign, plan, Workflow.candidates(campaign))
+        PackageBuilder.generate_complete_plan(campaign, plan, Workflow.candidates(campaign))
 
       _plan ->
         %{assets: [], errors: [%{candidate: nil, reason: :editorial_plan_not_ready}]}
@@ -252,6 +252,8 @@ defmodule GridMediaManager.Automation do
            "source_rationale" => source_choice["rationale"],
            "source_confidence" => source_choice["confidence"],
            "story_confidence" => story.confidence,
+           "text_visual_key" => story.text_visual_key,
+           "text_visual_role" => story.text_visual_role,
            "format_rationale" => story.format_rationale,
            "visual_style" => story.visual_style,
            "visual_rationale" => story.visual_rationale,
@@ -344,11 +346,15 @@ defmodule GridMediaManager.Automation do
     recommended_format = choice["recommended_format"]
     visual_style = choice["visual_style"]
     cover_mode = choice["cover_mode"]
+    text_visual_key = choice["text_visual_key"]
+    text_visual_role = choice["text_visual_role"]
 
     valid? =
       length(selected_keys) in minimum..min(6, MapSet.size(available_keys)) and
         Enum.all?(selected_keys, &MapSet.member?(available_keys, &1)) and
         present_string?(choice["hook"]) and
+        text_visual_key in selected_keys and
+        text_visual_role in ["question", "quotation", "evidence", "cover"] and
         present_string?(choice["rationale"]) and
         recommended_format in @formats and
         present_string?(choice["format_rationale"]) and
@@ -364,6 +370,8 @@ defmodule GridMediaManager.Automation do
        %{
          selected_keys: selected_keys,
          hook: choice["hook"],
+         text_visual_key: text_visual_key,
+         text_visual_role: text_visual_role,
          rationale: choice["rationale"],
          recommended_format: recommended_format,
          format_rationale: choice["format_rationale"],

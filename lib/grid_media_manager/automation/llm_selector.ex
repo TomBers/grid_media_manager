@@ -148,6 +148,11 @@ defmodule GridMediaManager.Automation.LLMSelector do
           "maxItems" => maximum_items
         },
         "hook" => %{"type" => "string", "minLength" => 1, "maxLength" => 280},
+        "text_visual_key" => %{"type" => "string", "enum" => keys},
+        "text_visual_role" => %{
+          "type" => "string",
+          "enum" => ["question", "quotation", "evidence", "cover"]
+        },
         "rationale" => %{"type" => "string", "minLength" => 1, "maxLength" => 900},
         "recommended_format" => %{
           "type" => "string",
@@ -167,6 +172,8 @@ defmodule GridMediaManager.Automation.LLMSelector do
       "required" => [
         "selected_keys",
         "hook",
+        "text_visual_key",
+        "text_visual_role",
         "rationale",
         "recommended_format",
         "format_rationale",

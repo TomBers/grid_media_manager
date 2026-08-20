@@ -65,5 +65,11 @@ defmodule GridMediaManager.Studio.PackageBuilderTest do
     campaign = Campaigns.get_campaign!(campaign.id)
     assert Campaigns.title_card_mode(campaign) == "pexels"
     assert Campaigns.pexels_background(campaign)["id"] == 42
+
+    assert %{assets: complete_assets, errors: []} =
+             PackageBuilder.generate_complete_plan(campaign, plan, candidates)
+
+    assert Enum.any?(complete_assets, &(&1.mime_type == "image/png"))
+    assert Enum.any?(complete_assets, &(&1.mime_type == "video/mp4"))
   end
 end

@@ -102,7 +102,7 @@ defmodule GridMediaManager.Social.TemplatesTest do
     assert video_copy =~ "Pause on this question"
   end
 
-  test "uses identical copy across each supported platform group" do
+  test "adapts copy within each supported platform group" do
     campaign = campaign()
 
     text_asset = %MediaAsset{
@@ -126,8 +126,8 @@ defmodule GridMediaManager.Social.TemplatesTest do
     video_copies =
       Enum.map(Platforms.video_ids(), &Templates.body(campaign, video_asset, &1, "highlight"))
 
-    assert Enum.uniq(text_copies) |> length() == 1
-    assert Enum.uniq(video_copies) |> length() == 1
+    assert Enum.uniq(text_copies) |> length() == 3
+    assert Enum.uniq(video_copies) |> length() >= 2
   end
 
   test "creates drafts only for the matching platform group for each asset" do
@@ -287,7 +287,10 @@ defmodule GridMediaManager.Social.TemplatesTest do
     assert linkedin =~ "Complete argument sentence 88."
     refute linkedin =~ "Follow-up questions"
     refute linkedin =~ "1. This question"
-    assert linkedin =~ "\n\n…\n\nLearn more at RationalGrid.ai:"
+
+    assert linkedin =~
+             "\n\n…\n\nExplore the evidence and connected questions.\nLearn more at RationalGrid.ai:"
+
     assert linkedin =~ "https://rationalgrid.ai/g/collective?node=node-1"
 
     assert facebook =~ "Follow-up questions"

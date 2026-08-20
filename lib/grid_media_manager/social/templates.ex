@@ -14,7 +14,6 @@ defmodule GridMediaManager.Social.Templates do
   alias GridMediaManager.Social.Platforms
 
   def body(%Campaign{} = campaign, asset, platform, angle) do
-    platform = if angle == "long_form", do: platform, else: canonical_platform(platform)
     body_for_platform(campaign, asset, platform, angle)
   end
 
@@ -130,7 +129,10 @@ defmodule GridMediaManager.Social.Templates do
           "“#{quote}”\n\nThis idea sits inside a larger question about #{title}.\n\n#{cta_line(link)}"
 
         "linkedin" ->
-          "“#{quote}”\n\nThis idea sits inside a larger question about #{title}.\n\n#{cta_line(link)}"
+          "“#{quote}”\n\nA strong claim is more useful when its assumptions and consequences are visible. This one sits inside a larger question about #{title}.\n\n#{cta_line(link)}"
+
+        "facebook" ->
+          "“#{quote}”\n\nWhat does this change about how we see #{title}?\n\n#{cta_line(link)}"
 
         "instagram" ->
           "“#{quote}”\n\nA highlight from #{title}.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
@@ -160,6 +162,9 @@ defmodule GridMediaManager.Social.Templates do
         "linkedin" ->
           "#{question}\n\nA question worth exploring in #{title}.\n\n#{cta_line(link)}"
 
+        "facebook" ->
+          "#{question}\n\nWhere do you stand—and what evidence would change your mind?\n\n#{cta_line(link)}"
+
         "instagram" ->
           "#{question}\n\nA question worth exploring in #{title}.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
@@ -182,6 +187,9 @@ defmodule GridMediaManager.Social.Templates do
       case platform do
         "linkedin" ->
           "#{node_title}\n\n#{node_text}\n\n#{cta_line(link)}"
+
+        "facebook" ->
+          "#{node_title}\n\n#{node_text}\n\nWhich part of this argument is most convincing?\n\n#{cta_line(link)}"
 
         "instagram" ->
           "#{node_title}\n\n#{node_text}\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
@@ -222,7 +230,10 @@ defmodule GridMediaManager.Social.Templates do
     copy =
       case platform do
         "linkedin" ->
-          "#{title}\n\nA visual entry point into a connected learning path.\n\n#{cta_line(link)}"
+          "#{title}\n\nOne visual idea, placed inside its wider argument.\n\n#{cta_line(link)}"
+
+        "facebook" ->
+          "#{title}\n\nStart with the visual, then follow the evidence and decide where you stand.\n\n#{cta_line(link)}"
 
         "instagram" ->
           "#{title}\n\nA visual entry point into a connected learning path.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
@@ -317,7 +328,9 @@ defmodule GridMediaManager.Social.Templates do
     node_text |> fallback(asset.text) |> fallback(caption_title(campaign.title))
   end
 
-  defp cta_line(link), do: "Learn more at RationalGrid.ai:\n#{link || "https://rationalgrid.ai"}"
+  defp cta_line(link) do
+    "Explore the evidence and connected questions.\nLearn more at RationalGrid.ai:\n#{link || "https://rationalgrid.ai"}"
+  end
 
   defp lead_question(%Campaign{} = campaign) do
     MediaPayload.recommended_question(campaign.raw_payload) || ensure_question(campaign.title)
@@ -353,13 +366,6 @@ defmodule GridMediaManager.Social.Templates do
        do: Platforms.video_ids()
 
   defp asset_platforms(%MediaAsset{}), do: Platforms.text_ids()
-
-  defp canonical_platform(platform) when platform in ["x", "linkedin", "facebook"], do: "x"
-
-  defp canonical_platform(platform) when platform in ["tiktok", "instagram", "youtube"],
-    do: "instagram"
-
-  defp canonical_platform(_platform), do: "x"
 
   defp asset_link(%Campaign{} = campaign, %MediaAsset{} = asset) do
     highlight_link(campaign, asset) || node_link(campaign, asset) || campaign.grid_url ||

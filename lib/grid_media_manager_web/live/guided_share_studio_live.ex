@@ -1999,7 +1999,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         data-browser-frame-video-url={client_video_url(@asset)}
         controls
         playsinline
-        preload="metadata"
+        preload="none"
         class={[
           "h-[70vh] max-h-[42rem] w-auto max-w-full rounded-2xl border border-base-content/10 bg-slate-950 object-contain",
           @wide && "lg:col-start-1 lg:row-start-1"

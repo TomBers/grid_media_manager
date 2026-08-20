@@ -29,6 +29,21 @@ defmodule GridMediaManager.Automation.EditorialGuidance do
     the rest of the grid to make sense.
 
     #{copy_quality()}
+
+    #{audience_conversion()}
+    """
+  end
+
+  def audience_conversion do
+    """
+    Every package exists to earn a qualified visit to RationalGrid.ai. Give the audience one
+    satisfying insight, then leave a genuine curiosity gap that the linked grid can resolve with
+    evidence, competing interpretations, or connected questions. Never use vague engagement bait.
+
+    Select the strongest standalone visual moment for text channels and identify its role:
+    provocative question, key quotation, evidence highlight, or topic cover. It must remain clear
+    without the caption. The caption and final visual should promise the specific additional value
+    available on RationalGrid.ai rather than merely saying “learn more”.
     """
   end
 
@@ -52,6 +67,8 @@ defmodule GridMediaManager.Automation.EditorialGuidance do
 
     Choose for audience impact and comprehension, not maximum channel coverage. Dense arguments
     need more reading space; a sharp question and a few visual beats suit short video.
+    Text posts are visual posts too: X, LinkedIn, and Facebook should receive an uploaded key
+    quotation, question, evidence card, cover, or carousel—not unsupported caption-only output.
     """
   end
 

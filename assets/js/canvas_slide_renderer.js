@@ -796,7 +796,7 @@ export const CanvasSlideRenderer = {
       uploadButton.textContent = "Assets saved"
       this.uploadedFrameFingerprint = fingerprint
       this.pushEvent("artifacts_saved", {asset_id: this.root.dataset.assetId})
-      this.reloadVideoFromBrowserFrames()
+      this.reloadVideoFromBrowserFrames({eager: !automatic})
     } catch (_error) {
       this.uploadedFrameFingerprint = null
       if (status) status.textContent = "Could not save browser frames"
@@ -808,7 +808,7 @@ export const CanvasSlideRenderer = {
     }
   },
 
-  reloadVideoFromBrowserFrames() {
+  reloadVideoFromBrowserFrames(options = {}) {
     const videoId = this.root?.dataset.videoPreviewId
     if (!videoId) return
 
@@ -817,7 +817,7 @@ export const CanvasSlideRenderer = {
     if (!video || !source) return
 
     video.src = cacheBustedUrl(source)
-    video.load()
+    if (options.eager === true) video.load()
   },
 
   loadVideoFallback() {
@@ -829,6 +829,5 @@ export const CanvasSlideRenderer = {
     if (!video || !source || video.src) return
 
     video.src = source
-    video.load()
   },
 }

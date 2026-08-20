@@ -36,6 +36,8 @@ defmodule GridMediaManager.EditorialSelectorStub do
      %{
        "selected_keys" => selected_keys,
        "hook" => "A grounded question worth following",
+       "text_visual_key" => List.first(selected_keys),
+       "text_visual_role" => "question",
        "rationale" => "The selected moments form a question, explanation, and implication.",
        "recommended_format" => "combined_carousel",
        "format_rationale" => "The mixed material works as both video and an image sequence.",
