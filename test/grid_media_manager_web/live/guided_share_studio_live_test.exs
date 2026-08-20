@@ -3,7 +3,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias GridMediaManager.Automation
+  alias GridMediaManager.Automation.EditorialPlan
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Repo
   alias GridMediaManager.Studio.Workflow
 
   test "redirects safely when the campaign no longer exists", %{conn: conn} do
@@ -35,6 +38,52 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     assert has_element?(view, "#content-candidates [id^='select-aspect-question-']")
     refute has_element?(view, "#select-aspect-highlight-123")
+  end
+
+  test "opens an autonomous plan with its story selected for all-channel output", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-planned")
+    selected_keys = campaign |> Workflow.candidates() |> Enum.take(2) |> Enum.map(& &1.key)
+
+    assert {:ok, batch} = Automation.create_batch(["Agency", "Comfort", "Freedom"])
+
+    plan =
+      %EditorialPlan{}
+      |> EditorialPlan.changeset(%{
+        editorial_batch_id: batch.id,
+        campaign_id: campaign.id,
+        position: 1,
+        topic: "Agency",
+        source_slug: campaign.slug,
+        source_title: campaign.title,
+        selected_keys: selected_keys,
+        hook: "A grounded hook",
+        rationale: "A coherent story",
+        confidence: 0.9,
+        recommended_format: "combined_carousel",
+        recommended_platforms: [
+          "x",
+          "linkedin",
+          "facebook",
+          "tiktok",
+          "instagram",
+          "youtube"
+        ],
+        status: "planned"
+      })
+      |> Repo.insert!()
+
+    {:ok, view, _html} =
+      live(conn, ~p"/campaigns/#{campaign.id}/studio?plan=#{plan.id}&step=design")
+
+    assert has_element?(view, "#guided-share-studio[data-step='design']")
+    assert has_element?(view, "#guided-share-studio", "2 selected")
+    assert has_element?(view, "#content-mode-bundle", "Video + carousel")
+
+    assert has_element?(
+             view,
+             "#design-platform-summary",
+             "videos will be posted to TikTok, Instagram, and YouTube"
+           )
   end
 
   test "labels questions extracted from answer bodies with their source", %{conn: conn} do

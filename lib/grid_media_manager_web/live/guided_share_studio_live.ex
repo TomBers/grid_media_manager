@@ -1,6 +1,7 @@
 defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   use GridMediaManagerWeb, :live_view
 
+  alias GridMediaManager.Automation
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
@@ -88,7 +89,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     restored_video_only? = restored_assets != [] and Enum.all?(restored_assets, &video_asset?/1)
 
     studio_state = Campaigns.guided_studio_state(campaign)
-    selected_keys = restored_selected_keys(candidates, studio_state)
+    editorial_plan = Automation.plan_for_campaign(params["plan"], campaign)
+    planned_keys = if editorial_plan, do: editorial_plan.selected_keys, else: []
+    selected_keys = restored_selected_keys(candidates, studio_state, planned_keys)
 
     selected_order =
       restored_selected_order(candidates, selected_keys, studio_state)
@@ -100,6 +103,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     restored_content_mode =
       cond do
         restored_assets != [] -> content_mode_for_assets(restored_assets)
+        planned_keys != [] -> content_mode_for_editorial_plan(editorial_plan)
         saved_content_mode in ["video", "bundle", "text", "long_form"] -> saved_content_mode
         true -> "video"
       end
@@ -107,7 +111,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     saved_format = Map.get(studio_state, "selected_format")
 
     restored_format =
-      if restored_assets == [] and Enum.any?(@formats, &(&1.id == saved_format)) do
+      if restored_assets == [] and planned_keys == [] and
+           Enum.any?(@formats, &(&1.id == saved_format)) do
         saved_format
       else
         format_for_content_mode(restored_content_mode)
@@ -121,13 +126,16 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     requested_platforms = requested_review_platforms(params, available_platforms)
 
     saved_platforms =
-      if restored_assets == [], do: Map.get(studio_state, "selected_platforms", []), else: []
+      if restored_assets == [] and planned_keys == [],
+        do: Map.get(studio_state, "selected_platforms", []),
+        else: []
 
     saved_platforms = Enum.filter(saved_platforms, &(&1 in available_platforms))
 
     restored_platforms =
       cond do
         requested_platforms != [] -> requested_platforms
+        editorial_plan -> editorial_plan.recommended_platforms
         saved_platforms != [] -> saved_platforms
         true -> available_platforms
       end
@@ -2500,8 +2508,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     end)
   end
 
-  defp restored_selected_keys(candidates, state) do
-    keys = Map.get(state, "selected_keys")
+  defp restored_selected_keys(candidates, state, planned_keys) do
+    keys = if planned_keys == [], do: Map.get(state, "selected_keys"), else: planned_keys
 
     if is_list(keys) and keys != [] do
       candidates_by_key = Map.new(candidates, &{&1.key, &1})
@@ -3070,6 +3078,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp platforms_for_mode("bundle"), do: Platforms.ids()
   defp platforms_for_mode("long_form"), do: Platforms.long_form_ids()
   defp platforms_for_mode("video"), do: Platforms.video_ids()
+
+  defp content_mode_for_editorial_plan(%{recommended_format: "story_video"}), do: "video"
+  defp content_mode_for_editorial_plan(%{recommended_format: "portrait"}), do: "text"
+  defp content_mode_for_editorial_plan(%{recommended_format: "long_form"}), do: "long_form"
+  defp content_mode_for_editorial_plan(_plan), do: "bundle"
 
   defp platforms_for_assets(assets) do
     assets

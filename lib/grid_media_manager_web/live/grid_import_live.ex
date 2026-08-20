@@ -1,6 +1,7 @@
 defmodule GridMediaManagerWeb.GridImportLive do
   use GridMediaManagerWeb, :live_view
 
+  alias GridMediaManager.Automation
   alias GridMediaManager.Campaigns
   alias GridMediaManager.RationalGrid.Client
   alias GridMediaManager.RationalGrid.GridIndex
@@ -18,6 +19,7 @@ defmodule GridMediaManagerWeb.GridImportLive do
       socket
       |> assign(:page_title, "RationalGrid Share Studio")
       |> assign(:form, to_form(%{"source" => ""}, as: :import))
+      |> assign(:automation_form, to_form(%{"topics" => ""}, as: :automation))
       |> assign(:tag_filter_form, to_form(%{"query" => "", "tag" => ""}, as: :filter))
       |> assign(:remote_grid_query, nil)
       |> assign(:remote_grid_filter, nil)
@@ -42,6 +44,19 @@ defmodule GridMediaManagerWeb.GridImportLive do
 
   def handle_event("import_remote_grid", %{"source" => source}, socket) do
     import_source(socket, source)
+  end
+
+  def handle_event("plan_topics", %{"automation" => %{"topics" => topics}}, socket) do
+    case Automation.create_batch(topics) do
+      {:ok, batch} ->
+        {:noreply, push_navigate(socket, to: ~p"/automation/#{batch.id}")}
+
+      {:error, changeset} ->
+        {:noreply,
+         socket
+         |> assign(:automation_form, to_form(%{"topics" => topics}, as: :automation))
+         |> put_flash(:error, automation_error(changeset))}
+    end
   end
 
   def handle_event("filter_remote_grids", %{"filter" => params}, socket) do
@@ -153,6 +168,40 @@ defmodule GridMediaManagerWeb.GridImportLive do
             <p class="mt-5 max-w-2xl text-base leading-8 text-base-content/70 sm:text-lg">
               Find a grid, choose the moments that matter, then edit the text directly in polished social assets for X, LinkedIn, Facebook, Instagram, TikTok, and YouTube.
             </p>
+
+            <section
+              id="autonomous-editorial-entry"
+              class="mt-8 overflow-hidden rounded-3xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/10 via-base-100 to-orange-500/10 shadow-xl shadow-indigo-950/5"
+            >
+              <div class="grid gap-6 p-5 sm:p-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
+                <div>
+                  <p class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-indigo-700 dark:text-indigo-200">
+                    <.icon name="hero-sparkles" class="size-4" /> Autonomous editorial planner
+                  </p>
+                  <h2 class="mt-3 text-2xl font-semibold tracking-tight text-base-content">
+                    Choose a count. Let the editorial desk do the rest.
+                  </h2>
+                  <p class="mt-2 text-sm leading-6 text-base-content/60">
+                    It chooses topics and sources, balances human questions and highlights with AI explanations, then recommends the best supported format.
+                  </p>
+                </div>
+
+                <div class="rounded-2xl border border-base-content/10 bg-base-100/80 p-4 shadow-sm">
+                  <div class="grid grid-cols-3 gap-2 text-center text-xs font-bold text-base-content/55">
+                    <span class="rounded-xl bg-base-200 px-2 py-3">1–10 stories</span>
+                    <span class="rounded-xl bg-base-200 px-2 py-3">Optional theme</span>
+                    <span class="rounded-xl bg-base-200 px-2 py-3">Preview first</span>
+                  </div>
+                  <.link
+                    id="open-editorial-autopilot"
+                    navigate={~p"/automation/new"}
+                    class="mt-3 inline-flex w-full items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-950/20 transition hover:-translate-y-0.5 hover:bg-indigo-500"
+                  >
+                    Open editorial autopilot <.icon name="hero-arrow-right" class="ml-2 size-4" />
+                  </.link>
+                </div>
+              </div>
+            </section>
 
             <.form
               for={@form}
@@ -470,5 +519,15 @@ defmodule GridMediaManagerWeb.GridImportLive do
 
   defp cache_error_message(reason) do
     "The RationalGrid list was fetched but could not be saved locally: #{inspect(reason)}"
+  end
+
+  defp automation_error(changeset) do
+    case Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end) do
+      %{topics: [message | _rest]} ->
+        "Topics #{message}. Enter exactly three topics, one per line."
+
+      _errors ->
+        "Enter exactly three different topics, one per line."
+    end
   end
 end

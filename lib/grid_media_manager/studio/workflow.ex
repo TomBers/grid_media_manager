@@ -254,6 +254,7 @@ defmodule GridMediaManager.Studio.Workflow do
       excerpt: question_context(question, kind, recommended?),
       label: question_label(kind),
       signal: question_signal(kind, recommended?),
+      provenance: question_provenance(kind),
       character_count: String.length(text),
       slide_count: 1,
       node_class: "question",
@@ -281,6 +282,7 @@ defmodule GridMediaManager.Studio.Workflow do
             present_string(note) || "A passage a person chose to preserve from the conversation.",
           label: "Highlight",
           signal: "Human-curated signal",
+          provenance: "human_highlight",
           character_count: String.length(text),
           slide_count: 1,
           node_class: "highlight",
@@ -328,6 +330,7 @@ defmodule GridMediaManager.Studio.Workflow do
           excerpt: present_string(map_value(node, "excerpt")),
           label: node_label(node_class),
           signal: node_signal(node_class),
+          provenance: node_provenance(node_class),
           character_count: character_count,
           slide_count: max(length(content_slides), 1),
           node_class: node_class,
@@ -349,6 +352,7 @@ defmodule GridMediaManager.Studio.Workflow do
       excerpt: "A title card that introduces the complete grid rather than one moment within it.",
       label: "Grid overview",
       signal: "Broad entry point",
+      provenance: "grid_context",
       character_count: String.length(campaign.title || ""),
       slide_count: 1,
       node_class: "grid",
@@ -526,6 +530,14 @@ defmodule GridMediaManager.Studio.Workflow do
   defp question_signal("user_question", false), do: "Audience question"
   defp question_signal(_kind, true), do: "Recommended conversation starter"
   defp question_signal(_kind, false), do: "Follow-up question"
+
+  defp question_provenance("user_question"), do: "human_question"
+  defp question_provenance(_kind), do: "ai_question"
+
+  defp node_provenance(node_class) when node_class in ["origin", "question", "user"],
+    do: "human_question"
+
+  defp node_provenance(_node_class), do: "ai_answer"
 
   defp normalize_question(question) when is_binary(question) do
     question

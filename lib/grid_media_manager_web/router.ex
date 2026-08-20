@@ -23,6 +23,8 @@ defmodule GridMediaManagerWeb.Router do
     pipe_through :browser
 
     live "/", GridImportLive, :new
+    live "/automation/new", AutopilotLive, :new
+    live "/automation/:id", AutonomousPlannerLive, :show
     get "/media-assets/:id/artifacts/:index", PromotionAssetController, :artifact
     get "/media-assets/:id/artifact.mp4", PromotionAssetController, :video_artifact
 

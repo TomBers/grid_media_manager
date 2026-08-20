@@ -36,6 +36,12 @@ defmodule GridMediaManagerWeb.GridImportLiveTest do
     refute has_element?(view, "#remote-grid-#{art_summary.id}")
   end
 
+  test "links to the editorial autopilot", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+
+    assert has_element?(view, "#open-editorial-autopilot[href='/automation/new']")
+  end
+
   defp grid(slug, tags) do
     %{
       slug: slug,
