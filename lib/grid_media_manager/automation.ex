@@ -10,9 +10,12 @@ defmodule GridMediaManager.Automation do
   alias GridMediaManager.Automation.LLMSelector
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Campaigns.Campaign
+  alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.RationalGrid.GridIndex
   alias GridMediaManager.Repo
   alias GridMediaManager.Studio.Workflow
+  alias GridMediaManager.Studio.PackageBuilder
+  alias GridMediaManager.Studio.VisualDirection
 
   @grid_shortlist_size 10
   @discovery_source_size 120
@@ -80,6 +83,7 @@ defmodule GridMediaManager.Automation do
 
   def run_batch(%EditorialBatch{} = batch, opts \\ []) do
     selector = Keyword.get(opts, :selector, LLMSelector)
+    cover_search? = Keyword.get(opts, :cover_search, selector == LLMSelector)
     batch = Repo.get!(EditorialBatch, batch.id)
 
     with {:ok, batch} <- update_batch(batch, %{status: "planning", error_message: nil}),
@@ -87,7 +91,7 @@ defmodule GridMediaManager.Automation do
       results =
         topic_inputs
         |> Task.async_stream(
-          fn input -> plan_topic(input, selector) end,
+          fn input -> plan_topic(input, selector, cover_search?) end,
           ordered: true,
           max_concurrency: 3,
           timeout: :infinity
@@ -146,6 +150,17 @@ defmodule GridMediaManager.Automation do
     case get_plan(plan_id) do
       %EditorialPlan{campaign_id: ^campaign_id, status: "planned"} = plan -> plan
       _plan -> nil
+    end
+  end
+
+  def generate_plan_package(plan_id) do
+    case get_plan(plan_id) do
+      %EditorialPlan{status: "planned", campaign_id: campaign_id} = plan ->
+        campaign = Campaigns.get_campaign!(campaign_id)
+        PackageBuilder.generate_plan(campaign, plan, Workflow.candidates(campaign))
+
+      _plan ->
+        %{assets: [], errors: [%{candidate: nil, reason: :editorial_plan_not_ready}]}
     end
   end
 
@@ -210,7 +225,7 @@ defmodule GridMediaManager.Automation do
     {:ok, batch, Enum.map(batch.topics, &%{topic: &1, source_choice: nil, source: nil})}
   end
 
-  defp plan_topic(input, selector) do
+  defp plan_topic(input, selector, cover_search?) do
     topic = input.topic
 
     with {:ok, source_choice, source} <- choose_source(input, selector),
@@ -218,7 +233,8 @@ defmodule GridMediaManager.Automation do
          candidates <- shortlist_candidates(topic, Workflow.candidates(campaign)),
          :ok <- ensure_present(candidates, :no_story_candidates),
          {:ok, story_choice} <- selector.select_story(topic, campaign, candidates),
-         {:ok, story} <- validate_story_choice(story_choice, candidates) do
+         {:ok, story} <- validate_story_choice(story_choice, candidates),
+         cover <- VisualDirection.resolve_cover(selector, topic, story, cover_search?) do
       {:ok,
        %{
          campaign_id: campaign.id,
@@ -237,6 +253,11 @@ defmodule GridMediaManager.Automation do
            "source_confidence" => source_choice["confidence"],
            "story_confidence" => story.confidence,
            "format_rationale" => story.format_rationale,
+           "visual_style" => story.visual_style,
+           "visual_rationale" => story.visual_rationale,
+           "cover_search_query" => story.cover_search_query,
+           "cover_brief" => story.cover_brief,
+           "cover" => cover,
            "moments" => preview_moments(story.selected_keys, candidates)
          }
        }}
@@ -321,6 +342,8 @@ defmodule GridMediaManager.Automation do
     minimum = min(2, MapSet.size(available_keys))
     confidence = choice["confidence"]
     recommended_format = choice["recommended_format"]
+    visual_style = choice["visual_style"]
+    cover_mode = choice["cover_mode"]
 
     valid? =
       length(selected_keys) in minimum..min(6, MapSet.size(available_keys)) and
@@ -329,6 +352,11 @@ defmodule GridMediaManager.Automation do
         present_string?(choice["rationale"]) and
         recommended_format in @formats and
         present_string?(choice["format_rationale"]) and
+        Enum.any?(ShareCard.styles(), &(&1.id == visual_style)) and
+        present_string?(choice["visual_rationale"]) and
+        cover_mode in ["photo", "text"] and
+        present_string?(choice["cover_search_query"]) and
+        present_string?(choice["cover_brief"]) and
         is_number(confidence) and confidence >= 0 and confidence <= 1
 
     if valid? do
@@ -339,6 +367,11 @@ defmodule GridMediaManager.Automation do
          rationale: choice["rationale"],
          recommended_format: recommended_format,
          format_rationale: choice["format_rationale"],
+         visual_style: visual_style,
+         visual_rationale: choice["visual_rationale"],
+         cover_mode: cover_mode,
+         cover_search_query: choice["cover_search_query"] |> String.trim(),
+         cover_brief: choice["cover_brief"],
          confidence: confidence / 1
        }}
     else

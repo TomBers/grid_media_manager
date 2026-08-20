@@ -137,12 +137,12 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   def carousel_slides(%Campaign{} = campaign, node) when is_map(node) do
-    node_title = node |> value("title") |> present_string() |> fallback("Key idea")
+    node_title = presentation_node_title(campaign, node)
 
     content_slides =
       campaign
       |> node_content(node)
-      |> Markdown.sections()
+      |> Markdown.presentation_sections()
       |> Enum.flat_map(fn section ->
         section.blocks
         |> Markdown.paginate_blocks(420)
@@ -172,12 +172,12 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   def node_reading_slides(%Campaign{} = campaign, node) when is_map(node) do
-    node_title = node |> value("title") |> present_string() |> fallback("Key idea")
+    node_title = presentation_node_title(campaign, node)
 
     content_slides =
       campaign
       |> node_content(node)
-      |> Markdown.sections()
+      |> Markdown.presentation_sections()
       |> Enum.with_index()
       |> Enum.flat_map(fn {section, section_index} ->
         section
@@ -199,12 +199,12 @@ defmodule GridMediaManager.Promotion.ShareCard do
   end
 
   def node_short_video_slides(%Campaign{} = campaign, node) when is_map(node) do
-    node_title = node |> value("title") |> present_string() |> fallback("Key idea")
+    node_title = presentation_node_title(campaign, node)
 
     content_slides =
       campaign
       |> node_content(node)
-      |> Markdown.sections()
+      |> Markdown.presentation_sections()
       |> Enum.with_index()
       |> Enum.flat_map(fn {section, section_index} ->
         section
@@ -364,8 +364,14 @@ defmodule GridMediaManager.Promotion.ShareCard do
     style = normalize_style(style)
     format = normalize_image_format(format)
     node_id = node |> value("id") |> to_string()
-    title = node |> value("title") |> present_string() |> fallback("Key idea")
-    body = node |> value("excerpt") |> present_string() |> fallback(node_content(campaign, node))
+    title = presentation_node_title(campaign, node)
+
+    body =
+      node
+      |> value("excerpt")
+      |> present_string()
+      |> fallback(Markdown.presentation_text(node_content(campaign, node)))
+
     slide = %{"kind" => "node_text", "label" => "Key idea", "title" => title, "body" => body}
 
     %{
@@ -386,8 +392,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   def key_node_long_form_asset_attr(%Campaign{} = campaign, node, style \\ @default_style) do
     attrs = key_node_asset_attr(campaign, node, style, "portrait")
-    title = node |> value("title") |> present_string() |> fallback("Key idea")
-    body = node_content(campaign, node)
+    title = presentation_node_title(campaign, node)
+    body = campaign |> node_content(node) |> Markdown.presentation_text()
     slide = %{"kind" => "cover", "label" => "", "title" => title, "body" => ""}
 
     %{
@@ -542,11 +548,21 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def node_title(%Campaign{} = campaign, node_id) do
     case find_key_node(campaign, node_id) do
       node when is_map(node) ->
-        value(node, "title") |> present_string() |> fallback(campaign.title)
+        presentation_node_title(campaign, node)
 
       _node ->
         campaign.title
     end
+  end
+
+  defp presentation_node_title(campaign, node) do
+    node
+    |> value("title")
+    |> present_string()
+    |> fallback("Key idea")
+    |> Markdown.presentation_title(node_content(campaign, node))
+    |> present_string()
+    |> fallback("Key idea")
   end
 
   defp question_from_map(question, kind) when is_map(question) do
@@ -628,8 +644,15 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
     case find_key_node(campaign, source_id) do
       node when is_map(node) ->
-        title = node |> value("title") |> present_string() |> fallback(campaign.title)
-        text = node_content(campaign, node) |> present_string() |> fallback(title)
+        title = presentation_node_title(campaign, node)
+
+        text =
+          campaign
+          |> node_content(node)
+          |> Markdown.presentation_text()
+          |> present_string()
+          |> fallback(title)
+
         node_id = node |> value("id") |> nullable_string()
         long_form_entry_map("key_node", source_id, title, text, node_id, nil)
 

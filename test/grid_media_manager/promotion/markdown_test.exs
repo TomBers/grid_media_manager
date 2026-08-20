@@ -152,6 +152,77 @@ defmodule GridMediaManager.Promotion.MarkdownTest do
            ]
   end
 
+  test "removes search-grounding references from presentation sections" do
+    markdown = """
+    # A grounded answer
+
+    The evidence supports the main claim [1] and a second finding 【turn2search3†source】.
+
+    - A useful implication for the audience.
+    - Search query if you want studies: “recommender systems identity memory”
+    - The Extended Mind — Clark & Chalmers (search query: "Clark Chalmers 1998")
+
+    ## Further reading / references
+
+    - First source
+    - https://example.com/paper
+
+    ## A final question
+
+    What would change your mind?
+
+    References: This trailing bibliography should also disappear.
+    """
+
+    sections = Markdown.presentation_sections(markdown)
+
+    assert Enum.map(sections, & &1.title) == ["A grounded answer", "A final question"]
+
+    assert Enum.at(sections, 0).text ==
+             "The evidence supports the main claim and a second finding.\n\n• A useful implication for the audience."
+
+    assert Enum.at(sections, 1).text == "What would change your mind?"
+  end
+
+  test "recognises reference labels authored as list items or trailing prose" do
+    assert [%{text: "A useful conclusion."}] =
+             Markdown.presentation_sections("""
+             A useful conclusion. References: First source; second source.
+             """)
+
+    assert [%{text: "A useful conclusion."}] =
+             Markdown.presentation_sections("""
+             A useful conclusion.
+
+             - Further reading / references
+             - First source
+             - Second source
+             """)
+  end
+
+  test "recovers a presentation title when node metadata contains references" do
+    assert Markdown.presentation_title(
+             "References: First source; second source",
+             "Title: Why this question matters\n\nThe answer follows."
+           ) == "Why this question matters"
+  end
+
+  test "builds clean longer-post text while retaining section structure" do
+    assert Markdown.presentation_text("""
+           # Main answer
+
+           A grounded claim [1].
+
+           ## Implication
+
+           The useful consequence.
+
+           ## Sources
+
+           - https://example.com/source
+           """) == "Main answer\n\nA grounded claim.\n\nImplication\n\nThe useful consequence."
+  end
+
   test "groups Markdown into carousel-ready sections" do
     sections =
       Markdown.sections("""

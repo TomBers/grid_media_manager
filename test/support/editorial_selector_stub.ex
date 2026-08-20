@@ -39,7 +39,21 @@ defmodule GridMediaManager.EditorialSelectorStub do
        "rationale" => "The selected moments form a question, explanation, and implication.",
        "recommended_format" => "combined_carousel",
        "format_rationale" => "The mixed material works as both video and an image sequence.",
+       "visual_style" => "deep_ocean",
+       "visual_rationale" => "A reflective analytical palette supports the subject.",
+       "cover_mode" => "photo",
+       "cover_search_query" => "lone figure ocean horizon blue dusk negative space",
+       "cover_brief" => "A contemplative portrait composition with room for a short title.",
        "confidence" => 0.88
+     }}
+  end
+
+  @impl true
+  def select_cover(_topic, _hook, _cover_brief, [photo | _photos]) do
+    {:ok,
+     %{
+       "photo_id" => to_string(photo.id),
+       "rationale" => "The strongest portrait composition for the story."
      }}
   end
 end

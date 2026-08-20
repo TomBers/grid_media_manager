@@ -41,6 +41,16 @@ defmodule GridMediaManager.AutomationTest do
     assert Enum.all?(completed.plans, &(&1.recommended_format == "combined_carousel"))
 
     assert Enum.all?(completed.plans, fn plan ->
+             plan.selection_details["visual_style"] == "deep_ocean" and
+               plan.selection_details["cover_search_query"] ==
+                 "lone figure ocean horizon blue dusk negative space" and
+               plan.selection_details["cover"] == %{
+                 "mode" => "photo",
+                 "status" => "not_searched"
+               }
+           end)
+
+    assert Enum.all?(completed.plans, fn plan ->
              plan.recommended_platforms ==
                ["x", "linkedin", "facebook", "tiktok", "instagram", "youtube"]
            end)
@@ -49,6 +59,11 @@ defmodule GridMediaManager.AutomationTest do
              plan.selection_details["moments"] != [] and
                Enum.all?(plan.selection_details["moments"], &is_binary(&1["provenance"]))
            end)
+
+    first_plan = List.first(completed.plans)
+    assert %{assets: assets, errors: []} = Automation.generate_plan_package(first_plan.id)
+    assert assets != []
+    assert Enum.all?(assets, &(&1.style == "deep_ocean"))
   end
 
   test "accepts one to ten distinct explicit topics" do

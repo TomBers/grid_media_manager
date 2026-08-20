@@ -9,6 +9,8 @@ defmodule GridMediaManager.Automation.LLMSelector do
   @behaviour GridMediaManager.Automation.Selector
 
   alias GridMediaManager.Campaigns.Campaign
+  alias GridMediaManager.Automation.EditorialGuidance
+  alias GridMediaManager.Promotion.ShareCard
 
   @default_model "openai:gpt-5-mini"
 
@@ -77,9 +79,9 @@ defmodule GridMediaManager.Automation.LLMSelector do
     Choose exactly #{count} distinct topics and distinct source grids for a social publishing run.
     #{theme_instruction}
 
-    Prefer sources with specific, surprising, or consequential questions over generic subjects.
-    Give each topic a concise audience-facing label. Use only supplied source slugs and do not
-    repeat a source.
+    Use only supplied source slugs and do not repeat a source.
+
+    #{EditorialGuidance.topic_selection()}
 
     Available RationalGrid sources:
     #{Jason.encode!(payload)}
@@ -152,6 +154,14 @@ defmodule GridMediaManager.Automation.LLMSelector do
           "enum" => ["story_video", "portrait", "long_form", "combined_carousel"]
         },
         "format_rationale" => %{"type" => "string", "minLength" => 1, "maxLength" => 500},
+        "visual_style" => %{
+          "type" => "string",
+          "enum" => Enum.map(ShareCard.styles(), & &1.id)
+        },
+        "visual_rationale" => %{"type" => "string", "minLength" => 1, "maxLength" => 500},
+        "cover_mode" => %{"type" => "string", "enum" => ["photo", "text"]},
+        "cover_search_query" => %{"type" => "string", "minLength" => 2, "maxLength" => 120},
+        "cover_brief" => %{"type" => "string", "minLength" => 1, "maxLength" => 500},
         "confidence" => %{"type" => "number", "minimum" => 0, "maximum" => 1}
       },
       "required" => [
@@ -160,6 +170,11 @@ defmodule GridMediaManager.Automation.LLMSelector do
         "rationale",
         "recommended_format",
         "format_rationale",
+        "visual_style",
+        "visual_rationale",
+        "cover_mode",
+        "cover_search_query",
+        "cover_brief",
         "confidence"
       ]
     }
@@ -184,25 +199,13 @@ defmodule GridMediaManager.Automation.LLMSelector do
     Requested topic: #{topic}
     Source grid: #{campaign.title}
 
-    Build one coherent, grounded social story from the supplied moments. Return the keys in
-    narrative order. Aim for an opening question or provocative claim, two or three explanatory
-    beats, a specific or surprising implication, and a natural closing thought. Prefer moments
-    that stand alone, remain relevant to the requested topic, and connect through their thread
-    metadata. Avoid repetition. Do not add facts or select keys that are not supplied.
+    Return selected keys in narrative order. Do not add facts or select keys that are not supplied.
 
-    Provenance is editorially important. Human questions make strong hooks, human highlights are
-    high-signal quotations, and AI answers are explanatory connective material. Never frame an AI
-    answer as a human quotation and avoid building a package entirely from AI material when human
-    signals are available.
+    #{EditorialGuidance.story_selection()}
 
-    Recommend the most impactful supported format:
-    - story_video: one vertical video for Instagram Reels, TikTok, and YouTube Shorts.
-    - portrait: an image carousel for X, LinkedIn, and Facebook.
-    - long_form: a detailed cover-led post for LinkedIn and Facebook.
-    - combined_carousel: vertical video plus image carousel for all six destinations.
-    Choose based on the selected material, not maximum channel coverage by default.
+    #{EditorialGuidance.format_selection()}
 
-    The hook should be a concise editorial framing for the package, not a new factual claim.
+    #{EditorialGuidance.visual_direction(ShareCard.styles())}
 
     Available moments:
     #{Jason.encode!(payload)}
@@ -212,6 +215,46 @@ defmodule GridMediaManager.Automation.LLMSelector do
   end
 
   def select_story(_topic, %Campaign{}, []), do: {:error, :no_story_candidates}
+
+  @impl true
+  def select_cover(topic, hook, cover_brief, photos) when is_list(photos) and photos != [] do
+    ids = Enum.map(photos, &to_string(&1.id))
+
+    schema = %{
+      "type" => "object",
+      "additionalProperties" => false,
+      "properties" => %{
+        "photo_id" => %{"type" => "string", "enum" => ids},
+        "rationale" => %{"type" => "string", "minLength" => 1, "maxLength" => 400}
+      },
+      "required" => ["photo_id", "rationale"]
+    }
+
+    payload =
+      Enum.map(photos, fn photo ->
+        %{
+          id: to_string(photo.id),
+          alt: photo.alt,
+          average_colour: photo.avg_color,
+          photographer: photo.photographer
+        }
+      end)
+
+    prompt = """
+    Story topic: #{topic}
+    Story hook: #{hook}
+    Cover brief: #{cover_brief}
+
+    #{EditorialGuidance.cover_selection()}
+
+    Pexels options:
+    #{Jason.encode!(payload)}
+    """
+
+    generate(prompt, schema, "editorial_cover_selection")
+  end
+
+  def select_cover(_topic, _hook, _cover_brief, _photos), do: {:error, :no_cover_options}
 
   defp generate(prompt, schema, output_name) do
     if configured?() do

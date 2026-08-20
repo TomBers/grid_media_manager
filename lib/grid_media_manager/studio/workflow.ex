@@ -306,7 +306,7 @@ defmodule GridMediaManager.Studio.Workflow do
     end)
     |> Enum.map(fn node ->
       source_id = map_value(node, "id")
-      title = map_value(node, "title")
+      title = ShareCard.node_title(campaign, source_id)
 
       if source_id && is_binary(title) && String.trim(title) != "" do
         node_class = map_value(node, "class") || "node"

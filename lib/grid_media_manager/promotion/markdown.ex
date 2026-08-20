@@ -42,6 +42,44 @@ defmodule GridMediaManager.Promotion.Markdown do
   def sections(markdown) do
     markdown
     |> blocks()
+    |> sections_from_blocks()
+  end
+
+  @doc """
+  Returns sections that are suitable for public-facing slides and previews.
+
+  The source Markdown remains untouched, but terminal bibliographies and search-grounding
+  scaffolding are excluded from generated media.
+  """
+  @spec presentation_sections(term()) :: [
+          %{title: String.t(), blocks: [block()], text: String.t()}
+        ]
+  def presentation_sections(markdown) do
+    markdown
+    |> blocks()
+    |> drop_reference_sections()
+    |> presentation_blocks()
+    |> sections_from_blocks()
+  end
+
+  @doc "Returns public-facing answer text without bibliography or grounding scaffolding."
+  @spec presentation_text(term()) :: String.t()
+  def presentation_text(markdown) do
+    markdown
+    |> presentation_sections()
+    |> Enum.map_join("\n\n", fn section ->
+      if section.title == "The argument" do
+        section.text
+      else
+        [section.title, section.text]
+        |> Enum.reject(&(&1 == ""))
+        |> Enum.join("\n\n")
+      end
+    end)
+  end
+
+  defp sections_from_blocks(blocks) do
+    blocks
     |> Enum.reduce([], fn
       %{type: :heading, text: title}, sections ->
         sections ++ [%{title: title, blocks: []}]
@@ -79,12 +117,29 @@ defmodule GridMediaManager.Promotion.Markdown do
   @spec presentation_blocks([block()]) :: [block()]
   def presentation_blocks(blocks) when is_list(blocks) do
     Enum.flat_map(blocks, fn
-      %{type: :list_item, text: text} = block -> presentation_list_item(block, text)
-      block -> [block]
+      %{type: :list_item, text: text} = block ->
+        if grounding_scaffolding?(text), do: [], else: presentation_list_item(block, text)
+
+      %{text: text} = block when is_binary(text) ->
+        if grounding_scaffolding?(text), do: [], else: [block]
+
+      block ->
+        [block]
     end)
   end
 
   def presentation_blocks(_blocks), do: []
+
+  @doc "Returns a clean node title, recovering it from the answer when metadata is a reference."
+  @spec presentation_title(term(), term()) :: String.t()
+  def presentation_title(title, markdown) do
+    title = title |> to_string() |> plain_inline()
+
+    case split_reference_material(title) do
+      {:reference, _public_text} -> title_from_markdown(markdown)
+      :content -> title
+    end
+  end
 
   @spec readable_text([block()]) :: String.t()
   def readable_text(blocks) when is_list(blocks) do
@@ -102,6 +157,9 @@ defmodule GridMediaManager.Promotion.Markdown do
   @spec plain_inline(term()) :: String.t()
   def plain_inline(text) when is_binary(text) do
     text
+    |> String.replace(~r/cite[^]+/u, "")
+    |> String.replace(~r/【[^】]*(?:turn\d+(?:search|fetch)\d+|†)[^】]*】/u, "")
+    |> String.replace(~r/(?<!\w)\[(?:\d+\s*[,;]?\s*)+\](?!\()/u, "")
     |> String.replace(~r/!\[([^\]]*)\]\([^\)]+\)/u, "\\1")
     |> String.replace(~r/\[([^\]]+)\]\([^\)]+\)/u, "\\1")
     |> String.replace(~r/<(?:https?:\/\/|mailto:)[^>]+>/u, "")
@@ -113,6 +171,7 @@ defmodule GridMediaManager.Promotion.Markdown do
     |> String.replace(~r/`([^`]+)`/u, "\\1")
     |> String.replace(~r/\\([*_`\[\]#>+-])/u, "\\1")
     |> String.replace(~r/\s+/u, " ")
+    |> String.replace(~r/\s+([,.;:!?])/u, "\\1")
     |> String.trim()
   end
 
@@ -256,6 +315,77 @@ defmodule GridMediaManager.Promotion.Markdown do
 
   defp append_social_section(sections, []), do: sections
   defp append_social_section(sections, blocks), do: sections ++ [blocks]
+
+  defp drop_reference_sections(blocks) do
+    {kept, _dropping?} =
+      Enum.reduce(blocks, {[], false}, fn
+        %{type: :heading, text: title} = heading, {kept, _dropping?} ->
+          if reference_heading?(title), do: {kept, true}, else: {kept ++ [heading], false}
+
+        _block, {kept, true} ->
+          {kept, true}
+
+        %{text: text} = block, {kept, false} ->
+          case split_reference_material(text) do
+            {:reference, ""} -> {kept, true}
+            {:reference, public_text} -> {kept ++ [%{block | text: public_text}], true}
+            :content -> {kept ++ [block], false}
+          end
+      end)
+
+    kept
+  end
+
+  defp reference_heading?(title) do
+    title = normalize(title)
+
+    Regex.match?(
+      ~r/^(?:references?|bibliography|works cited|reading list|further (?:reading|references)|recommended (?:reading|sources)|sources?(?: and further reading)?)(?:\b|\s)/u,
+      title
+    )
+  end
+
+  defp split_reference_material(text) do
+    colon_pattern =
+      ~r/^(.*?)(?:references for further reading|further reading\s*\/\s*references|key references|references?(?:\s*\([^)]*\))?)\s*:\s*.*$/iu
+
+    label_pattern =
+      ~r/^(.*?)(?:references for further reading|further reading\s*\/\s*references|key references|references?(?:\s*\([^)]*\))?)\s*$/iu
+
+    case Regex.run(colon_pattern, text, capture: :all_but_first) ||
+           Regex.run(label_pattern, text, capture: :all_but_first) do
+      [public_text] -> {:reference, String.trim(public_text)}
+      _match -> :content
+    end
+  end
+
+  defp grounding_scaffolding?(text) do
+    normalized = String.trim(text)
+
+    Regex.match?(~r/^(?:search query|suggested search|source query|web search)\b/iu, normalized) or
+      Regex.match?(~r/^https?:\/\/\S+$/iu, normalized) or
+      Regex.match?(~r/\bsearch query\s*(?:if you want[^:]*|\([^)]*\))?\s*:/iu, normalized) or
+      Regex.match?(~r/\(\s*(?:textbook\s+)?search query\s*:/iu, normalized)
+  end
+
+  defp title_from_markdown(markdown) do
+    markdown
+    |> blocks()
+    |> drop_reference_sections()
+    |> Enum.find_value("", fn
+      %{type: type, text: text} when type in [:heading, :paragraph] ->
+        text
+        |> String.replace(~r/^title\s*:\s*/iu, "")
+        |> String.trim()
+        |> case do
+          "" -> nil
+          title -> title
+        end
+
+      _block ->
+        nil
+    end)
+  end
 
   defp presentation_list_item(_block, text) do
     cond do

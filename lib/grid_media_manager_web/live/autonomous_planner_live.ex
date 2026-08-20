@@ -3,6 +3,8 @@ defmodule GridMediaManagerWeb.AutonomousPlannerLive do
 
   alias GridMediaManager.Automation
   alias GridMediaManager.Automation.EditorialBatch
+  alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.Studio.VisualDirection
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -172,6 +174,36 @@ defmodule GridMediaManagerWeb.AutonomousPlannerLive do
                     </span>
                   </div>
 
+                  <div
+                    :if={visual_direction?(plan)}
+                    id={"plan-visual-#{plan.id}"}
+                    class="mt-5 overflow-hidden rounded-2xl border border-base-content/10 bg-base-200/55"
+                  >
+                    <img
+                      :if={cover_photo_url(plan)}
+                      src={cover_photo_url(plan)}
+                      alt={cover_photo_alt(plan)}
+                      class="aspect-[16/7] w-full object-cover"
+                    />
+                    <div class="p-4">
+                      <p class="text-xs font-bold uppercase tracking-wider text-base-content/40">
+                        Visual direction
+                      </p>
+                      <p class="mt-1 text-sm font-semibold text-base-content">
+                        {visual_style_label(plan)}
+                      </p>
+                      <p class="mt-1 text-xs leading-5 text-base-content/60">
+                        {Map.get(plan.selection_details, "visual_rationale")}
+                      </p>
+                      <p
+                        :if={cover_rationale(plan)}
+                        class="mt-2 text-xs leading-5 text-base-content/50"
+                      >
+                        Cover · {cover_rationale(plan)}
+                      </p>
+                    </div>
+                  </div>
+
                   <ol
                     id={"plan-moments-#{plan.id}"}
                     class="mt-5 grid gap-2"
@@ -276,6 +308,33 @@ defmodule GridMediaManagerWeb.AutonomousPlannerLive do
   end
 
   defp confidence_label(_confidence), do: "—"
+
+  defp visual_direction?(plan) do
+    details = plan.selection_details || %{}
+    is_binary(details["visual_style"]) or is_map(details["cover"])
+  end
+
+  defp visual_style_label(plan) do
+    style_id = Map.get(plan.selection_details, "visual_style")
+
+    Enum.find_value(
+      ShareCard.styles(),
+      style_id || "Editorial",
+      &if(&1.id == style_id, do: &1.label)
+    )
+  end
+
+  defp cover_photo_url(plan) do
+    (plan.selection_details || %{})
+    |> Map.get("cover", %{})
+    |> VisualDirection.cover_url()
+  end
+
+  defp cover_photo_alt(plan) do
+    get_in(plan.selection_details, ["cover", "photo", "alt"]) || "Selected editorial cover"
+  end
+
+  defp cover_rationale(plan), do: get_in(plan.selection_details, ["cover", "rationale"])
 
   defp format_label("story_video"), do: "Vertical story video"
   defp format_label("portrait"), do: "Image carousel"

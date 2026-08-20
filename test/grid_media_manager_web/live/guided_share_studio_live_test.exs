@@ -68,6 +68,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
           "instagram",
           "youtube"
         ],
+        selection_details: %{
+          "visual_style" => "deep_ocean",
+          "visual_rationale" => "A reflective analytical palette supports the subject."
+        },
         status: "planned"
       })
       |> Repo.insert!()
@@ -78,6 +82,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#guided-share-studio[data-step='design']")
     assert has_element?(view, "#guided-share-studio", "2 selected")
     assert has_element?(view, "#content-mode-bundle", "Video + carousel")
+    assert has_element?(view, "#guided-share-studio[data-selected-style='deep_ocean']")
 
     assert has_element?(
              view,
