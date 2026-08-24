@@ -3,7 +3,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias GridMediaManager.Automation
+  alias GridMediaManager.Automation.EditorialPlan
   alias GridMediaManager.Campaigns
+  alias GridMediaManager.Repo
   alias GridMediaManager.Studio.Workflow
 
   test "redirects safely when the campaign no longer exists", %{conn: conn} do
@@ -37,6 +40,70 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     refute has_element?(view, "#select-aspect-highlight-123")
   end
 
+  test "opens an autonomous plan with its story selected for all-channel output", %{conn: conn} do
+    assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-planned")
+    candidates = Workflow.candidates(campaign)
+    selected_candidates = candidates |> Enum.take(2) |> Enum.reverse()
+    selected_keys = Enum.map(selected_candidates, & &1.key)
+
+    assert {:ok, campaign} =
+             Campaigns.save_guided_studio_state(campaign, %{
+               "selected_keys" => selected_keys |> Enum.reverse()
+             })
+
+    assert {:ok, batch} = Automation.create_batch(["Agency", "Comfort", "Freedom"])
+
+    plan =
+      %EditorialPlan{}
+      |> EditorialPlan.changeset(%{
+        editorial_batch_id: batch.id,
+        campaign_id: campaign.id,
+        position: 1,
+        topic: "Agency",
+        source_slug: campaign.slug,
+        source_title: campaign.title,
+        selected_keys: selected_keys,
+        hook: "A grounded hook",
+        rationale: "A coherent story",
+        confidence: 0.9,
+        recommended_format: "combined_carousel",
+        recommended_platforms: [
+          "x",
+          "linkedin",
+          "facebook",
+          "tiktok",
+          "instagram",
+          "youtube"
+        ],
+        selection_details: %{
+          "visual_style" => "deep_ocean",
+          "visual_rationale" => "A reflective analytical palette supports the subject."
+        },
+        status: "planned"
+      })
+      |> Repo.insert!()
+
+    {:ok, view, _html} =
+      live(conn, ~p"/campaigns/#{campaign.id}/studio?plan=#{plan.id}&step=design")
+
+    assert has_element?(view, "#guided-share-studio[data-step='design']")
+    assert has_element?(view, "#guided-share-studio", "2 selected")
+    assert has_element?(view, "#content-mode-bundle", "Video + carousel")
+    assert has_element?(view, "#guided-share-studio[data-selected-style='deep_ocean']")
+
+    assert has_element?(
+             view,
+             "#selected-aspects > :first-child",
+             List.first(selected_candidates).title
+           )
+
+    assert has_element?(
+             view,
+             "#design-platform-summary",
+             "videos will be posted to TikTok, Instagram, and YouTube"
+           )
+  end
+
   test "labels questions extracted from answer bodies with their source", %{conn: conn} do
     assert {:ok, campaign} =
              Campaigns.import_payload(answer_question_payload(), "guided-answer-questions")
@@ -52,7 +119,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     view |> element("#create-story-package") |> render_click()
     await_generation(view)
 
-    assert Enum.any?(Campaigns.list_media_assets(campaign), &(&1.kind == "curated_carousel"))
+    assert Enum.any?(
+             Campaigns.list_media_assets(campaign),
+             &(&1.kind == "curated_carousel_video")
+           )
   end
 
   test "orders signals as question and answer threads using the node stream", %{conn: conn} do
@@ -214,7 +284,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assets = Campaigns.list_media_assets(campaign)
     assert [%{kind: "curated_carousel", style: "warm_paper"} = carousel] = assets
     assert carousel.metadata["slide_count"] >= 3
-    assert List.last(carousel.metadata["slides"])["label"] == "Learn more"
+    assert List.last(carousel.metadata["slides"])["label"] == "Join the conversation"
     last_slide = carousel.metadata["slide_count"]
     assert carousel.metadata["selected_slide_indexes"] == Enum.to_list(1..last_slide)
     assert has_element?(view, "#curated-carousel-order-#{carousel.id}")
@@ -282,6 +352,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert asset.text =~ "If a drug like soma existed today"
     assert asset.text =~ "Perfect comfort can become a cage."
     assert asset.text =~ "Long answer"
+    assert Enum.map(asset.metadata["slides"], & &1["kind"]) == ["cover", "cta"]
+    assert List.last(asset.metadata["slides"])["title"] == "Where do you stand?"
 
     assert Enum.map(asset.metadata["sources"], & &1["type"]) == [
              "question",
@@ -307,11 +379,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     await_generation(view)
 
     assets = Campaigns.list_media_assets(campaign)
-    carousel = Enum.find(assets, &(&1.kind == "curated_carousel"))
-    assert carousel
-    assert carousel.metadata["slide_count"] >= 4
+    video = Enum.find(assets, &(&1.kind == "curated_carousel_video"))
+    assert video
+    assert video.metadata["slide_count"] >= 4
+    refute Enum.any?(assets, &(&1.kind == "curated_carousel"))
 
-    assert List.last(carousel.metadata["slides"])["title"] == "Continue on RationalGrid.ai"
+    assert List.last(video.metadata["slides"])["title"] == "Where do you stand?"
   end
 
   test "creates video and image outputs together from one design", %{conn: conn} do
@@ -368,15 +441,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     view |> element("#create-story-package") |> render_click()
     await_generation(view)
 
-    hidden_carousel =
-      Campaigns.list_media_assets(campaign) |> Enum.find(&(&1.kind == "curated_carousel"))
-
-    assert hidden_carousel
-
-    refute Enum.any?(
-             Campaigns.list_post_drafts(campaign),
-             &(&1.media_asset_id == hidden_carousel.id)
-           )
+    refute Enum.any?(Campaigns.list_media_assets(campaign), &(&1.kind == "curated_carousel"))
 
     assert has_element?(view, "#create-companion-carousel", "Create image carousel")
     view |> element("#create-companion-carousel") |> render_click()

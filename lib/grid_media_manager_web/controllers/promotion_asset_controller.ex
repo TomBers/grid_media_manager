@@ -18,6 +18,19 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
     end
   end
 
+  def uploaded_artifact(conn, %{"id" => id, "index" => index}) do
+    with asset when not is_nil(asset) <- Campaigns.get_media_asset(id),
+         {index, ""} when index > 0 <- Integer.parse(index),
+         {:ok, body} <- ArtifactStore.read_uploaded(asset, index) do
+      conn
+      |> put_resp_content_type("image/png")
+      |> put_resp_header("cache-control", "private, no-cache")
+      |> send_resp(200, body)
+    else
+      _error -> send_resp(conn, 404, "Uploaded frame not found")
+    end
+  end
+
   def video_artifact(conn, %{"id" => id}) do
     with asset when not is_nil(asset) <- Campaigns.get_media_asset(id),
          true <- asset.mime_type == "video/mp4",

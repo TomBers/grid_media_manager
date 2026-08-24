@@ -1,17 +1,20 @@
 defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   use GridMediaManagerWeb, :live_view
 
+  alias GridMediaManager.Automation
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
   alias GridMediaManager.Campaigns.PostDraft
-  alias GridMediaManager.Pexels.Client, as: Pexels
   alias GridMediaManager.Promotion.ArtifactStore
   alias GridMediaManager.Promotion.CarouselVideo
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.Social.Buffer
   alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Social.Templates
+  alias GridMediaManager.Studio.PackageBuilder
+  alias GridMediaManager.Studio.PackageDefinition
+  alias GridMediaManager.Studio.VisualDirection
   alias GridMediaManager.Studio.Workflow
 
   @max_selection 6
@@ -85,13 +88,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       if requested_step in Enum.map(@steps, & &1.id), do: requested_step, else: default_step
 
     restored_asset_filter = restore_asset_filter(params, restored_asset_ids)
-    restored_video_only? = restored_assets != [] and Enum.all?(restored_assets, &video_asset?/1)
+
+    restored_video_only? =
+      restored_assets != [] and Enum.all?(restored_assets, &PackageDefinition.video_asset?/1)
 
     studio_state = Campaigns.guided_studio_state(campaign)
-    selected_keys = restored_selected_keys(candidates, studio_state)
+    editorial_plan = Automation.plan_for_campaign(params["plan"], campaign)
+    planned_keys = if editorial_plan, do: editorial_plan.selected_keys, else: []
+    selected_keys = restored_selected_keys(candidates, studio_state, planned_keys)
 
     selected_order =
-      restored_selected_order(candidates, selected_keys, studio_state)
+      restored_selected_order(candidates, selected_keys, studio_state, planned_keys)
 
     expanded_thread_ids = initial_expanded_thread_ids(candidates, selected_keys)
 
@@ -99,7 +106,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
     restored_content_mode =
       cond do
-        restored_assets != [] -> content_mode_for_assets(restored_assets)
+        restored_assets != [] -> PackageDefinition.mode_for_assets(restored_assets)
+        planned_keys != [] -> PackageDefinition.mode_for_plan(editorial_plan)
         saved_content_mode in ["video", "bundle", "text", "long_form"] -> saved_content_mode
         true -> "video"
       end
@@ -107,32 +115,44 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     saved_format = Map.get(studio_state, "selected_format")
 
     restored_format =
-      if restored_assets == [] and Enum.any?(@formats, &(&1.id == saved_format)) do
+      if restored_assets == [] and planned_keys == [] and
+           Enum.any?(@formats, &(&1.id == saved_format)) do
         saved_format
       else
-        format_for_content_mode(restored_content_mode)
+        PackageDefinition.format_for_mode(restored_content_mode)
       end
 
     available_platforms =
       if restored_assets == [],
-        do: platforms_for_mode(restored_content_mode),
-        else: platforms_for_assets(restored_assets)
+        do: PackageDefinition.platforms_for_mode(restored_content_mode),
+        else: PackageDefinition.platforms_for_assets(restored_assets)
 
-    requested_platforms = requested_review_platforms(params, available_platforms)
+    requested_platforms = PackageDefinition.requested_platforms(params, available_platforms)
 
     saved_platforms =
-      if restored_assets == [], do: Map.get(studio_state, "selected_platforms", []), else: []
+      if restored_assets == [] and planned_keys == [],
+        do: Map.get(studio_state, "selected_platforms", []),
+        else: []
 
     saved_platforms = Enum.filter(saved_platforms, &(&1 in available_platforms))
 
     restored_platforms =
       cond do
         requested_platforms != [] -> requested_platforms
+        editorial_plan -> editorial_plan.recommended_platforms
         saved_platforms != [] -> saved_platforms
         true -> available_platforms
       end
 
-    restored_style = ShareCard.normalize_style(Map.get(studio_state, "selected_style"))
+    restored_style =
+      VisualDirection.style_for_plan(editorial_plan, Map.get(studio_state, "selected_style"))
+
+    restored_cover =
+      VisualDirection.cover_for_plan(
+        editorial_plan,
+        Campaigns.pexels_background(campaign),
+        Campaigns.title_card_mode(campaign)
+      )
 
     restored_filter = "all"
 
@@ -173,12 +193,15 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:bulk_schedule_form, to_form(%{"scheduled_for" => ""}, as: :bulk_schedule))
       |> assign(:generation_error, nil)
       |> assign(:generation_in_progress?, false)
-      |> assign(:pexels_configured?, Pexels.configured?())
+      |> assign(:pexels_configured?, VisualDirection.configured?())
       |> assign(:pexels_search_form, to_form(%{"query" => campaign.title}, as: :pexels))
       |> assign(:pexels_search_error, nil)
       |> assign(:pexels_by_id, %{})
-      |> assign(:selected_pexels_background, Campaigns.pexels_background(campaign))
-      |> assign(:title_card_mode, Campaigns.title_card_mode(campaign))
+      |> assign(:selected_pexels_background, restored_cover["photo"])
+      |> assign(
+        :title_card_mode,
+        if(restored_cover["mode"] == "photo", do: "pexels", else: "text")
+      )
       |> stream_configure(:candidate_groups, dom_id: &"candidate-group-#{&1.dom_id}")
       |> stream_configure(:selected_aspects, dom_id: &"selected-#{&1.dom_id}")
       |> stream_configure(:output_assets, dom_id: &"guided-output-#{&1.id}")
@@ -318,7 +341,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   def handle_event("select_content_mode", _params, socket), do: {:noreply, socket}
 
   def handle_event("search_pexels", %{"pexels" => %{"query" => query}}, socket) do
-    case Pexels.search(query,
+    case VisualDirection.search(query,
            orientation: pexels_orientation(socket.assigns.selected_format),
            per_page: 8
          ) do
@@ -341,7 +364,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         {:noreply, put_flash(socket, :error, "That Pexels photo is no longer available.")}
 
       photo ->
-        case Campaigns.set_pexels_background(socket.assigns.campaign, photo) do
+        case VisualDirection.apply_photo(socket.assigns.campaign, photo) do
           {:ok, campaign} ->
             {:noreply,
              socket
@@ -356,7 +379,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   def handle_event("clear_pexels_background", _params, socket) do
-    case Campaigns.clear_pexels_background(socket.assigns.campaign) do
+    case VisualDirection.clear(socket.assigns.campaign) do
       {:ok, campaign} ->
         {:noreply,
          socket
@@ -370,7 +393,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   def handle_event("select_title_card_mode", %{"mode" => mode}, socket)
       when mode in ["text", "pexels"] do
-    case Campaigns.set_title_card_mode(socket.assigns.campaign, mode) do
+    case VisualDirection.set_mode(socket.assigns.campaign, mode) do
       {:ok, campaign} ->
         {:noreply,
          socket
@@ -411,7 +434,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   def handle_event("generate_companion", _params, socket), do: {:noreply, socket}
 
   def handle_event("toggle_platform", %{"platform" => platform}, socket) do
-    available = platforms_for_mode(socket.assigns.content_mode)
+    available = PackageDefinition.platforms_for_mode(socket.assigns.content_mode)
 
     if platform in available do
       selected = socket.assigns.selected_platforms
@@ -692,6 +715,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         id="guided-share-studio"
         phx-hook="PreserveScrollPosition"
         data-step={@step}
+        data-selected-style={@selected_style}
         class="relative isolate min-h-screen overflow-hidden px-4 py-8 sm:px-6 lg:px-8 lg:py-10"
       >
         <div class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[34rem] bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.17),transparent_38%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.13),transparent_36%)]" />
@@ -1453,7 +1477,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 </div>
                 <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   <button
-                    :for={platform <- platforms_for_mode(@content_mode)}
+                    :for={platform <- PackageDefinition.platforms_for_mode(@content_mode)}
                     id={"toggle-platform-#{platform}"}
                     type="button"
                     phx-click="toggle_platform"
@@ -1698,9 +1722,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                     wide={@output_asset_count == 1}
                     auto_save={@content_mode in ["bundle", "long_form"]}
                     cover_image_url={
-                      pexels_cover_url(
-                        @selected_pexels_background,
-                        @title_card_mode
+                      VisualDirection.cover_url(
+                        VisualDirection.cover(@title_card_mode, @selected_pexels_background)
                       )
                     }
                   />
@@ -1971,12 +1994,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     ~H"""
     <article id={@id} class={output_asset_card_class(@selected, @wide, @asset)}>
       <video
-        :if={video_asset?(@asset)}
+        :if={PackageDefinition.video_asset?(@asset)}
         id={"guided-video-preview-#{@asset.id}"}
         data-browser-frame-video-url={client_video_url(@asset)}
         controls
         playsinline
-        preload="metadata"
+        preload="none"
         class={[
           "h-[70vh] max-h-[42rem] w-auto max-w-full rounded-2xl border border-base-content/10 bg-slate-950 object-contain",
           @wide && "lg:col-start-1 lg:row-start-1"
@@ -1984,7 +2007,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       >
       </video>
       <canvas
-        :if={not video_asset?(@asset)}
+        :if={not PackageDefinition.video_asset?(@asset)}
         id={"guided-output-preview-#{@asset.id}"}
         width="1080"
         height="1350"
@@ -2008,7 +2031,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         data-style={@asset.style}
         data-video-frame={if(browser_canvas_video?(@asset), do: "true", else: "false")}
         data-cover-image-url={@cover_image_url}
-        data-logo-src="/images/rg_logo.webp"
+        data-cta-image-src="/images/rationalgrid-follow-up.png"
         data-upload-url={client_artifact_upload_url(@asset)}
         data-asset-id={@asset.id}
         data-auto-save={if(@auto_save, do: "true", else: "false")}
@@ -2446,62 +2469,37 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp put_content_mode(socket, mode) do
     socket
     |> assign(:content_mode, mode)
-    |> assign(:selected_format, format_for_content_mode(mode))
-    |> assign(:selected_platforms, platforms_for_mode(mode))
+    |> assign(:selected_format, PackageDefinition.format_for_mode(mode))
+    |> assign(:selected_platforms, PackageDefinition.platforms_for_mode(mode))
   end
-
-  defp format_for_content_mode("video"), do: "story_video"
-  defp format_for_content_mode("bundle"), do: "combined_carousel"
-  defp format_for_content_mode("long_form"), do: "long_form"
-  defp format_for_content_mode(_mode), do: "portrait"
-
-  defp content_mode_for_assets(assets) do
-    video? = Enum.any?(assets, &video_asset?/1)
-    visual? = Enum.any?(assets, &(not video_asset?(&1)))
-
-    cond do
-      video? and visual? -> "bundle"
-      video? -> "video"
-      Enum.any?(assets, &(&1.kind == "long_form_post")) -> "long_form"
-      true -> "text"
-    end
-  end
-
-  defp requested_review_platforms(%{"platform" => platforms}, available_platforms)
-       when is_binary(platforms) do
-    requested = platforms |> String.split(",", trim: true) |> MapSet.new()
-    Enum.filter(available_platforms, &MapSet.member?(requested, &1))
-  end
-
-  defp requested_review_platforms(_params, _available_platforms), do: []
 
   defp start_package_generation(socket, content_mode) do
-    selected_candidates =
-      socket.assigns.all_candidates
-      |> Workflow.selected_candidates(socket.assigns.selected_order)
-      |> maybe_text_quote_candidates(content_mode, socket.assigns.all_candidates)
-
-    format =
-      case content_mode do
-        "text" -> "portrait"
-        "bundle" -> "combined_carousel"
-        "long_form" -> "long_form"
-        _ -> socket.assigns.selected_format
-      end
-
     campaign = socket.assigns.campaign
     style = socket.assigns.selected_style
+    all_candidates = socket.assigns.all_candidates
+    selected_order = socket.assigns.selected_order
+
+    cover =
+      VisualDirection.cover(
+        socket.assigns.title_card_mode,
+        socket.assigns.selected_pexels_background
+      )
 
     socket
     |> assign(:generation_in_progress?, true)
     |> assign(:generation_error, nil)
     |> start_async(:generate_package, fn ->
-      Workflow.generate(campaign, selected_candidates, style: style, format: format)
+      PackageBuilder.generate(campaign, all_candidates, selected_order,
+        content_mode: content_mode,
+        style: style,
+        format: PackageDefinition.format_for_mode(content_mode),
+        cover: cover
+      )
     end)
   end
 
-  defp restored_selected_keys(candidates, state) do
-    keys = Map.get(state, "selected_keys")
+  defp restored_selected_keys(candidates, state, planned_keys) do
+    keys = if planned_keys == [], do: Map.get(state, "selected_keys"), else: planned_keys
 
     if is_list(keys) and keys != [] do
       candidates_by_key = Map.new(candidates, &{&1.key, &1})
@@ -2528,10 +2526,22 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp restored_candidate_key(_key, _candidates, _candidates_by_key), do: nil
 
-  defp restored_selected_order(candidates, selected_keys, state) do
-    order = Map.get(state, "selected_keys", [])
+  defp restored_selected_order(candidates, selected_keys, state, planned_keys) do
+    candidates_by_key = Map.new(candidates, &{&1.key, &1})
+
+    order =
+      if planned_keys == [],
+        do: Map.get(state, "selected_keys", []),
+        else: planned_keys
+
+    restored_order =
+      order
+      |> Enum.map(&restored_candidate_key(&1, candidates, candidates_by_key))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.filter(&MapSet.member?(selected_keys, &1))
+
     selected = Workflow.selected_candidates(candidates, selected_keys) |> Enum.map(& &1.key)
-    Enum.uniq(Enum.filter(order, &MapSet.member?(selected_keys, &1)) ++ selected)
+    Enum.uniq(restored_order ++ selected)
   end
 
   defp move_to_step(socket, step) do
@@ -2619,7 +2629,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp complete_generation(socket, %{assets: assets, errors: errors}) do
     output_asset_ids = assets |> Enum.map(& &1.id) |> MapSet.new()
 
-    available_platforms = platforms_for_assets(assets)
+    available_platforms = PackageDefinition.platforms_for_assets(assets)
 
     selected_platforms =
       Enum.filter(socket.assigns.selected_platforms, &(&1 in available_platforms))
@@ -2639,7 +2649,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:step, "review")
       |> assign(:output_asset_ids, output_asset_ids)
       |> assign(:output_asset_count, length(assets))
-      |> assign(:output_video_only?, Enum.all?(assets, &video_asset?/1))
+      |> assign(:output_video_only?, Enum.all?(assets, &PackageDefinition.video_asset?/1))
       |> assign(:selected_output_asset_id, "all")
       |> assign(:selected_platforms, selected_platforms)
       |> assign(:generation_error, generation_error(errors))
@@ -2776,8 +2786,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         Buffer.account_for(draft.platform) != nil and
         client_artifacts_ready?(draft.media_asset) and
         if draft.platform in Platforms.video_ids(),
-          do: video_asset?(draft.media_asset),
-          else: not video_asset?(draft.media_asset)
+          do: PackageDefinition.video_asset?(draft.media_asset),
+          else: not PackageDefinition.video_asset?(draft.media_asset)
     end)
   end
 
@@ -2800,7 +2810,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp review_draft_preference(%PostDraft{platform: platform, media_asset: asset, status: status}) do
     media_score =
-      case {platform, video_asset?(asset)} do
+      case {platform, PackageDefinition.video_asset?(asset)} do
         {platform, false} when platform in ["x"] -> 2
         {platform, true} when platform in ["instagram", "youtube", "tiktok"] -> 2
         _ -> 1
@@ -3060,37 +3070,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp pexels_error_message(_reason), do: "Pexels search is unavailable right now."
 
-  defp pexels_cover_url(background, "pexels") when is_map(background) do
-    background["portrait_url"] || background["original_url"] || background["landscape_url"]
-  end
-
-  defp pexels_cover_url(_background, _mode), do: nil
-
-  defp platforms_for_mode("text"), do: Platforms.text_ids()
-  defp platforms_for_mode("bundle"), do: Platforms.ids()
-  defp platforms_for_mode("long_form"), do: Platforms.long_form_ids()
-  defp platforms_for_mode("video"), do: Platforms.video_ids()
-
-  defp platforms_for_assets(assets) do
-    assets
-    |> Enum.flat_map(fn asset ->
-      cond do
-        video_asset?(asset) ->
-          Platforms.video_ids()
-
-        is_list(asset.recommended_platforms) and asset.recommended_platforms != [] ->
-          asset.recommended_platforms
-
-        true ->
-          Platforms.text_ids()
-      end
-    end)
-    |> Enum.uniq()
-    |> then(fn platforms ->
-      Enum.filter(Platforms.ids(), &(&1 in platforms))
-    end)
-  end
-
   defp destination_summary(platforms) do
     cond do
       platforms == Platforms.text_ids() ->
@@ -3138,28 +3117,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         "Text and video posts use their matching Buffer accounts and assets."
     end
   end
-
-  defp maybe_text_quote_candidates(candidates, "text", all_candidates) do
-    quote_candidates = Enum.filter(candidates, &quote_candidate?/1)
-
-    cond do
-      quote_candidates != [] ->
-        quote_candidates
-
-      Enum.any?(all_candidates, &quote_candidate?/1) ->
-        Enum.filter(all_candidates, &quote_candidate?/1) |> Enum.take(1)
-
-      true ->
-        candidates
-    end
-  end
-
-  defp maybe_text_quote_candidates(candidates, _mode, _all_candidates), do: candidates
-
-  defp quote_candidate?(%{type: type}) when type in ["question", "highlight", "key_node"],
-    do: true
-
-  defp quote_candidate?(_candidate), do: false
 
   defp valid_output_asset_filter(_output_asset_ids, "all"), do: "all"
 
@@ -3221,10 +3178,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp positive_integer(_value), do: {:error, :invalid_index}
 
   defp carousel_selected_slide_indexes(%MediaAsset{
-         kind: kind,
+         kind: "curated_carousel_video",
          metadata: metadata
-       })
-       when kind in ["curated_carousel_video", "key_node_video"] do
+       }) do
     metadata = metadata || %{}
 
     case Map.get(metadata, "selected_slide_indexes") do
@@ -3616,7 +3572,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   defp canvas_rendered_asset?(%MediaAsset{}), do: true
 
-  defp browser_canvas_video?(%MediaAsset{} = asset), do: video_asset?(asset)
+  defp browser_canvas_video?(%MediaAsset{} = asset),
+    do: PackageDefinition.video_asset?(asset)
 
   defp client_artifact_upload_url(%MediaAsset{id: id}),
     do: "/api/media-assets/#{id}/artifacts"
@@ -3624,22 +3581,9 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp client_video_url(%MediaAsset{id: id}), do: "/media-assets/#{id}/artifact.mp4"
 
   defp client_asset_url(%MediaAsset{} = asset, slide_index) do
-    if video_asset?(asset),
+    if PackageDefinition.video_asset?(asset),
       do: client_video_url(asset),
       else: Campaigns.media_asset_artifact_url(asset, slide_index)
-  end
-
-  defp canvas_slides(campaign, %MediaAsset{kind: "key_node_video"} = asset) do
-    case Map.get(asset.metadata || %{}, "slides", []) do
-      [] ->
-        case ShareCard.find_key_node(campaign, asset.node_id) do
-          node when is_map(node) -> ShareCard.node_short_video_slides(campaign, node)
-          _node -> []
-        end
-
-      slides ->
-        slides
-    end
   end
 
   defp canvas_slides(_campaign, %MediaAsset{} = asset) do
@@ -3692,18 +3636,6 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp asset_kind_label(%MediaAsset{kind: "curated_carousel_video"} = asset),
     do: "Story Short · #{video_duration_seconds(asset)}s · 1080 × 1920"
 
-  defp asset_kind_label(%MediaAsset{kind: "key_node_carousel_slide", metadata: metadata}),
-    do: "Carousel · slide #{Map.get(metadata, "slide_index")}"
-
-  defp asset_kind_label(%MediaAsset{kind: "key_node_video"} = asset),
-    do: "Short video · #{video_duration_seconds(asset)}s · 1080 × 1920"
-
-  defp asset_kind_label(%MediaAsset{kind: "question_video"}),
-    do: "Question Short · 6s · 1080 × 1920"
-
-  defp asset_kind_label(%MediaAsset{kind: "highlight_video"}),
-    do: "Highlight Reel · 6s · 1080 × 1920"
-
   defp asset_kind_label(%MediaAsset{kind: "key_node_card", metadata: %{"format" => "portrait"}}),
     do: "Portrait card · 1080 × 1350"
 
@@ -3723,10 +3655,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     CarouselVideo.asset_duration_seconds(asset, carousel_selected_slide_indexes(asset))
   end
 
-  defp video_asset?(%MediaAsset{mime_type: "video/mp4"}), do: true
-  defp video_asset?(_asset), do: false
-
-  defp media_label(asset), do: if(video_asset?(asset), do: "video", else: "image")
+  defp media_label(asset),
+    do: if(PackageDefinition.video_asset?(asset), do: "video", else: "image")
 
   defp output_filter_class(active?) do
     [

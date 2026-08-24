@@ -488,25 +488,12 @@ function drawQuote(context, slide, palette, frame) {
   context.fillRect(frame.bodyX, contentStart + quoteHeight + accentGap, 240, accentHeight)
 }
 
-function drawCta(context, slide, palette, logo, frame) {
-  if (logo) context.drawImage(logo, 420, frame.video ? 520 : 360, 240, 240)
-  context.fillStyle = palette.text
-  context.textAlign = "center"
-  const title = cleanInlineMarkdown(slide.title || "Continue on RationalGrid.ai")
-  context.font = `900 54px ${UI_FONT}`
-  const lines = wrapText(context, title, 780)
-  const startY = frame.video ? 930 : 760
-  lines.forEach((line, index) => context.fillText(line, 540, startY + index * 66))
-  if (cleanInlineMarkdown(slide.body)) {
-    const bodyStartY = startY + lines.length * 66 + 38
-    const body = supportingLayout(context, slide.body, 780, frame.bodyMaxY - bodyStartY)
-    context.font = `${body.weight} ${body.size}px ${body.family}`
-    context.fillStyle = palette.secondary
-    body.lines.forEach((line, index) => {
-      context.fillText(line, 540, bodyStartY + index * body.lineHeight)
-    })
-  }
-  context.textAlign = "left"
+function drawCta(context, image, frame) {
+  context.fillStyle = "#081323"
+  context.fillRect(0, 0, WIDTH, frame.height)
+
+  const height = WIDTH * (image.naturalHeight / image.naturalWidth)
+  context.drawImage(image, 0, (frame.height - height) / 2, WIDTH, height)
 }
 
 function drawFooter(context, slideIndex, slideCount, palette, frame, mutedColor = palette.muted) {
@@ -527,7 +514,7 @@ function drawImageCover(context, image, width, height) {
   context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight)
 }
 
-function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverImage, video) {
+function drawSlide(canvas, slide, slideIndex, slideCount, style, ctaImage, coverImage, video) {
   const context = canvas.getContext("2d")
   const palette = paletteFor(style)
   const coverSlide = slideIndex === 1 && (slide.kind === "cover" || slide.kind === "node_title")
@@ -543,12 +530,12 @@ function drawSlide(canvas, slide, slideIndex, slideCount, style, logo, coverImag
   canvas.height = frame.height
   context.clearRect(0, 0, WIDTH, frame.height)
   context.fontKerning = "normal"
-  drawBackground(context, palette, frame)
-
   if (slide.kind === "cta" || slide.label === "Learn more") {
-    drawCta(context, slide, palette, logo, frame)
+    drawCta(context, ctaImage, frame)
     return
   }
+
+  drawBackground(context, palette, frame)
 
   if (coverSlide && coverImage) {
     context.save()
@@ -654,6 +641,7 @@ export const CanvasSlideRenderer = {
         "data-style",
         "data-video-frame",
         "data-cover-image-url",
+        "data-cta-image-src",
       ],
       childList: true,
       subtree: true,
@@ -683,7 +671,9 @@ export const CanvasSlideRenderer = {
       const style = this.root.dataset.style || "editorial_dark"
       const video = this.root.dataset.videoFrame === "true"
       await loadCanvasFont()
-      const logo = await loadImage(this.root.dataset.logoSrc || "/images/rg_logo.webp")
+      const ctaImage = await loadImage(
+        this.root.dataset.ctaImageSrc || "/images/rationalgrid-follow-up.png"
+      )
       const coverImage = this.root.dataset.coverImageUrl
         ? await loadImage(this.root.dataset.coverImageUrl)
         : null
@@ -694,7 +684,7 @@ export const CanvasSlideRenderer = {
         const slide = slides[index - 1]
         const canvas = target
         if (!slide || !canvas) return
-        drawSlide(canvas, slide, index, slides.length, style, logo, coverImage, video)
+        drawSlide(canvas, slide, index, slides.length, style, ctaImage, coverImage, video)
       })
 
       const previewIndex = Number(this.root.dataset.previewSlide || 1)
@@ -705,7 +695,7 @@ export const CanvasSlideRenderer = {
       if (previewCanvas && mainPreview) copyCanvas(previewCanvas, mainPreview)
 
       const status = this.root.querySelector("[data-browser-render-status]")
-      const fingerprint = `${this.root.dataset.slides}|${style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.coverImageUrl || ""}|${this.root.dataset.selectedIndexes || ""}`
+      const fingerprint = `${this.root.dataset.slides}|${style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.coverImageUrl || ""}|${this.root.dataset.ctaImageSrc || ""}|${this.root.dataset.rendererVersion || ""}|${this.root.dataset.selectedIndexes || ""}`
       if (this.root.dataset.artifactsReady === "true" && !this.uploadedFrameFingerprint) {
         this.uploadedFrameFingerprint = fingerprint
       }
@@ -752,7 +742,7 @@ export const CanvasSlideRenderer = {
     const uploadButton = this.root.querySelector("[data-browser-render-upload]")
     if (!uploadButton) return
     const automatic = options.automatic === true
-    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.coverImageUrl || ""}|${this.root.dataset.selectedIndexes || ""}`
+    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.coverImageUrl || ""}|${this.root.dataset.ctaImageSrc || ""}|${this.root.dataset.rendererVersion || ""}|${this.root.dataset.selectedIndexes || ""}`
     const targets = this.root.querySelectorAll("[data-canvas-slide]")
     const selectedIndexes = JSON.parse(this.root.dataset.selectedIndexes || "[]").map(Number)
     const frameIndexes = Array.from(targets)
@@ -796,7 +786,7 @@ export const CanvasSlideRenderer = {
       uploadButton.textContent = "Assets saved"
       this.uploadedFrameFingerprint = fingerprint
       this.pushEvent("artifacts_saved", {asset_id: this.root.dataset.assetId})
-      this.reloadVideoFromBrowserFrames()
+      this.reloadVideoFromBrowserFrames({eager: !automatic})
     } catch (_error) {
       this.uploadedFrameFingerprint = null
       if (status) status.textContent = "Could not save browser frames"
@@ -808,7 +798,7 @@ export const CanvasSlideRenderer = {
     }
   },
 
-  reloadVideoFromBrowserFrames() {
+  reloadVideoFromBrowserFrames(options = {}) {
     const videoId = this.root?.dataset.videoPreviewId
     if (!videoId) return
 
@@ -817,7 +807,7 @@ export const CanvasSlideRenderer = {
     if (!video || !source) return
 
     video.src = cacheBustedUrl(source)
-    video.load()
+    if (options.eager === true) video.load()
   },
 
   loadVideoFallback() {
@@ -829,6 +819,5 @@ export const CanvasSlideRenderer = {
     if (!video || !source || video.src) return
 
     video.src = source
-    video.load()
   },
 }

@@ -8,27 +8,16 @@ defmodule GridMediaManager.Promotion.SlideSequence do
 
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Promotion.ShareCard
+  alias GridMediaManager.Promotion.StoryPackage
 
   def build(%Campaign{} = campaign, candidates, opts \\ [])
       when is_list(candidates) and is_list(opts) do
     reading_mode = Keyword.get(opts, :reading_mode, :full)
 
-    cover = %{
-      "kind" => "cover",
-      "label" => "RationalGrid story",
-      "title" => campaign.title,
-      "body" => ""
-    }
+    content_slides =
+      Enum.flat_map(candidates, &candidate_slides(campaign, &1, reading_mode))
 
-    closing = %{
-      "kind" => "cta",
-      "label" => "Learn more",
-      "title" => "Continue on RationalGrid.ai",
-      "body" => ""
-    }
-
-    [cover] ++
-      Enum.flat_map(candidates, &candidate_slides(campaign, &1, reading_mode)) ++ [closing]
+    StoryPackage.build(campaign.title, content_slides)
   end
 
   defp candidate_slides(
@@ -39,8 +28,6 @@ defmodule GridMediaManager.Promotion.SlideSequence do
     case ShareCard.find_key_node(campaign, node_id) do
       node when is_map(node) ->
         reading_slides(campaign, node, reading_mode)
-        |> Enum.drop(1)
-        |> Enum.reject(&(Map.get(&1, "label") == "Learn more"))
         |> Enum.map(&persisted_slide/1)
 
       _ ->

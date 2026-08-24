@@ -11,7 +11,7 @@ defmodule GridMediaManager.Studio.Workflow do
   alias GridMediaManager.Promotion.ShareCard
 
   @max_candidates_per_type 24
-  @formats ~w(landscape linkedin portrait carousel combined_carousel story_video long_form)
+  @formats ~w(landscape linkedin portrait combined_carousel story_video long_form)
 
   def candidates(%Campaign{} = campaign) do
     recommended_question = Campaigns.recommended_question(campaign)
@@ -144,36 +144,13 @@ defmodule GridMediaManager.Studio.Workflow do
   end
 
   defp generate_story_video(campaign, candidates, style) do
-    case candidates do
-      [%{type: "key_node", source_id: source_id} = candidate] ->
-        case Campaigns.generate_key_node_video(campaign, source_id, style) do
-          {:ok, video} ->
-            %{assets: [video], errors: []}
-
-          {:error, reason} ->
-            %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
-        end
-
-      _ ->
-        generate_story_video_from_carousel(campaign, candidates, style)
-    end
-  end
-
-  defp generate_story_video_from_carousel(campaign, candidates, style) do
-    case Campaigns.generate_curated_carousel_for_video(campaign, candidates, style) do
-      {:ok, carousel} ->
-        case Campaigns.generate_curated_carousel_video(campaign, carousel) do
-          {:ok, video} ->
-            %{assets: [video], errors: []}
-
-          {:error, reason} ->
-            candidate = List.first(candidates) || %{title: campaign.title}
-            %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
-        end
+    case Campaigns.generate_story_video(campaign, candidates, style) do
+      {:ok, video} ->
+        %{assets: [video], errors: []}
 
       {:error, reason} ->
         candidate = List.first(candidates) || %{title: campaign.title}
-        %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
+        %{assets: [], errors: [%{candidate: candidate, reason: {:video, reason}}]}
     end
   end
 
@@ -192,44 +169,12 @@ defmodule GridMediaManager.Studio.Workflow do
     Campaigns.generate_grid_asset(campaign, style)
   end
 
-  defp generate_candidate(campaign, %{type: "question", source_id: source_id}, style, "carousel") do
-    with {:ok, image} <- Campaigns.generate_question_asset(campaign, source_id, style, "portrait") do
-      case Campaigns.generate_question_short_video(campaign, source_id, style) do
-        {:ok, video} -> {:ok, [image, video]}
-        {:error, reason} -> {:partial, [image], {:video, reason}}
-      end
-    end
-  end
-
   defp generate_candidate(campaign, %{type: "question", source_id: source_id}, style, format) do
     Campaigns.generate_question_asset(campaign, source_id, style, format)
   end
 
-  defp generate_candidate(campaign, %{type: "highlight", source_id: source_id}, style, "carousel") do
-    with {:ok, image} <-
-           Campaigns.generate_highlight_asset(campaign, source_id, style, "portrait") do
-      case Campaigns.generate_highlight_short_video(campaign, source_id, style) do
-        {:ok, video} -> {:ok, [image, video]}
-        {:error, reason} -> {:partial, [image], {:video, reason}}
-      end
-    end
-  end
-
   defp generate_candidate(campaign, %{type: "highlight", source_id: source_id}, style, format) do
     Campaigns.generate_highlight_asset(campaign, source_id, style, format)
-  end
-
-  defp generate_candidate(campaign, %{type: "key_node", source_id: source_id}, style, "carousel") do
-    case Campaigns.generate_key_node_carousel(campaign, source_id, style) do
-      {:ok, slides} ->
-        case Campaigns.generate_key_node_video(campaign, source_id, style) do
-          {:ok, video} -> {:ok, slides ++ [video]}
-          {:error, reason} -> {:partial, slides, {:video, reason}}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
-    end
   end
 
   defp generate_candidate(campaign, %{type: "key_node", source_id: source_id}, style, format) do
@@ -254,6 +199,7 @@ defmodule GridMediaManager.Studio.Workflow do
       excerpt: question_context(question, kind, recommended?),
       label: question_label(kind),
       signal: question_signal(kind, recommended?),
+      provenance: question_provenance(kind),
       character_count: String.length(text),
       slide_count: 1,
       node_class: "question",
@@ -281,6 +227,7 @@ defmodule GridMediaManager.Studio.Workflow do
             present_string(note) || "A passage a person chose to preserve from the conversation.",
           label: "Highlight",
           signal: "Human-curated signal",
+          provenance: "human_highlight",
           character_count: String.length(text),
           slide_count: 1,
           node_class: "highlight",
@@ -304,7 +251,7 @@ defmodule GridMediaManager.Studio.Workflow do
     end)
     |> Enum.map(fn node ->
       source_id = map_value(node, "id")
-      title = map_value(node, "title")
+      title = ShareCard.node_title(campaign, source_id)
 
       if source_id && is_binary(title) && String.trim(title) != "" do
         node_class = map_value(node, "class") || "node"
@@ -328,6 +275,7 @@ defmodule GridMediaManager.Studio.Workflow do
           excerpt: present_string(map_value(node, "excerpt")),
           label: node_label(node_class),
           signal: node_signal(node_class),
+          provenance: node_provenance(node_class),
           character_count: character_count,
           slide_count: max(length(content_slides), 1),
           node_class: node_class,
@@ -349,6 +297,7 @@ defmodule GridMediaManager.Studio.Workflow do
       excerpt: "A title card that introduces the complete grid rather than one moment within it.",
       label: "Grid overview",
       signal: "Broad entry point",
+      provenance: "grid_context",
       character_count: String.length(campaign.title || ""),
       slide_count: 1,
       node_class: "grid",
@@ -526,6 +475,14 @@ defmodule GridMediaManager.Studio.Workflow do
   defp question_signal("user_question", false), do: "Audience question"
   defp question_signal(_kind, true), do: "Recommended conversation starter"
   defp question_signal(_kind, false), do: "Follow-up question"
+
+  defp question_provenance("user_question"), do: "human_question"
+  defp question_provenance(_kind), do: "ai_question"
+
+  defp node_provenance(node_class) when node_class in ["origin", "question", "user"],
+    do: "human_question"
+
+  defp node_provenance(_node_class), do: "ai_answer"
 
   defp normalize_question(question) when is_binary(question) do
     question

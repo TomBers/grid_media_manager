@@ -14,7 +14,6 @@ defmodule GridMediaManager.Social.Templates do
   alias GridMediaManager.Social.Platforms
 
   def body(%Campaign{} = campaign, asset, platform, angle) do
-    platform = if angle == "long_form", do: platform, else: canonical_platform(platform)
     body_for_platform(campaign, asset, platform, angle)
   end
 
@@ -69,56 +68,6 @@ defmodule GridMediaManager.Social.Templates do
     angle |> String.replace("_", " ") |> String.capitalize()
   end
 
-  defp body_for_platform(
-         %Campaign{} = campaign,
-         %MediaAsset{kind: "highlight_video"} = asset,
-         platform,
-         "highlight"
-       ) do
-    link = asset_link(campaign, asset)
-    title = caption_title(campaign.title)
-    quote = asset.text |> fallback(title)
-
-    copy =
-      case platform do
-        "instagram" ->
-          "A moment worth sitting with:\n\n“#{quote}”\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
-
-        "youtube" ->
-          "Can this idea change how you see #{title}?\n\n“#{quote}”\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
-
-        _ ->
-          "#{quote}\n\n#{cta_line(link)}"
-      end
-
-    fit_to_platform(copy, platform, link)
-  end
-
-  defp body_for_platform(
-         %Campaign{} = campaign,
-         %MediaAsset{kind: "question_video"} = asset,
-         platform,
-         "question_quote"
-       ) do
-    link = asset_link(campaign, asset)
-    title = caption_title(campaign.title)
-    question = asset.text |> fallback(title)
-
-    copy =
-      case platform do
-        "instagram" ->
-          "Pause on this question, then take a position:\n\n#{question}\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
-
-        "youtube" ->
-          "A question about #{title}:\n\n#{question}\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
-
-        _ ->
-          "#{question}\n\n#{cta_line(link)}"
-      end
-
-    fit_to_platform(copy, platform, link)
-  end
-
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "highlight") do
     link = asset_link(campaign, asset)
     title = caption_title(campaign.title)
@@ -130,7 +79,10 @@ defmodule GridMediaManager.Social.Templates do
           "“#{quote}”\n\nThis idea sits inside a larger question about #{title}.\n\n#{cta_line(link)}"
 
         "linkedin" ->
-          "“#{quote}”\n\nThis idea sits inside a larger question about #{title}.\n\n#{cta_line(link)}"
+          "“#{quote}”\n\nA strong claim is more useful when its assumptions and consequences are visible. This one sits inside a larger question about #{title}.\n\n#{cta_line(link)}"
+
+        "facebook" ->
+          "“#{quote}”\n\nWhat does this change about how we see #{title}?\n\n#{cta_line(link)}"
 
         "instagram" ->
           "“#{quote}”\n\nA highlight from #{title}.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
@@ -160,6 +112,9 @@ defmodule GridMediaManager.Social.Templates do
         "linkedin" ->
           "#{question}\n\nA question worth exploring in #{title}.\n\n#{cta_line(link)}"
 
+        "facebook" ->
+          "#{question}\n\nWhere do you stand—and what evidence would change your mind?\n\n#{cta_line(link)}"
+
         "instagram" ->
           "#{question}\n\nA question worth exploring in #{title}.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
@@ -182,6 +137,9 @@ defmodule GridMediaManager.Social.Templates do
       case platform do
         "linkedin" ->
           "#{node_title}\n\n#{node_text}\n\n#{cta_line(link)}"
+
+        "facebook" ->
+          "#{node_title}\n\n#{node_text}\n\nWhich part of this argument is most convincing?\n\n#{cta_line(link)}"
 
         "instagram" ->
           "#{node_title}\n\n#{node_text}\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
@@ -222,7 +180,10 @@ defmodule GridMediaManager.Social.Templates do
     copy =
       case platform do
         "linkedin" ->
-          "#{title}\n\nA visual entry point into a connected learning path.\n\n#{cta_line(link)}"
+          "#{title}\n\nOne visual idea, placed inside its wider argument.\n\n#{cta_line(link)}"
+
+        "facebook" ->
+          "#{title}\n\nStart with the visual, then follow the evidence and decide where you stand.\n\n#{cta_line(link)}"
 
         "instagram" ->
           "#{title}\n\nA visual entry point into a connected learning path.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
@@ -305,8 +266,6 @@ defmodule GridMediaManager.Social.Templates do
       with node_id when is_binary(node_id) and node_id != "" <- asset.node_id,
            node when is_map(node) <- ShareCard.find_key_node(campaign, node_id) do
         ShareCard.node_short_video_slides(campaign, node)
-        |> Enum.drop(1)
-        |> Enum.reject(&(Map.get(&1, "label") == "Learn more"))
         |> Enum.map(&Map.get(&1, "body", ""))
         |> Enum.reject(&(String.trim(&1) == ""))
         |> Enum.join("\n\n")
@@ -317,7 +276,9 @@ defmodule GridMediaManager.Social.Templates do
     node_text |> fallback(asset.text) |> fallback(caption_title(campaign.title))
   end
 
-  defp cta_line(link), do: "Learn more at RationalGrid.ai:\n#{link || "https://rationalgrid.ai"}"
+  defp cta_line(link) do
+    "Explore the evidence and connected questions.\nLearn more at RationalGrid.ai:\n#{link || "https://rationalgrid.ai"}"
+  end
 
   defp lead_question(%Campaign{} = campaign) do
     MediaPayload.recommended_question(campaign.raw_payload) || ensure_question(campaign.title)
@@ -327,14 +288,13 @@ defmodule GridMediaManager.Social.Templates do
        when kind in ["curated_carousel", "curated_carousel_video"],
        do: "visual"
 
-  defp asset_angle(%MediaAsset{kind: kind}) when kind in ["key_node_card", "key_node_video"],
+  defp asset_angle(%MediaAsset{kind: "key_node_card"}),
     do: "key_node"
 
   defp asset_angle(%MediaAsset{kind: "long_form_post"}), do: "long_form"
 
-  defp asset_angle(%MediaAsset{kind: kind})
-       when kind in ["question_quote_card", "question_video"],
-       do: "question_quote"
+  defp asset_angle(%MediaAsset{kind: "question_quote_card"}),
+    do: "question_quote"
 
   defp asset_angle(%MediaAsset{text: text}) when text in [nil, ""], do: "visual"
   defp asset_angle(%MediaAsset{}), do: "highlight"
@@ -343,23 +303,7 @@ defmodule GridMediaManager.Social.Templates do
 
   defp asset_platforms(%MediaAsset{kind: "long_form_post"}), do: Platforms.long_form_ids()
 
-  defp asset_platforms(%MediaAsset{kind: kind})
-       when kind in [
-              "question_video",
-              "highlight_video",
-              "key_node_video",
-              "curated_carousel_video"
-            ],
-       do: Platforms.video_ids()
-
   defp asset_platforms(%MediaAsset{}), do: Platforms.text_ids()
-
-  defp canonical_platform(platform) when platform in ["x", "linkedin", "facebook"], do: "x"
-
-  defp canonical_platform(platform) when platform in ["tiktok", "instagram", "youtube"],
-    do: "instagram"
-
-  defp canonical_platform(_platform), do: "x"
 
   defp asset_link(%Campaign{} = campaign, %MediaAsset{} = asset) do
     highlight_link(campaign, asset) || node_link(campaign, asset) || campaign.grid_url ||

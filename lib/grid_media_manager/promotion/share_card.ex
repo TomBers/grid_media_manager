@@ -8,13 +8,14 @@ defmodule GridMediaManager.Promotion.ShareCard do
   """
 
   alias GridMediaManager.Campaigns.Campaign
-  alias GridMediaManager.Promotion.Markdown
+  alias GridMediaManager.Promotion.{Markdown, StoryPackage}
   alias GridMediaManager.RationalGrid.MediaPayload
   alias GridMediaManager.Social.Platforms
 
   @default_style "editorial_dark"
   @carousel_reading_max_characters 220
   @short_video_max_characters 220
+  @short_video_complete_thought_max_characters 320
 
   @styles [
     %{
@@ -136,48 +137,13 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> Enum.find(&(integer_value(value(&1, "id")) == expected_id))
   end
 
-  def carousel_slides(%Campaign{} = campaign, node) when is_map(node) do
-    node_title = node |> value("title") |> present_string() |> fallback("Key idea")
-
-    content_slides =
-      campaign
-      |> node_content(node)
-      |> Markdown.sections()
-      |> Enum.flat_map(fn section ->
-        section.blocks
-        |> Markdown.paginate_blocks(420)
-        |> Enum.with_index()
-        |> Enum.map(fn {blocks, page_index} ->
-          title = if page_index == 0, do: section.title, else: "#{section.title} · continued"
-
-          %{
-            "kind" => "node_text",
-            "label" => "Argument",
-            "title" => title,
-            "body" => Markdown.readable_text(blocks),
-            "blocks" => stringify_blocks(blocks)
-          }
-        end)
-      end)
-
-    [
-      %{
-        "kind" => "cover",
-        "label" => "Thesis",
-        "title" => node_title,
-        "body" => "Follow the reasoning, test the assumptions, and decide where you stand."
-      }
-      | content_slides
-    ] ++ [cta_slide()]
-  end
-
   def node_reading_slides(%Campaign{} = campaign, node) when is_map(node) do
-    node_title = node |> value("title") |> present_string() |> fallback("Key idea")
+    node_title = presentation_node_title(campaign, node)
 
     content_slides =
       campaign
       |> node_content(node)
-      |> Markdown.sections()
+      |> Markdown.presentation_sections()
       |> Enum.with_index()
       |> Enum.flat_map(fn {section, section_index} ->
         section
@@ -194,17 +160,16 @@ defmodule GridMediaManager.Promotion.ShareCard do
         end)
       end)
 
-    [%{"kind" => "node_title", "label" => "", "title" => node_title, "body" => ""}] ++
-      content_slides ++ [cta_slide()]
+    content_slides
   end
 
   def node_short_video_slides(%Campaign{} = campaign, node) when is_map(node) do
-    node_title = node |> value("title") |> present_string() |> fallback("Key idea")
+    node_title = presentation_node_title(campaign, node)
 
     content_slides =
       campaign
       |> node_content(node)
-      |> Markdown.sections()
+      |> Markdown.presentation_sections()
       |> Enum.with_index()
       |> Enum.flat_map(fn {section, section_index} ->
         section
@@ -220,8 +185,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         end)
       end)
 
-    [%{"kind" => "node_title", "label" => "", "title" => node_title, "body" => ""}] ++
-      content_slides ++ [cta_slide()]
+    content_slides
   end
 
   defp short_video_section_pages(section, node_title, section_index) do
@@ -236,9 +200,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
     selected_pages =
       if section_index == 0 do
-        blocks
-        |> Markdown.paginate_blocks(@short_video_max_characters)
-        |> Enum.take(1)
+        take_pages(blocks, 1)
       else
         general_blocks = Enum.reject(blocks, &Map.has_key?(&1, :role))
         connection_blocks = Enum.filter(blocks, &(&1[:role] == :connection))
@@ -253,7 +215,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp take_pages(blocks, count) do
     blocks
-    |> Markdown.paginate_blocks(@short_video_max_characters)
+    |> Markdown.complete_thought_pages(
+      @short_video_max_characters,
+      @short_video_complete_thought_max_characters
+    )
     |> Enum.take(count)
   end
 
@@ -326,35 +291,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
     |> Enum.reject(&is_nil/1)
   end
 
-  def key_node_carousel_asset_attrs(%Campaign{} = campaign, node, style \\ @default_style) do
-    style = normalize_style(style)
-    node_id = node |> value("id") |> to_string()
-    node_title = node |> value("title") |> present_string() |> fallback("Key idea")
-    slides = carousel_slides(campaign, node)
-
-    slides
-    |> Enum.with_index(1)
-    |> Enum.map(fn {slide, index} ->
-      %{
-        title: "#{node_title} · Slide #{index}",
-        kind: "key_node_carousel_slide",
-        url: asset_identity(campaign, "node-carousel", "#{node_id}-#{index}", style, "portrait"),
-        mime_type: "image/png",
-        text: slide["body"],
-        node_id: node_id,
-        highlight_id: nil,
-        recommended_platforms: if(index == 1, do: Platforms.text_ids(), else: []),
-        style: style,
-        source_type: "key_node_carousel",
-        source_id: "#{node_id}|#{index}",
-        metadata:
-          image_metadata("portrait", [slide])
-          |> Map.merge(%{"slide_index" => index, "slide_count" => length(slides)}),
-        carousel_cover?: index == 1
-      }
-    end)
-  end
-
   def key_node_asset_attr(
         %Campaign{} = campaign,
         node,
@@ -364,8 +300,14 @@ defmodule GridMediaManager.Promotion.ShareCard do
     style = normalize_style(style)
     format = normalize_image_format(format)
     node_id = node |> value("id") |> to_string()
-    title = node |> value("title") |> present_string() |> fallback("Key idea")
-    body = node |> value("excerpt") |> present_string() |> fallback(node_content(campaign, node))
+    title = presentation_node_title(campaign, node)
+
+    body =
+      node
+      |> value("excerpt")
+      |> present_string()
+      |> fallback(Markdown.presentation_text(node_content(campaign, node)))
+
     slide = %{"kind" => "node_text", "label" => "Key idea", "title" => title, "body" => body}
 
     %{
@@ -386,9 +328,9 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   def key_node_long_form_asset_attr(%Campaign{} = campaign, node, style \\ @default_style) do
     attrs = key_node_asset_attr(campaign, node, style, "portrait")
-    title = node |> value("title") |> present_string() |> fallback("Key idea")
-    body = node_content(campaign, node)
-    slide = %{"kind" => "cover", "label" => "", "title" => title, "body" => ""}
+    title = presentation_node_title(campaign, node)
+    body = campaign |> node_content(node) |> Markdown.presentation_text()
+    slides = StoryPackage.build(title, [], cover_label: "")
 
     %{
       attrs
@@ -400,8 +342,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
         metadata:
           attrs.metadata
           |> Map.put("content_type", "long_form")
-          |> Map.put("slides", [slide])
-          |> Map.put("slide_count", 1)
+          |> Map.put("slides", slides)
+          |> Map.put("slide_count", length(slides))
     }
   end
 
@@ -423,7 +365,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
         cover_title = long_form_cover_title(campaign, entries)
         text = entries |> Enum.map(& &1.text) |> Enum.join("\n\n")
         source_id = long_form_source_id(entries)
-        slide = %{"kind" => "cover", "label" => "", "title" => cover_title, "body" => ""}
+        slides = StoryPackage.build(cover_title, [], cover_label: "")
 
         %{
           title: "#{cover_title} · Long-form post",
@@ -438,7 +380,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
           source_type: "long_form_post",
           source_id: source_id,
           metadata:
-            image_metadata("portrait", [slide])
+            image_metadata("portrait", slides)
             |> Map.put("content_type", "long_form")
             |> Map.put("sources", Enum.map(entries, &long_form_source_metadata/1))
         }
@@ -511,28 +453,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end
   end
 
-  def question_short_video_asset_attr(%Campaign{} = campaign, question, style) do
-    question_asset_attr(campaign, question, style, "short")
-    |> Map.merge(%{
-      title: "Question · Short video",
-      kind: "question_video",
-      mime_type: "video/mp4",
-      recommended_platforms: Platforms.video_ids(),
-      source_type: "question_video"
-    })
-  end
-
-  def highlight_short_video_asset_attr(%Campaign{} = campaign, highlight, style) do
-    highlight_asset_attr(campaign, highlight, style, "short")
-    |> Map.merge(%{
-      title: "Highlight · Short video",
-      kind: "highlight_video",
-      mime_type: "video/mp4",
-      recommended_platforms: Platforms.video_ids(),
-      source_type: "highlight_video"
-    })
-  end
-
   def page_title(%Campaign{} = campaign, highlight),
     do: highlight_text(highlight) |> fallback(campaign.title)
 
@@ -542,11 +462,21 @@ defmodule GridMediaManager.Promotion.ShareCard do
   def node_title(%Campaign{} = campaign, node_id) do
     case find_key_node(campaign, node_id) do
       node when is_map(node) ->
-        value(node, "title") |> present_string() |> fallback(campaign.title)
+        presentation_node_title(campaign, node)
 
       _node ->
         campaign.title
     end
+  end
+
+  defp presentation_node_title(campaign, node) do
+    node
+    |> value("title")
+    |> present_string()
+    |> fallback("Key idea")
+    |> Markdown.presentation_title(node_content(campaign, node))
+    |> present_string()
+    |> fallback("Key idea")
   end
 
   defp question_from_map(question, kind) when is_map(question) do
@@ -628,8 +558,15 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
     case find_key_node(campaign, source_id) do
       node when is_map(node) ->
-        title = node |> value("title") |> present_string() |> fallback(campaign.title)
-        text = node_content(campaign, node) |> present_string() |> fallback(title)
+        title = presentation_node_title(campaign, node)
+
+        text =
+          campaign
+          |> node_content(node)
+          |> Markdown.presentation_text()
+          |> present_string()
+          |> fallback(title)
+
         node_id = node |> value("id") |> nullable_string()
         long_form_entry_map("key_node", source_id, title, text, node_id, nil)
 
@@ -752,15 +689,6 @@ defmodule GridMediaManager.Promotion.ShareCard do
     end)
   end
 
-  defp cta_slide do
-    %{
-      "kind" => "cta",
-      "label" => "Learn more",
-      "title" => "Continue on RationalGrid.ai",
-      "body" => ""
-    }
-  end
-
   defp highlight_text(highlight) when is_map(highlight) do
     value(highlight, "text") || value(highlight, "content") || value(highlight, "quote") ||
       value(highlight, "highlight")
@@ -781,10 +709,8 @@ defmodule GridMediaManager.Promotion.ShareCard do
     }
   end
 
-  defp dimensions("short"), do: {1080, 1920}
   defp dimensions(_format), do: {1080, 1350}
 
-  defp normalize_image_format("short"), do: "short"
   defp normalize_image_format(_format), do: "portrait"
 
   defp asset_identity(%Campaign{id: id}, kind, source_id, style, format) do

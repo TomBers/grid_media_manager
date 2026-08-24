@@ -83,26 +83,25 @@ defmodule GridMediaManager.Social.TemplatesTest do
     end)
   end
 
-  test "video assets receive distinct copy from their companion image" do
+  test "story video copy is adapted for each video platform" do
     campaign = campaign()
 
-    image = %MediaAsset{
-      id: 1,
-      title: "Question quote",
-      kind: "question_quote_card",
-      text: "What should we value?"
+    video = %MediaAsset{
+      id: 2,
+      title: "What should we value?",
+      kind: "curated_carousel_video",
+      mime_type: "video/mp4"
     }
 
-    video = %{image | id: 2, kind: "question_video"}
+    instagram_copy = Templates.body(campaign, video, "instagram", "visual")
+    youtube_copy = Templates.body(campaign, video, "youtube", "visual")
 
-    image_copy = Templates.body(campaign, image, "instagram", "question_quote")
-    video_copy = Templates.body(campaign, video, "instagram", "question_quote")
-
-    refute image_copy == video_copy
-    assert video_copy =~ "Pause on this question"
+    refute instagram_copy == youtube_copy
+    assert instagram_copy =~ "#"
+    assert youtube_copy =~ "RationalGrid.ai"
   end
 
-  test "uses identical copy across each supported platform group" do
+  test "adapts copy within each supported platform group" do
     campaign = campaign()
 
     text_asset = %MediaAsset{
@@ -115,7 +114,7 @@ defmodule GridMediaManager.Social.TemplatesTest do
     video_asset = %MediaAsset{
       id: 2,
       title: "A useful highlight",
-      kind: "highlight_video",
+      kind: "curated_carousel_video",
       mime_type: "video/mp4",
       text: "The important idea is easier to see when the pieces are connected."
     }
@@ -126,15 +125,21 @@ defmodule GridMediaManager.Social.TemplatesTest do
     video_copies =
       Enum.map(Platforms.video_ids(), &Templates.body(campaign, video_asset, &1, "highlight"))
 
-    assert Enum.uniq(text_copies) |> length() == 1
-    assert Enum.uniq(video_copies) |> length() == 1
+    assert Enum.uniq(text_copies) |> length() == 3
+    assert Enum.uniq(video_copies) |> length() >= 2
   end
 
   test "creates drafts only for the matching platform group for each asset" do
     campaign = campaign()
 
     image = %MediaAsset{id: 1, kind: "highlight_card", mime_type: "image/png", text: "A quote"}
-    video = %MediaAsset{id: 2, kind: "highlight_video", mime_type: "video/mp4", text: "A quote"}
+
+    video = %MediaAsset{
+      id: 2,
+      kind: "curated_carousel_video",
+      mime_type: "video/mp4",
+      text: "A quote"
+    }
 
     drafts = Templates.draft_attrs_for_platforms(campaign, [image, video], Platforms.ids())
 
@@ -287,7 +292,10 @@ defmodule GridMediaManager.Social.TemplatesTest do
     assert linkedin =~ "Complete argument sentence 88."
     refute linkedin =~ "Follow-up questions"
     refute linkedin =~ "1. This question"
-    assert linkedin =~ "\n\n…\n\nLearn more at RationalGrid.ai:"
+
+    assert linkedin =~
+             "\n\n…\n\nExplore the evidence and connected questions.\nLearn more at RationalGrid.ai:"
+
     assert linkedin =~ "https://rationalgrid.ai/g/collective?node=node-1"
 
     assert facebook =~ "Follow-up questions"

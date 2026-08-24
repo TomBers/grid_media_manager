@@ -109,6 +109,34 @@ defmodule GridMediaManager.Promotion.MarkdownTest do
     assert Enum.join(page_texts, " ") == text
   end
 
+  test "builds short pages without cutting a complete thought" do
+    complete_sentence =
+      "While philosophical inquiries often focus on how raw sensory data or subjective boundaries are organized, cognitive developmental science asks a more mechanical question: what primitive categories must a mind possess to cut the continuous flux of reality into discrete entities?"
+
+    pages =
+      Markdown.complete_thought_pages(
+        [%{type: :paragraph, text: complete_sentence}],
+        220,
+        320
+      )
+
+    assert Enum.map(pages, &Markdown.readable_text/1) == [complete_sentence]
+  end
+
+  test "omits an oversized thought instead of publishing its opening fragment" do
+    oversized = String.duplicate("Unusually elaborate wording ", 20) <> "finally ends."
+    concise = "A later complete thought still works."
+
+    pages =
+      Markdown.complete_thought_pages(
+        [%{type: :paragraph, text: oversized <> " " <> concise}],
+        220,
+        320
+      )
+
+    assert Enum.map(pages, &Markdown.readable_text/1) == [concise]
+  end
+
   test "does not split common abbreviations into broken reading beats" do
     text =
       "Professional fasters like Dr. Henry Tanner became global attractions. Their performances drew paying crowds."
@@ -150,6 +178,94 @@ defmodule GridMediaManager.Promotion.MarkdownTest do
              },
              %{type: :list_item, marker: "•", text: "A genuine list item"}
            ]
+  end
+
+  test "removes search-grounding references from presentation sections" do
+    markdown = """
+    # A grounded answer
+
+    The evidence supports the main claim [1] and a second finding 【turn2search3†source】.
+
+    - A useful implication for the audience.
+    - Search query if you want studies: “recommender systems identity memory”
+    - The Extended Mind — Clark & Chalmers (search query: "Clark Chalmers 1998")
+
+    ## Further reading / references
+
+    - First source
+    - https://example.com/paper
+
+    ## A final question
+
+    What would change your mind?
+
+    References: This trailing bibliography should also disappear.
+    """
+
+    sections = Markdown.presentation_sections(markdown)
+
+    assert Enum.map(sections, & &1.title) == ["A grounded answer", "A final question"]
+
+    assert Enum.at(sections, 0).text ==
+             "The evidence supports the main claim and a second finding.\n\n• A useful implication for the audience."
+
+    assert Enum.at(sections, 1).text == "What would change your mind?"
+  end
+
+  test "keeps headings that only begin with a reference label" do
+    markdown = """
+    # Sources of uncertainty
+
+    This discussion belongs in the public content.
+
+    ## References
+
+    - A private source
+    """
+
+    assert [%{title: "Sources of uncertainty", text: text}] =
+             Markdown.presentation_sections(markdown)
+
+    assert text == "This discussion belongs in the public content."
+  end
+
+  test "recognises reference labels authored as list items or trailing prose" do
+    assert [%{text: "A useful conclusion."}] =
+             Markdown.presentation_sections("""
+             A useful conclusion. References: First source; second source.
+             """)
+
+    assert [%{text: "A useful conclusion."}] =
+             Markdown.presentation_sections("""
+             A useful conclusion.
+
+             - Further reading / references
+             - First source
+             - Second source
+             """)
+  end
+
+  test "recovers a presentation title when node metadata contains references" do
+    assert Markdown.presentation_title(
+             "References: First source; second source",
+             "Title: Why this question matters\n\nThe answer follows."
+           ) == "Why this question matters"
+  end
+
+  test "builds clean longer-post text while retaining section structure" do
+    assert Markdown.presentation_text("""
+           # Main answer
+
+           A grounded claim [1].
+
+           ## Implication
+
+           The useful consequence.
+
+           ## Sources
+
+           - https://example.com/source
+           """) == "Main answer\n\nA grounded claim.\n\nImplication\n\nThe useful consequence."
   end
 
   test "groups Markdown into carousel-ready sections" do

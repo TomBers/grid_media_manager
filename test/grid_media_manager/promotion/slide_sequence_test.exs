@@ -92,7 +92,82 @@ defmodule GridMediaManager.Promotion.SlideSequenceTest do
 
     assert Enum.all?(
              Enum.filter(slides, &(&1["kind"] == "node_text")),
-             &(String.length(&1["body"]) <= 220)
+             &(String.length(&1["body"]) <= 320)
            )
+  end
+
+  test "short video reading beats never end midway through a sentence" do
+    complete_sentence =
+      "While philosophical inquiries often focus on how raw sensory data or subjective boundaries are organized, cognitive developmental science asks a more mechanical question: what primitive categories must a mind possess to cut the continuous flux of reality into discrete entities?"
+
+    campaign = %Campaign{
+      title: "A complete thought",
+      raw_payload: %{
+        "content" => %{
+          "key_nodes" => [
+            %{
+              "id" => "answer-1",
+              "title" => "The cognitive toolkit",
+              "content" => "# The cognitive toolkit\n\n#{complete_sentence}"
+            }
+          ]
+        }
+      }
+    }
+
+    candidate = %{
+      type: "key_node",
+      source_id: "answer-1",
+      title: "The cognitive toolkit",
+      label: "Answer"
+    }
+
+    slides = SlideSequence.build(campaign, [candidate], reading_mode: :short_video)
+
+    assert Enum.any?(slides, &(&1["body"] == complete_sentence))
+    refute Enum.any?(slides, &String.ends_with?(&1["body"], "possess to"))
+  end
+
+  test "long answers do not turn grounding references into slides" do
+    campaign = %Campaign{
+      title: "A grounded answer",
+      raw_payload: %{
+        "content" => %{
+          "key_nodes" => [
+            %{
+              "id" => "answer-1",
+              "title" => "A grounded answer",
+              "content" => """
+              # A grounded answer
+
+              The central argument is useful and self-contained [1].
+
+              - Search query: "grounded answer evidence"
+
+              ## References
+
+              - https://example.com/reference
+              """
+            }
+          ]
+        }
+      }
+    }
+
+    candidate = %{
+      type: "key_node",
+      source_id: "answer-1",
+      title: "A grounded answer",
+      label: "Answer"
+    }
+
+    slides = SlideSequence.build(campaign, [candidate], reading_mode: :full)
+    public_text = Enum.map_join(slides, " ", &"#{&1["title"]} #{&1["body"]}")
+
+    assert public_text =~ "The central argument is useful and self-contained."
+    refute public_text =~ "Search query"
+    refute public_text =~ "References"
+    refute public_text =~ "example.com"
+    refute public_text =~ "[1]"
   end
 end
