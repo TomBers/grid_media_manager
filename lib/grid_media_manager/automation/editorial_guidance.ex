@@ -24,11 +24,16 @@ defmodule GridMediaManager.Automation.EditorialGuidance do
     explanatory material. Never present an AI answer as a human quotation.
 
     Treat bibliographies, raw URLs, citation markers, search queries, model scaffolding, and
-    phrases such as “further reading” as grounding metadata—not publishable story moments.
-    Avoid generic assistant language, repeated points, unsupported claims, and content that needs
-    the rest of the grid to make sense.
+    phrases such as “further reading” as grounding metadata—not publishable story moments. Treat
+    formatting labels such as “Title:”, “Category:”, and section scaffolding as metadata too; do
+    not select a moment merely because one of those labels makes it look distinct. Avoid generic
+    assistant language, repeated points, unsupported claims, and content that needs the rest of
+    the grid to make sense. Select the fewest moments needed for a complete arc, and never select
+    both a grid overview and source moments that simply restate it.
 
     #{copy_quality()}
+
+    #{platform_depth()}
 
     #{audience_conversion()}
     """
@@ -49,11 +54,28 @@ defmodule GridMediaManager.Automation.EditorialGuidance do
 
   def copy_quality do
     """
-    Hooks, cover titles, video titles, and post copy must be concise, accurate, publication-ready
-    British English. Correct spelling, grammar, articles, capitalization, and punctuation. Use
-    sentence case, end direct questions with a question mark, and never truncate a thought.
-    Preserve the approved meaning across platforms while adapting length and tone. Do not include
-    raw Markdown, title prefixes, assistant-like offers, search queries, or internal citations.
+    Hooks, cover titles, video titles, and short-form post copy must be concise, accurate,
+    publication-ready British English. Correct spelling, grammar, articles, capitalization, and
+    punctuation. Use sentence case, end direct questions with a question mark, and never truncate
+    a thought. Preserve the approved meaning across platforms while adapting length, depth, and
+    tone. Do not include raw Markdown, title prefixes, assistant-like offers, search queries, or
+    internal citations.
+    """
+  end
+
+  def platform_depth do
+    """
+    Treat LinkedIn and Facebook as destinations for substantive posts, not merely longer captions.
+    When the source contains a coherent argument worth unpacking, recommend long_form and select
+    one strong structured answer or a small number of genuinely complementary moments. Preserve
+    the central thesis, the reasoning or evidence behind it, an important tension or limitation,
+    and the practical or intellectual implication. Use several readable paragraphs when the
+    material supports them; depth and specificity matter more than brevity, but avoid repetition,
+    filler, and stitched-together excerpts that do not form one argument.
+
+    LinkedIn copy may use most of its 3,000-character allowance while ending on a complete section.
+    Facebook may retain the fuller explanation when it remains coherent and readable. Do not apply
+    short-video frame density or duration constraints to either platform.
     """
   end
 
@@ -62,11 +84,19 @@ defmodule GridMediaManager.Automation.EditorialGuidance do
     Match the format to the material and supported destinations:
     - story_video: a paced vertical narrative for Instagram Reels, TikTok, and YouTube Shorts.
     - portrait: a concise image carousel for X, LinkedIn, and Facebook.
-    - long_form: a substantial cover-led post for LinkedIn and Facebook.
+    - long_form: a detailed, multi-paragraph, cover-led post for LinkedIn and Facebook.
     - combined_carousel: vertical video plus image carousel when both genuinely add value.
 
     Choose for audience impact and comprehension, not maximum channel coverage. Dense arguments
-    need more reading space; a sharp question and a few visual beats suit short video.
+    need more reading space; a sharp question and a few visual beats suit short video. Prefer
+    long_form when a source can support a deeper explanation rather than reducing it to a teaser.
+    For story_video, make brevity an editorial constraint: select only two or three distinct
+    moments, never a generic grid overview, and use at most one structured AI-answer node. Aim for
+    four to six rendered frames including the cover and closing frame, roughly 25–40 seconds and
+    never more than 45 seconds. Each frame should communicate one complete thought in about 25
+    words or fewer. Remember that a structured answer can expand into several frames; if the idea
+    needs more moments or denser copy, choose portrait or long_form instead. Apply the same concise
+    video sequence inside combined_carousel.
     Text posts are visual posts too: X, LinkedIn, and Facebook should receive an uploaded key
     quotation, question, evidence card, cover, or carousel—not unsupported caption-only output.
     """

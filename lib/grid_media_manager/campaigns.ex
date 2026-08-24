@@ -70,6 +70,17 @@ defmodule GridMediaManager.Campaigns do
     |> Repo.all()
   end
 
+  def list_uploaded_media_assets do
+    MediaAsset
+    |> where(
+      [a],
+      fragment("COALESCE(?->'artifacts', '{}'::jsonb) <> '{}'::jsonb", a.metadata)
+    )
+    |> order_by([a], desc: a.updated_at, desc: a.id)
+    |> preload(:campaign)
+    |> Repo.all()
+  end
+
   def list_post_drafts(%Campaign{id: campaign_id}, filters \\ []) do
     PostDraft
     |> where([d], d.campaign_id == ^campaign_id)

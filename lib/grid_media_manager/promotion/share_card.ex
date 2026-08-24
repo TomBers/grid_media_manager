@@ -15,6 +15,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
   @default_style "editorial_dark"
   @carousel_reading_max_characters 220
   @short_video_max_characters 220
+  @short_video_complete_thought_max_characters 320
 
   @styles [
     %{
@@ -199,9 +200,7 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
     selected_pages =
       if section_index == 0 do
-        blocks
-        |> Markdown.paginate_blocks(@short_video_max_characters)
-        |> Enum.take(1)
+        take_pages(blocks, 1)
       else
         general_blocks = Enum.reject(blocks, &Map.has_key?(&1, :role))
         connection_blocks = Enum.filter(blocks, &(&1[:role] == :connection))
@@ -216,7 +215,10 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp take_pages(blocks, count) do
     blocks
-    |> Markdown.paginate_blocks(@short_video_max_characters)
+    |> Markdown.complete_thought_pages(
+      @short_video_max_characters,
+      @short_video_complete_thought_max_characters
+    )
     |> Enum.take(count)
   end
 

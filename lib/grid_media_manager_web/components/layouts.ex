@@ -53,6 +53,12 @@ defmodule GridMediaManagerWeb.Layouts do
 
         <nav class="flex items-center gap-3">
           <.link
+            navigate={~p"/media-library"}
+            class="hidden rounded-full px-3 py-2 text-sm font-medium text-base-content/65 transition hover:bg-base-200 hover:text-base-content sm:inline-flex"
+          >
+            Media library
+          </.link>
+          <.link
             navigate={~p"/"}
             class="hidden rounded-full px-3 py-2 text-sm font-medium text-base-content/65 transition hover:bg-base-200 hover:text-base-content sm:inline-flex"
           >

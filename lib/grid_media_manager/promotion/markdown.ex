@@ -109,6 +109,26 @@ defmodule GridMediaManager.Promotion.Markdown do
   def paginate_blocks(_blocks, _max_characters), do: []
 
   @doc """
+  Builds concise pages without splitting a sentence or list item.
+
+  Complete thoughts may exceed the preferred page size up to the hard limit. Thoughts beyond
+  the hard limit are omitted instead of being published as misleading fragments.
+  """
+  @spec complete_thought_pages([block()], pos_integer(), pos_integer()) :: [[block()]]
+  def complete_thought_pages(blocks, preferred_characters, hard_limit)
+      when is_list(blocks) and is_integer(preferred_characters) and preferred_characters > 0 and
+             is_integer(hard_limit) and hard_limit >= preferred_characters do
+    blocks
+    |> Enum.flat_map(&sentence_blocks/1)
+    |> Enum.filter(&(String.length(&1.text) <= hard_limit))
+    |> Enum.reduce([], fn block, pages ->
+      append_block_to_pages(pages, block, preferred_characters)
+    end)
+  end
+
+  def complete_thought_pages(_blocks, _preferred_characters, _hard_limit), do: []
+
+  @doc """
   Removes authoring scaffolding that is useful in Markdown but distracting on a slide.
 
   Semantic lists remain lists. Editorial labels such as `Category` are removed,
@@ -223,6 +243,14 @@ defmodule GridMediaManager.Promotion.Markdown do
   end
 
   defp split_block(_block, _max_characters), do: []
+
+  defp sentence_blocks(%{text: text} = block) when is_binary(text) do
+    text
+    |> complete_sentences()
+    |> Enum.map(&%{block | text: &1})
+  end
+
+  defp sentence_blocks(_block), do: []
 
   defp preserve_link_destinations(markdown) do
     markdown =

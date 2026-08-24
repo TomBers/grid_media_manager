@@ -56,6 +56,17 @@ defmodule GridMediaManager.Promotion.ArtifactStore do
 
   def read(%MediaAsset{}, _index), do: {:error, :artifact_not_ready}
 
+  def read_uploaded(%MediaAsset{} = asset, index) when is_integer(index) and index > 0 do
+    with %{"path" => path} <- uploaded_artifact(asset, index),
+         {:ok, body} <- File.read(path) do
+      {:ok, body}
+    else
+      _error -> {:error, :artifact_not_ready}
+    end
+  end
+
+  def read_uploaded(%MediaAsset{}, _index), do: {:error, :artifact_not_ready}
+
   def read_all(%MediaAsset{} = asset, indexes) when is_list(indexes) do
     Enum.reduce_while(indexes, {:ok, []}, fn index, {:ok, bodies} ->
       case read(asset, index) do
@@ -79,6 +90,19 @@ defmodule GridMediaManager.Promotion.ArtifactStore do
   end
 
   def artifact(%MediaAsset{}, _index), do: nil
+
+  def uploaded_artifact(%MediaAsset{metadata: metadata}, index) when is_map(metadata) do
+    with %{"path" => path} = artifact <-
+           metadata |> Map.get("artifacts", %{}) |> Map.get(to_string(index)),
+         true <- within_root?(path),
+         {:ok, %File.Stat{type: :regular}} <- File.stat(path) do
+      artifact
+    else
+      _error -> nil
+    end
+  end
+
+  def uploaded_artifact(%MediaAsset{}, _index), do: nil
 
   def ready?(%MediaAsset{} = asset, indexes) when is_list(indexes) do
     indexes != [] and Enum.all?(indexes, &artifact_ready?(asset, &1))
