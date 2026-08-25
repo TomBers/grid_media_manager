@@ -422,7 +422,13 @@ defmodule GridMediaManager.Campaigns do
 
   def generate_curated_carousel(%Campaign{} = campaign, candidates, style)
       when is_list(candidates) and length(candidates) >= 1 do
-    generate_curated_carousel(campaign, candidates, style, :full)
+    generate_curated_carousel(campaign, candidates, style,
+      reading_mode: :full,
+      include_cover: true,
+      recommended_platforms: Platforms.text_ids(),
+      title: "#{campaign.title} · Story carousel",
+      text: campaign.title
+    )
   end
 
   def generate_curated_carousel(%Campaign{}, _candidates, _style),
@@ -430,8 +436,29 @@ defmodule GridMediaManager.Campaigns do
 
   def generate_curated_carousel_bundle(%Campaign{} = campaign, candidates, style)
       when is_list(candidates) and length(candidates) >= 1 do
-    generate_curated_carousel(campaign, candidates, style, :short_video)
+    generate_curated_carousel(campaign, candidates, style,
+      reading_mode: :short_video,
+      include_cover: true,
+      recommended_platforms: Platforms.text_ids(),
+      title: "#{campaign.title} · Story carousel",
+      text: campaign.title
+    )
   end
+
+  def generate_x_post(%Campaign{} = campaign, candidates, style)
+      when is_list(candidates) and length(candidates) >= 1 do
+    text = candidates |> List.first() |> Map.get(:title, campaign.title)
+
+    generate_curated_carousel(campaign, candidates, style,
+      reading_mode: :x_post,
+      include_cover: false,
+      recommended_platforms: ["x"],
+      title: "#{campaign.title} · X post",
+      text: text
+    )
+  end
+
+  def generate_x_post(%Campaign{}, _candidates, _style), do: {:error, :not_enough_candidates}
 
   def generate_story_video(%Campaign{} = campaign, candidates, style)
       when is_list(candidates) and length(candidates) >= 1 do
@@ -448,21 +475,27 @@ defmodule GridMediaManager.Campaigns do
   def generate_story_video(%Campaign{}, _candidates, _style),
     do: {:error, :not_enough_candidates}
 
-  defp generate_curated_carousel(%Campaign{} = campaign, candidates, style, reading_mode) do
+  defp generate_curated_carousel(%Campaign{} = campaign, candidates, style, opts) do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
-    slides = SlideSequence.build(campaign, candidates, reading_mode: reading_mode)
+
+    slides =
+      SlideSequence.build(campaign, candidates,
+        reading_mode: Keyword.fetch!(opts, :reading_mode),
+        include_cover: Keyword.fetch!(opts, :include_cover)
+      )
+
     token = curated_carousel_token(candidates, slides, style)
 
     %{
-      title: "#{campaign.title} · Story carousel",
+      title: Keyword.fetch!(opts, :title),
       kind: "curated_carousel",
       url: ShareCard.curated_carousel_image_path(campaign, token, 1, style),
       mime_type: "image/png",
-      text: campaign.title,
+      text: Keyword.fetch!(opts, :text),
       node_id: nil,
       highlight_id: nil,
-      recommended_platforms: Platforms.text_ids(),
+      recommended_platforms: Keyword.fetch!(opts, :recommended_platforms),
       style: style,
       source_type: "curated_carousel",
       source_id: token,

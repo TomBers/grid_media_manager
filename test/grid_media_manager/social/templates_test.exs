@@ -255,8 +255,10 @@ defmodule GridMediaManager.Social.TemplatesTest do
 
     assert String.length(linkedin) > 280
     assert Platforms.within_limit?(linkedin, "linkedin")
+    assert Platforms.max_chars("facebook") == 5_000
     assert Platforms.within_limit?(facebook, "facebook")
-    assert facebook =~ String.trim(answer)
+    assert String.length(facebook) > 3_000
+    refute facebook =~ String.trim(answer)
     assert facebook =~ "https://rationalgrid.ai/g/collective?node=node-1"
   end
 

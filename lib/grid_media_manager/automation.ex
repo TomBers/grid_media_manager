@@ -648,6 +648,7 @@ defmodule GridMediaManager.Automation do
   end
 
   defp persist_plan(attrs, batch) do
+    attrs = sanitize_postgres_json(attrs)
     existing = Repo.get_by(EditorialPlan, editorial_batch_id: batch.id, position: attrs.position)
 
     (existing || %EditorialPlan{})
@@ -656,6 +657,20 @@ defmodule GridMediaManager.Automation do
       if existing, do: Repo.update!(changeset), else: Repo.insert!(changeset)
     end)
   end
+
+  defp sanitize_postgres_json(value) when is_binary(value),
+    do: String.replace(value, <<0>>, "")
+
+  defp sanitize_postgres_json(value) when is_list(value),
+    do: Enum.map(value, &sanitize_postgres_json/1)
+
+  defp sanitize_postgres_json(value) when is_map(value) do
+    Map.new(value, fn {key, item} ->
+      {sanitize_postgres_json(key), sanitize_postgres_json(item)}
+    end)
+  end
+
+  defp sanitize_postgres_json(value), do: value
 
   defp plan_attrs({:ok, attrs}, topic, position) do
     attrs

@@ -180,7 +180,7 @@ PackageBuilder.generate_complete_plan/4
     └── Workflow.generate/3
 ```
 
-`generate_complete_plan/4` creates the plan's primary format and any missing companion format needed to cover both text and video destinations. Do not separately invoke format generators unless diagnosing a specific branch.
+`generate_complete_plan/4` always creates the complete destination package, independent of the model's recommended primary format. Every plan must produce exactly three destination assets: `long_form` for LinkedIn and Facebook, `x_post` for X, and `story_video` for TikTok, Instagram, and YouTube. Do not separately invoke format generators unless diagnosing a specific branch.
 
 The orchestrator accepts a module implementing `GridMediaManager.Automation.Renderer` through its `:renderer` option. The default is `GridMediaManager.Automation.BrowserRenderer`. Tests and other execution environments can inject a renderer without changing planning or package generation.
 
@@ -188,24 +188,31 @@ The orchestrator accepts a module implementing `GridMediaManager.Automation.Rend
 
 | Format | Canonical generator |
 | --- | --- |
-| `portrait` | `Campaigns.generate_curated_carousel/3` |
-| `story_video` | `Campaigns.generate_story_video/3` |
-| `combined_carousel` | `Campaigns.generate_curated_carousel_bundle/3`, then `Campaigns.generate_curated_carousel_video/2` |
-| `long_form` | `Campaigns.generate_long_form_post/3` |
+| `long_form` | `Campaigns.generate_long_form_post/3`; LinkedIn and Facebook only; long copy with cover image and fixed CTA image |
+| `x_post` | `Campaigns.generate_x_post/3`; X only; one selected quote or short section followed by the fixed CTA image |
+| `story_video` | `Campaigns.generate_story_video/3`; TikTok, Instagram, and YouTube only; short-form vertical video |
+| `portrait` | `Campaigns.generate_curated_carousel/3`; guided/manual flows only |
+| `combined_carousel` | `Campaigns.generate_curated_carousel_bundle/3`, then `Campaigns.generate_curated_carousel_video/2`; guided/manual flows only |
 
 These calls upsert `MediaAsset` rows and automatically create or refresh deterministic `PostDraft` rows through `Social.Templates`. At this point the post copy and media specification exist, but the PNG bytes do not.
 
 ### 4. Build one canonical slide sequence
 
-Every carousel and video must have this shape:
+Each destination has an explicit shape:
 
 ```text
-thumbnail-ready cover
-→ one or more variable editorial text/quote/highlight cards
-→ fixed CTA
+LinkedIn / Facebook: thumbnail-ready cover → fixed CTA image
+                         + long-form platform copy
+
+X: selected quote or short section → fixed CTA image
+
+TikTok / Instagram / YouTube: thumbnail-ready cover
+                               → one or more concise editorial cards
+                               → fixed CTA
+                               → short-form vertical video
 ```
 
-`SlideSequence.build/3` owns content selection and normalisation. `StoryPackage.build/3` owns the outer cover/content/CTA invariant. Formats must consume this sequence rather than independently creating covers, text cards, or closing frames.
+`SlideSequence.build/3` owns content selection and normalisation. `StoryPackage.build/3` owns cover/content/CTA assembly and may omit the cover only for the explicit `x_post` contract. Formats must consume this sequence rather than independently creating covers, text cards, or closing frames.
 
 The CTA slide metadata identifies and orders the frame. Its visual source of truth is always:
 
@@ -259,11 +266,49 @@ For each planned topic, verify:
 
 - `EditorialPlan.status == "planned"` and selected keys are grounded in `Workflow.candidates/1`.
 - `Automation.generate_batch_assets/2` returns a uniform status for the batch, every plan, and every asset.
-- Both text and video destination coverage exists when a complete package is requested.
-- Every asset has a cover, at least one content frame, and the CTA last.
+- A complete package contains exactly the three destination contracts: `long_form`, `x_post`, and `story_video`.
+- LinkedIn/Facebook long-form media is `cover → CTA`, with the substantive argument in platform copy.
+- X media is `selected quote or short section → CTA`, with no redundant generic cover.
+- TikTok/Instagram/YouTube media is `cover → concise editorial frames → CTA` and is assembled as a short-form vertical video.
 - Every required artifact index is current and present.
 - Every portrait CTA uses `rationalgrid-follow-up.png` exactly.
 - Every video is assembled only after all required PNGs exist.
 - Corresponding `PostDraft` rows contain platform-appropriate deterministic copy.
 
 After code changes, run focused tests, `mix assets.build`, and `mix precommit`. For Studio behaviour, inspect source first and verify with Tidewave `browser_eval`. Do not restart Phoenix for ordinary code changes.
+
+## Operational runbook for a live publishing session
+
+Keep the production workflow inside the application. Do not create Python, Playwright, Selenium, shell, or one-off Mix scripts to reproduce planning, canvas rendering, media assembly, or Buffer scheduling. Use the public Elixir entrypoints through Tidewave `project_eval`, and use Tidewave `browser_eval` for the required browser-owned canvas stage. A temporary script creates a second orchestration path, loses the persisted resume state, and can leave browser processes running after the caller exits.
+
+Use this sequence:
+
+1. Call `Buffer.queue_snapshot/1` immediately before generation. Treat its per-channel vacancies as the hard upper bound and never delete or replace queued posts to make room.
+2. Create one persisted batch with `Automation.create_autopilot_batch/2` or `Automation.create_batch/1`, then call `Automation.generate_batch_assets/2` once.
+3. If some plans fail grounded selection, keep every successful plan. Create a small supplemental batch only for the remaining package count; do not restart the original batch or repeat successful LLM calls.
+4. For `:awaiting_artifacts` assets, open the returned Studio `render_path` with Tidewave `browser_eval`. Prefer one campaign page containing its three comma-separated asset IDs, wait for its uploads to finish, and verify readiness with `Campaigns.media_asset_slide_indexes/1` plus `ArtifactStore.ready?/2` before moving on.
+5. Render campaigns sequentially. Do not open multiple unattended browser workers or render many Studio pages concurrently. Video assembly can hold a navigation open after its PNG uploads have succeeded, so verify stored artifacts instead of treating a browser timeout as a failed render.
+6. Resume the same batch with `Automation.generate_batch_assets/2` only after its required artifacts are ready. Never substitute a newly generated asset or a raw source image for a pending artifact.
+7. Immediately before publishing, take another live queue snapshot, select exactly one canonical draft per destination, and re-check copy limits and asset contracts. Publish and schedule packages sequentially on successive days with channel-specific times.
+8. Require a returned Buffer post ID and persisted `scheduled` status for every submission. Finish with a fresh `Buffer.queue_snapshot/1`; the run is complete only when the live scheduled counts match the intended counts for all six channels.
+
+For a complete package, schedule only these drafts:
+
+- the `long_form_post` asset for LinkedIn and Facebook;
+- the `x_post`/X carousel asset for X;
+- the `curated_carousel_video`/story-video asset for TikTok, Instagram, and YouTube.
+
+Other deterministic drafts may exist for guided/manual presentation choices. Do not schedule those in addition to the canonical six, or one story can occupy multiple slots in the same channel.
+
+### Browser process safety
+
+Tidewave's shared browser is the default browser boundary. Do not launch standalone Chrome instances with profiles such as `tmp/chrome-elixir-*`. Those profiles are runtime scratch space, not resumable job state, and deleting them does not stop their processes.
+
+If Phoenix becomes slow without application errors, stop mutations and diagnose before restarting anything:
+
+- inspect OS processes for old headless Chrome trees, `ffmpeg`, and high CPU usage;
+- inspect PostgreSQL activity to distinguish database blocking from CPU saturation;
+- check for repeated LiveView reconnects and unusually slow successful requests in the logs;
+- verify saved artifacts before assuming an interrupted browser still owns useful work.
+
+An orphaned headless Chrome tree is indicated by a parent reparented to PID 1, a `tmp/chrome-elixir-*` profile, sustained CPU use, and a render URL that has been open long after its artifacts were stored. Terminate only the confirmed profile-specific process tree, first gracefully and then forcibly only if it ignores termination. Never use a broad `pkill` that could close the user's browser, Tidewave's shared browser, or unrelated Chrome sessions. A Phoenix restart is not a remedy for an external orphan browser and should remain unnecessary.

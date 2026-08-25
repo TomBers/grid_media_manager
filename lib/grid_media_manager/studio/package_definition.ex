@@ -17,6 +17,7 @@ defmodule GridMediaManager.Studio.PackageDefinition do
 
   def mode_for_format("story_video"), do: "video"
   def mode_for_format("portrait"), do: "text"
+  def mode_for_format("x_post"), do: "text"
   def mode_for_format("long_form"), do: "long_form"
   def mode_for_format(_format), do: "bundle"
 

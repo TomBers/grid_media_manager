@@ -2,9 +2,11 @@ defmodule GridMediaManager.Promotion.StoryPackage do
   @moduledoc """
   Defines the single canonical frame sequence for visual stories.
 
-  Every story starts with a thumbnail-ready cover, contains one or more
-  editorial cards, and ends with the same conversion-focused CTA. Image
-  carousels and videos render this exact sequence at their target dimensions.
+  Stories normally start with a thumbnail-ready cover, contain one or more
+  editorial cards, and end with the same conversion-focused CTA. The explicit
+  X destination contract omits the redundant cover and uses one content card
+  followed by the CTA. Image carousels and videos render these sequences at
+  their target dimensions.
   """
 
   @cta_title "Where do you stand?"
@@ -22,7 +24,11 @@ defmodule GridMediaManager.Promotion.StoryPackage do
     content_slides =
       Enum.reject(content_slides, &(Map.get(&1, "kind") in ["cover", "node_title", "cta"]))
 
-    [cover | content_slides] ++ [cta_slide()]
+    if Keyword.get(opts, :include_cover, true) do
+      [cover | content_slides] ++ [cta_slide()]
+    else
+      content_slides ++ [cta_slide()]
+    end
   end
 
   def cta_slide do

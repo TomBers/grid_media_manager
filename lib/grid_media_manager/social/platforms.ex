@@ -15,7 +15,7 @@ defmodule GridMediaManager.Social.Platforms do
     %{
       id: "facebook",
       label: "Facebook",
-      max_chars: 63_206,
+      max_chars: 5_000,
       style: "Readable, conversational context"
     },
     %{

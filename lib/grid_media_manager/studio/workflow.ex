@@ -11,7 +11,7 @@ defmodule GridMediaManager.Studio.Workflow do
   alias GridMediaManager.Promotion.ShareCard
 
   @max_candidates_per_type 24
-  @formats ~w(landscape linkedin portrait combined_carousel story_video long_form)
+  @formats ~w(landscape linkedin portrait x_post combined_carousel story_video long_form)
 
   def candidates(%Campaign{} = campaign) do
     recommended_question = Campaigns.recommended_question(campaign)
@@ -77,6 +77,9 @@ defmodule GridMediaManager.Studio.Workflow do
         format == "story_video" ->
           generate_story_video(campaign, candidates, style)
 
+        format == "x_post" ->
+          generate_x_post(campaign, candidates, style)
+
         format == "long_form" ->
           generate_long_form_post(campaign, candidates, style)
 
@@ -136,6 +139,17 @@ defmodule GridMediaManager.Studio.Workflow do
               errors: [%{candidate: candidate, reason: {:video, reason}}]
             }
         end
+
+      {:error, reason} ->
+        candidate = List.first(candidates) || %{title: campaign.title}
+        %{assets: [], errors: [%{candidate: candidate, reason: reason}]}
+    end
+  end
+
+  defp generate_x_post(campaign, candidates, style) do
+    case Campaigns.generate_x_post(campaign, candidates, style) do
+      {:ok, asset} ->
+        %{assets: [asset], errors: []}
 
       {:error, reason} ->
         candidate = List.first(candidates) || %{title: campaign.title}

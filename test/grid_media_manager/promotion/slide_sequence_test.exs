@@ -39,6 +39,51 @@ defmodule GridMediaManager.Promotion.SlideSequenceTest do
            }
   end
 
+  test "X posts contain one selected content card followed by the CTA without a cover" do
+    campaign = %Campaign{title: "A story"}
+
+    candidate = %{
+      type: "key_node",
+      source_id: "answer-1",
+      title: "A concise section",
+      excerpt: "One short section that stands on its own.",
+      label: "Answer"
+    }
+
+    assert [content, cta] =
+             SlideSequence.build(campaign, [candidate],
+               reading_mode: :x_post,
+               include_cover: false
+             )
+
+    assert content["kind"] == "node_text"
+    assert content["title"] == "A concise section"
+    assert cta["kind"] == "cta"
+  end
+
+  test "short videos contain at most four editorial frames plus cover and CTA" do
+    campaign = %Campaign{title: "A short video"}
+
+    candidates =
+      Enum.map(1..6, fn index ->
+        %{
+          type: "question",
+          title: "Question #{index}?",
+          excerpt: "Question context",
+          label: "Question"
+        }
+      end)
+
+    slides = SlideSequence.build(campaign, candidates, reading_mode: :short_video)
+
+    assert length(slides) == 6
+    assert List.first(slides)["kind"] == "cover"
+    assert List.last(slides)["kind"] == "cta"
+
+    assert slides |> Enum.slice(1, 4) |> Enum.map(& &1["title"]) ==
+             Enum.map(1..4, &"Question #{&1}?")
+  end
+
   test "short video reading beats remove authoring labels and cap text density" do
     campaign = %Campaign{
       title: "A long answer",

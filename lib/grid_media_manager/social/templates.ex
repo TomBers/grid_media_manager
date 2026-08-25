@@ -179,6 +179,10 @@ defmodule GridMediaManager.Social.Templates do
 
     copy =
       case platform do
+        "x" ->
+          excerpt = asset.text |> fallback(title)
+          "#{excerpt}\n\n#{cta_line(link)}"
+
         "linkedin" ->
           "#{title}\n\nOne visual idea, placed inside its wider argument.\n\n#{cta_line(link)}"
 

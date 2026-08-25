@@ -14,11 +14,26 @@ defmodule GridMediaManager.Promotion.SlideSequence do
       when is_list(candidates) and is_list(opts) do
     reading_mode = Keyword.get(opts, :reading_mode, :full)
 
-    content_slides =
-      Enum.flat_map(candidates, &candidate_slides(campaign, &1, reading_mode))
+    slide_groups = Enum.map(candidates, &candidate_slides(campaign, &1, reading_mode))
 
-    StoryPackage.build(campaign.title, content_slides)
+    content_slides =
+      if reading_mode == :short_video do
+        short_video_slides(slide_groups)
+      else
+        Enum.flat_map(slide_groups, & &1)
+      end
+
+    StoryPackage.build(campaign.title, content_slides,
+      include_cover: Keyword.get(opts, :include_cover, true)
+    )
   end
+
+  defp candidate_slides(
+         _campaign,
+         %{type: "key_node"} = candidate,
+         :x_post
+       ),
+       do: [fallback_slide(candidate)]
 
   defp candidate_slides(
          %Campaign{} = campaign,
@@ -72,6 +87,20 @@ defmodule GridMediaManager.Promotion.SlideSequence do
       "title" => candidate.title,
       "body" => Map.get(candidate, :excerpt) || ""
     }
+  end
+
+  defp short_video_slides(slide_groups) do
+    primary_slides =
+      slide_groups |> Enum.map(&List.first/1) |> Enum.reject(&is_nil/1) |> Enum.take(4)
+
+    remaining_count = 4 - length(primary_slides)
+
+    extra_slides =
+      slide_groups
+      |> Enum.flat_map(&Enum.drop(&1, 1))
+      |> Enum.take(remaining_count)
+
+    primary_slides ++ extra_slides
   end
 
   defp persisted_block(block) do

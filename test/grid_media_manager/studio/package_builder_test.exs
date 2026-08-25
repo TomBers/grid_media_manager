@@ -4,6 +4,7 @@ defmodule GridMediaManager.Studio.PackageBuilderTest do
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Studio.PackageBuilder
   alias GridMediaManager.Studio.Workflow
+  alias GridMediaManager.Social.Platforms
 
   test "an autonomous plan and guided generation use the same package builder" do
     assert {:ok, campaign} =
@@ -74,10 +75,23 @@ defmodule GridMediaManager.Studio.PackageBuilderTest do
     assert %{assets: complete_assets, errors: []} =
              PackageBuilder.generate_complete_plan(campaign, plan, candidates)
 
-    assert Enum.any?(complete_assets, &(&1.mime_type == "image/png"))
-    assert Enum.any?(complete_assets, &(&1.mime_type == "video/mp4"))
+    assert Enum.map(complete_assets, & &1.kind) |> Enum.sort() ==
+             Enum.sort(["long_form_post", "curated_carousel", "curated_carousel_video"])
 
-    video = Enum.find(complete_assets, &(&1.mime_type == "video/mp4"))
+    long_form = Enum.find(complete_assets, &(&1.kind == "long_form_post"))
+    assert long_form.recommended_platforms == Platforms.long_form_ids()
+    assert Enum.map(long_form.metadata["slides"], & &1["kind"]) == ["cover", "cta"]
+
+    x_post = Enum.find(complete_assets, &(&1.kind == "curated_carousel"))
+    assert x_post.recommended_platforms == ["x"]
+    assert Enum.map(x_post.metadata["slides"], & &1["kind"]) == ["node_text", "cta"]
+    assert List.first(x_post.metadata["slides"])["title"] == standalone_candidate.title
+
+    video = Enum.find(complete_assets, &(&1.kind == "curated_carousel_video"))
+    assert video.recommended_platforms == Platforms.video_ids()
+    assert List.first(video.metadata["slides"])["kind"] == "cover"
+    assert List.last(video.metadata["slides"])["kind"] == "cta"
+
     content_titles = video.metadata["slides"] |> Enum.drop(1) |> Enum.map(& &1["title"])
     refute List.first(content_titles) == standalone_candidate.title
     assert standalone_candidate.title in content_titles

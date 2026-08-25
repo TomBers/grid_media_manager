@@ -8,27 +8,13 @@ defmodule GridMediaManager.Studio.PackageBuilder do
   alias GridMediaManager.Studio.PackageDefinition
   alias GridMediaManager.Studio.VisualDirection
   alias GridMediaManager.Studio.Workflow
-  alias GridMediaManager.Social.Platforms
+  @complete_package_formats ~w(long_form x_post story_video)
 
   def generate_complete_plan(%Campaign{} = campaign, plan, all_candidates, opts \\ [])
       when is_list(all_candidates) do
-    primary = generate_plan(campaign, plan, all_candidates, opts)
-    available_platforms = PackageDefinition.platforms_for_assets(primary.assets)
-
-    companion_formats =
-      []
-      |> maybe_add_companion(
-        not Enum.all?(Platforms.text_ids(), &(&1 in available_platforms)),
-        "portrait"
-      )
-      |> maybe_add_companion(
-        not Enum.all?(Platforms.video_ids(), &(&1 in available_platforms)),
-        "story_video"
-      )
-
-    companion_formats
+    @complete_package_formats
     |> Enum.map(&generate_plan(campaign, plan, all_candidates, Keyword.put(opts, :format, &1)))
-    |> Enum.reduce(primary, &merge_results/2)
+    |> Enum.reduce(%{assets: [], errors: []}, &merge_results/2)
   end
 
   def generate_plan(%Campaign{} = campaign, plan, all_candidates, opts \\ [])
@@ -82,8 +68,8 @@ defmodule GridMediaManager.Studio.PackageBuilder do
     end
   end
 
-  defp candidates_for_output(candidates, _mode, "portrait", _all_candidates, text_visual_key)
-       when is_binary(text_visual_key) do
+  defp candidates_for_output(candidates, _mode, format, _all_candidates, text_visual_key)
+       when format in ["portrait", "x_post"] and is_binary(text_visual_key) do
     case Enum.find(candidates, &(&1.key == text_visual_key)) do
       nil -> candidates
       candidate -> [candidate]
@@ -112,9 +98,6 @@ defmodule GridMediaManager.Studio.PackageBuilder do
     do: true
 
   defp quote_candidate?(_candidate), do: false
-
-  defp maybe_add_companion(formats, true, format), do: formats ++ [format]
-  defp maybe_add_companion(formats, false, _format), do: formats
 
   defp merge_results(result, merged) do
     %{

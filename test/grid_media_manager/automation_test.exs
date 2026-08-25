@@ -126,6 +126,20 @@ defmodule GridMediaManager.AutomationTest do
     assert length(completed.plans) == 2
   end
 
+  test "removes NUL characters from model metadata before persistence" do
+    topic = "NUL metadata"
+    prepare_source(topic)
+
+    assert {:ok, batch} = Automation.create_batch([topic])
+    assert {:ok, completed} = Automation.run_batch(batch, selector: EditorialSelectorStub)
+
+    plan = List.first(completed.plans)
+    refute String.contains?(plan.selection_details["visual_rationale"], <<0>>)
+
+    assert plan.selection_details["visual_rationale"] ==
+             "A reflective palette supports the subject."
+  end
+
   test "autopilot records a useful failure when no source grids are available" do
     assert {:ok, batch} = Automation.create_autopilot_batch(1, nil)
 
@@ -153,7 +167,7 @@ defmodule GridMediaManager.AutomationTest do
     assert result.batch_id == batch.id
     assert result.status == :complete
     assert [%{status: :complete, assets: assets, errors: []}] = result.plans
-    assert length(assets) == 2
+    assert length(assets) == 3
     assert Enum.all?(assets, &(&1.status == :complete))
 
     completed = Automation.get_batch(batch.id)

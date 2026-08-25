@@ -81,13 +81,13 @@ defmodule GridMediaManager.Automation.EditorialGuidance do
 
   def format_selection do
     """
-    Match the format to the material and supported destinations:
-    - story_video: a paced vertical narrative for Instagram Reels, TikTok, and YouTube Shorts.
-    - portrait: a concise image carousel for X, LinkedIn, and Facebook.
-    - long_form: a detailed, multi-paragraph, cover-led post for LinkedIn and Facebook.
-    - combined_carousel: vertical video plus image carousel when both genuinely add value.
+    Match the recommended editorial emphasis to the material, but preserve the complete-package
+    destination contract regardless of that recommendation:
+    - TikTok, Instagram, and YouTube receive a paced short-form vertical story video.
+    - LinkedIn and Facebook receive substantive long-form copy with a cover image and fixed CTA image.
+    - X receives one strongest standalone quotation or short section followed by the fixed CTA image.
 
-    Choose for audience impact and comprehension, not maximum channel coverage. Dense arguments
+    Choose the recommended emphasis for audience impact and comprehension, not maximum channel coverage. Dense arguments
     need more reading space; a sharp question and a few visual beats suit short video. Prefer
     long_form when a source can support a deeper explanation rather than reducing it to a teaser.
     For story_video, make brevity an editorial constraint: select only two or three distinct
@@ -97,8 +97,9 @@ defmodule GridMediaManager.Automation.EditorialGuidance do
     words or fewer. Remember that a structured answer can expand into several frames; if the idea
     needs more moments or denser copy, choose portrait or long_form instead. Apply the same concise
     video sequence inside combined_carousel.
-    Text posts are visual posts too: X, LinkedIn, and Facebook should receive an uploaded key
-    quotation, question, evidence card, cover, or carousel—not unsupported caption-only output.
+    Text posts are visual posts too. LinkedIn and Facebook must receive the long-form cover and CTA;
+    X must receive only its selected quotation or short section and CTA, without an extra generic
+    cover. Never produce unsupported caption-only output.
     """
   end
 
@@ -139,8 +140,10 @@ defmodule GridMediaManager.Automation.EditorialGuidance do
     channel. Use channel-specific historical metrics to choose topics and posting times; do not
     assume one time works for every network. Schedule a campaign on successive days, avoid
     accidental duplicate content, keep video and text destinations distinct, and verify every
-    returned Buffer post ID and final scheduled status. Re-check titles and copy immediately
-    before submission.
+    returned Buffer post ID and final scheduled status. Before submission, verify the actual asset
+    contract per channel: short-form video for TikTok/Instagram/YouTube, long copy plus cover and CTA
+    for LinkedIn/Facebook, and one quote or short section plus CTA for X. Re-check titles and copy
+    immediately before submission.
     """
   end
 end

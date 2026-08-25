@@ -29,8 +29,13 @@ defmodule GridMediaManager.EditorialSelectorStub do
   end
 
   @impl true
-  def select_story(_topic, _campaign, candidates) do
+  def select_story(topic, _campaign, candidates) do
     selected_keys = candidates |> Enum.take(3) |> Enum.map(& &1.key)
+
+    visual_rationale =
+      if topic == "NUL metadata",
+        do: "A reflective palette supports\0 the subject.",
+        else: "A reflective analytical palette supports the subject."
 
     {:ok,
      %{
@@ -42,7 +47,7 @@ defmodule GridMediaManager.EditorialSelectorStub do
        "recommended_format" => "combined_carousel",
        "format_rationale" => "The mixed material works as both video and an image sequence.",
        "visual_style" => "deep_ocean",
-       "visual_rationale" => "A reflective analytical palette supports the subject.",
+       "visual_rationale" => visual_rationale,
        "cover_mode" => "photo",
        "cover_search_query" => "lone figure ocean horizon blue dusk negative space",
        "cover_brief" => "A contemplative portrait composition with room for a short title.",
