@@ -189,6 +189,17 @@ defmodule GridMediaManager.AutomationTest do
 
     assert Enum.map(List.first(resumed.plans).assets, & &1.asset_id) ==
              completed_plan.selection_details["generated_asset_ids"]
+
+    assert {:ok, review_result} =
+             Automation.review_batch(batch.id, editor: GridMediaManager.EditorStub)
+
+    assert review_result.status == :complete
+    assert [%{status: :complete, review: review}] = review_result.plans
+    assert review["verdict"] == "revise"
+    assert review["summary"] =~ "3 assets"
+
+    reviewed_plan = Automation.get_batch(batch.id).plans |> List.first()
+    assert reviewed_plan.selection_details["editor_review"]["overall_score"] == 74
   end
 
   test "bulk scheduling rejects an invalid start date before contacting Buffer" do
@@ -197,6 +208,37 @@ defmodule GridMediaManager.AutomationTest do
 
     assert {:ok, batch} = Automation.create_batch([topic])
     assert Automation.schedule_batch(batch.id, "not-a-date") == {:error, :invalid_start_date}
+  end
+
+  test "quality preparation revises a weak package once and reuses the final review" do
+    topic = "Editor guided refinement"
+    prepare_source(topic)
+
+    assert {:ok, batch} = Automation.create_batch([topic])
+
+    opts = [
+      selector: EditorialSelectorStub,
+      editor: GridMediaManager.EditorStub,
+      renderer: AutomationRendererStub,
+      renderer_options: [status: :complete],
+      max_revisions: 1
+    ]
+
+    assert {:ok, result} = Automation.prepare_quality_batch(batch.id, opts)
+    assert [%{status: :revised}] = result.refinements
+    assert result.generation.status == :complete
+    assert result.review.status == :complete
+
+    revised_plan = Automation.get_batch(batch.id).plans |> List.first()
+    assert revised_plan.hook == "A sharper Editor-guided opening"
+    assert revised_plan.selection_details["quality_revision_count"] == 1
+    assert length(revised_plan.selection_details["quality_history"]) == 1
+
+    assert {:ok, resumed} = Automation.prepare_quality_batch(batch.id, opts)
+    assert [%{status: :limit_reached}] = resumed.refinements
+
+    assert Automation.get_batch(batch.id).plans |> List.first() |> Map.fetch!(:hook) ==
+             revised_plan.hook
   end
 
   test "reports browser artifacts as resumable work" do

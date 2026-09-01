@@ -55,6 +55,18 @@ defmodule GridMediaManager.EditorialSelectorStub do
      }}
   end
 
+  def revise_story(topic, campaign, candidates, _current_plan, _review) do
+    {:ok, choice} = select_story(topic, campaign, candidates)
+
+    {:ok,
+     choice
+     |> Map.put("hook", "A sharper Editor-guided opening")
+     |> Map.put(
+       "rationale",
+       "The revised sequence foregrounds the most shareable implication."
+     )}
+  end
+
   @impl true
   def select_cover(_topic, _hook, _cover_brief, [photo | _photos]) do
     {:ok,

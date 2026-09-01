@@ -91,6 +91,16 @@ defmodule GridMediaManager.Campaigns do
     |> Repo.all()
   end
 
+  def list_post_drafts_for_assets(%Campaign{id: campaign_id}, media_asset_ids)
+      when is_list(media_asset_ids) do
+    PostDraft
+    |> where([draft], draft.campaign_id == ^campaign_id)
+    |> where([draft], draft.media_asset_id in ^media_asset_ids)
+    |> order_by([draft], asc: draft.platform, asc: draft.id)
+    |> preload(:media_asset)
+    |> Repo.all()
+  end
+
   def ensure_post_drafts_for_platforms(campaign, media_assets, platforms, opts \\ [])
 
   def ensure_post_drafts_for_platforms(%Campaign{} = campaign, media_assets, platforms, opts)

@@ -716,6 +716,57 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   @impl true
   def render(assigns) do
+    if assigns.live_action == :render_assets do
+      render_assets(assigns)
+    else
+      render_studio(assigns)
+    end
+  end
+
+  defp render_assets(assigns) do
+    ~H"""
+    <Layouts.app flash={@flash}>
+      <main
+        id="batch-asset-renderer"
+        class="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-8"
+      >
+        <div class="mx-auto max-w-6xl">
+          <div class="mb-6 flex items-center justify-between gap-4">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-300">
+                Batch renderer
+              </p>
+              <h1 class="mt-2 text-2xl font-semibold">Rendering {@campaign.title}</h1>
+            </div>
+            <span class="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/70">
+              Saves and advances automatically
+            </span>
+          </div>
+
+          <div id="batch-render-assets" phx-update="stream" class="grid gap-5 lg:grid-cols-3">
+            <.output_asset_card
+              :for={{id, asset} <- @streams.output_assets}
+              id={id}
+              asset={asset}
+              campaign={@campaign}
+              selected={true}
+              preview_slide={1}
+              wide={false}
+              auto_save={true}
+              cover_image_url={
+                VisualDirection.cover_url(
+                  VisualDirection.cover(@title_card_mode, @selected_pexels_background)
+                )
+              }
+            />
+          </div>
+        </div>
+      </main>
+    </Layouts.app>
+    """
+  end
+
+  defp render_studio(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
       <div

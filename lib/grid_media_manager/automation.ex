@@ -9,6 +9,7 @@ defmodule GridMediaManager.Automation do
   alias GridMediaManager.Automation.EditorialPlan
   alias GridMediaManager.Automation.BrowserRenderer
   alias GridMediaManager.Automation.LLMSelector
+  alias GridMediaManager.Automation.LLMEditor
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Campaigns.Campaign
   alias GridMediaManager.Campaigns.MediaAsset
@@ -81,8 +82,14 @@ defmodule GridMediaManager.Automation do
 
   def get_batch(id) do
     case positive_integer(id) do
-      {:ok, id} -> Repo.get(EditorialBatch, id) |> Repo.preload(plans: :campaign)
-      :error -> nil
+      {:ok, id} ->
+        plans_query =
+          from plan in EditorialPlan, order_by: [asc: plan.position], preload: :campaign
+
+        Repo.get(EditorialBatch, id) |> Repo.preload(plans: plans_query)
+
+      :error ->
+        nil
     end
   end
 
@@ -280,7 +287,7 @@ defmodule GridMediaManager.Automation do
          :ok <- preflight_publishing_jobs(jobs),
          {:ok, queue} <- Buffer.queue_snapshot(Platforms.ids()),
          :ok <- ensure_queue_capacity(queue, jobs) do
-      schedule_publishing_jobs(jobs)
+      schedule_publishing_jobs(jobs, Keyword.get(opts, :max_concurrency, 3))
     else
       nil -> {:error, :editorial_batch_not_found}
       {:error, _reason} = error -> error
@@ -288,6 +295,92 @@ defmodule GridMediaManager.Automation do
   end
 
   def schedule_batch(_batch_id, _start_date, _opts), do: {:error, :invalid_options}
+
+  @doc """
+  Runs a senior-editor assessment against every complete generated package in a batch.
+
+  Reviews are persisted in each plan's `selection_details` and can be safely rerun.
+  """
+  def review_batch(batch_or_id, opts \\ [])
+
+  def review_batch(%EditorialBatch{id: id}, opts), do: review_batch(id, opts)
+
+  def review_batch(batch_id, opts) when is_list(opts) do
+    editor = Keyword.get(opts, :editor, LLMEditor)
+    force? = Keyword.get(opts, :force, true)
+
+    with %EditorialBatch{} = batch <- get_batch(batch_id),
+         :ok <- validate_editor(editor) do
+      results =
+        batch.plans
+        |> Enum.filter(&(&1.status == "planned"))
+        |> Task.async_stream(&review_plan(&1, editor, force?),
+          ordered: true,
+          max_concurrency: normalize_concurrency(Keyword.get(opts, :max_concurrency, 3)),
+          timeout: :infinity
+        )
+        |> Enum.map(fn
+          {:ok, result} -> result
+          {:exit, reason} -> %{status: :failed, error: {:task_exit, reason}}
+        end)
+
+      status = if Enum.all?(results, &(&1.status == :complete)), do: :complete, else: :partial
+      {:ok, %{batch_id: batch.id, status: status, plans: results}}
+    else
+      nil -> {:error, :editorial_batch_not_found}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  def review_batch(_batch_id, _opts), do: {:error, :invalid_options}
+
+  @doc """
+  Generates and reviews a batch, then performs a bounded feedback-guided revision pass.
+
+  Reviews tied to the same canonical asset IDs are reused when browser rendering resumes.
+  """
+  def prepare_quality_batch(batch_id, opts \\ [])
+
+  def prepare_quality_batch(batch_id, opts) when is_list(opts) do
+    threshold = opts |> Keyword.get(:quality_threshold, 75) |> normalize_quality_threshold()
+    max_revisions = opts |> Keyword.get(:max_revisions, 1) |> normalize_revision_limit()
+    selector = Keyword.get(opts, :selector, LLMSelector)
+    editor = Keyword.get(opts, :editor, LLMEditor)
+
+    generation_opts =
+      Keyword.take(opts, [
+        :selector,
+        :cover_search,
+        :renderer,
+        :renderer_options,
+        :max_concurrency
+      ])
+
+    with {:ok, generation} <- generate_batch_assets(batch_id, generation_opts),
+         {:ok, review} <- review_batch(batch_id, editor: editor, force: false),
+         {:ok, refinements} <-
+           refine_low_scoring_plans(batch_id, review, selector, threshold, max_revisions),
+         {:ok, final_generation, final_review} <-
+           regenerate_refined_batch(
+             batch_id,
+             generation,
+             review,
+             refinements,
+             generation_opts,
+             editor
+           ) do
+      {:ok,
+       %{
+         batch_id: batch_id,
+         generation: final_generation,
+         review: final_review,
+         refinements: refinements,
+         quality_threshold: threshold
+       }}
+    end
+  end
+
+  def prepare_quality_batch(_batch_id, _opts), do: {:error, :invalid_options}
 
   def platforms_for_format("story_video"), do: ["tiktok", "instagram", "youtube"]
   def platforms_for_format("portrait"), do: ["x", "linkedin", "facebook"]
@@ -297,6 +390,205 @@ defmodule GridMediaManager.Automation do
     do: ["x", "linkedin", "facebook", "tiktok", "instagram", "youtube"]
 
   def platforms_for_format(_format), do: []
+
+  defp review_plan(%EditorialPlan{} = plan, editor, force?) do
+    with {:ok, assets} <- reusable_plan_assets(plan),
+         %Campaign{} = campaign <- Campaigns.get_campaign(plan.campaign_id),
+         drafts <- Campaigns.list_post_drafts_for_assets(campaign, Enum.map(assets, & &1.id)),
+         {:ok, review} <- assess_or_reuse_review(plan, assets, drafts, campaign, editor, force?) do
+      review =
+        review
+        |> stringify_map_keys()
+        |> Map.put(
+          "reviewed_at",
+          DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+        )
+        |> Map.put("model", LLMSelector.model())
+        |> Map.put("generated_asset_ids", Enum.map(assets, & &1.id))
+
+      details = Map.put(plan.selection_details || %{}, "editor_review", review)
+
+      plan
+      |> EditorialPlan.changeset(%{selection_details: details})
+      |> Repo.update!()
+
+      %{plan_id: plan.id, status: :complete, review: review}
+    else
+      :regenerate -> %{plan_id: plan.id, status: :failed, error: :assets_not_generated}
+      nil -> %{plan_id: plan.id, status: :failed, error: :campaign_not_found}
+      {:error, reason} -> %{plan_id: plan.id, status: :failed, error: reason}
+    end
+  end
+
+  defp assess_or_reuse_review(plan, assets, drafts, campaign, editor, false) do
+    review = get_in(plan.selection_details || %{}, ["editor_review"])
+
+    if is_map(review) and review["generated_asset_ids"] == Enum.map(assets, & &1.id) do
+      {:ok, review}
+    else
+      editor.assess(plan, campaign, assets, drafts)
+    end
+  end
+
+  defp assess_or_reuse_review(plan, assets, drafts, campaign, editor, true),
+    do: editor.assess(plan, campaign, assets, drafts)
+
+  defp validate_editor(editor) when is_atom(editor) do
+    with {:module, ^editor} <- Code.ensure_loaded(editor),
+         true <- function_exported?(editor, :assess, 4) do
+      :ok
+    else
+      _error -> {:error, :invalid_editor}
+    end
+  end
+
+  defp validate_editor(_editor), do: {:error, :invalid_editor}
+
+  defp stringify_map_keys(value) when is_map(value) do
+    Map.new(value, fn {key, item} -> {to_string(key), stringify_map_keys(item)} end)
+  end
+
+  defp stringify_map_keys(value) when is_list(value), do: Enum.map(value, &stringify_map_keys/1)
+  defp stringify_map_keys(value), do: value
+
+  defp refine_low_scoring_plans(batch_id, review_result, selector, threshold, max_revisions) do
+    batch = get_batch(batch_id)
+    reviews = Map.new(review_result.plans, &{&1.plan_id, &1})
+
+    results =
+      Enum.map(batch.plans, fn plan ->
+        result = Map.get(reviews, plan.id)
+        revision_count = Map.get(plan.selection_details || %{}, "quality_revision_count", 0)
+
+        cond do
+          is_nil(result) or result.status != :complete ->
+            %{plan_id: plan.id, status: :skipped, reason: :review_unavailable}
+
+          quality_pass?(result.review, threshold) ->
+            %{plan_id: plan.id, status: :passed, score: result.review["overall_score"]}
+
+          revision_count >= max_revisions ->
+            %{plan_id: plan.id, status: :limit_reached, score: result.review["overall_score"]}
+
+          publishing_locked?(plan) ->
+            %{plan_id: plan.id, status: :publishing_locked, score: result.review["overall_score"]}
+
+          true ->
+            refine_plan(plan, selector, result.review)
+        end
+      end)
+
+    failures = Enum.filter(results, &(&1.status == :failed))
+    if failures == [], do: {:ok, results}, else: {:error, {:quality_refinement_failed, failures}}
+  end
+
+  defp refine_plan(%EditorialPlan{} = plan, selector, review) do
+    campaign = Campaigns.get_campaign!(plan.campaign_id)
+    candidates = shortlist_candidates(plan.topic, Workflow.candidates(campaign))
+
+    with true <-
+           function_exported?(selector, :revise_story, 5) || {:error, :revision_not_supported},
+         {:ok, choice} <- selector.revise_story(plan.topic, campaign, candidates, plan, review),
+         {:ok, story} <- validate_story_choice(choice, candidates) do
+      old_details = plan.selection_details || %{}
+      history = Map.get(old_details, "quality_history", [])
+
+      details =
+        old_details
+        |> Map.drop([
+          "generated_asset_ids",
+          "package_generation_version",
+          "renderer_version",
+          "campaign_visual_fingerprint",
+          "editor_review"
+        ])
+        |> Map.merge(%{
+          "text_visual_key" => story.text_visual_key,
+          "text_visual_role" => story.text_visual_role,
+          "format_rationale" => story.format_rationale,
+          "visual_style" => story.visual_style,
+          "visual_rationale" => story.visual_rationale,
+          "cover_search_query" => story.cover_search_query,
+          "cover_brief" => story.cover_brief,
+          "cover" => revised_cover(selector, plan.topic, story, old_details),
+          "moments" => preview_moments(story.selected_keys, candidates),
+          "quality_revision_count" => Map.get(old_details, "quality_revision_count", 0) + 1,
+          "quality_history" =>
+            history ++
+              [
+                %{
+                  "hook" => plan.hook,
+                  "selected_keys" => plan.selected_keys,
+                  "review" => review
+                }
+              ]
+        })
+
+      {:ok, updated} =
+        plan
+        |> EditorialPlan.changeset(%{
+          selected_keys: story.selected_keys,
+          hook: story.hook,
+          rationale: story.rationale,
+          recommended_format: story.recommended_format,
+          recommended_platforms: platforms_for_format(story.recommended_format),
+          confidence: story.confidence,
+          selection_details: details
+        })
+        |> Repo.update()
+
+      %{plan_id: updated.id, status: :revised, previous_score: review["overall_score"]}
+    else
+      {:error, reason} -> %{plan_id: plan.id, status: :failed, reason: reason}
+      false -> %{plan_id: plan.id, status: :failed, reason: :revision_not_supported}
+    end
+  end
+
+  defp revised_cover(LLMSelector, topic, story, _details),
+    do: VisualDirection.resolve_cover(LLMSelector, topic, story, true)
+
+  defp revised_cover(_selector, _topic, _story, details),
+    do: Map.get(details, "cover", %{"mode" => "text"})
+
+  defp publishing_locked?(plan) do
+    with {:ok, assets} <- reusable_plan_assets(plan),
+         %Campaign{} = campaign <- Campaigns.get_campaign(plan.campaign_id) do
+      campaign
+      |> Campaigns.list_post_drafts_for_assets(Enum.map(assets, & &1.id))
+      |> Enum.any?(&(&1.status in ["scheduled", "published"]))
+    else
+      _missing -> false
+    end
+  end
+
+  defp regenerate_refined_batch(
+         batch_id,
+         generation,
+         review,
+         refinements,
+         generation_opts,
+         editor
+       ) do
+    if Enum.any?(refinements, &(&1.status == :revised)) do
+      with {:ok, generation} <- generate_batch_assets(batch_id, generation_opts),
+           {:ok, review} <- review_batch(batch_id, editor: editor, force: false) do
+        {:ok, generation, review}
+      end
+    else
+      {:ok, generation, review}
+    end
+  end
+
+  defp quality_pass?(review, threshold) do
+    review["verdict"] == "approve" and review["overall_score"] >= threshold and
+      review["thematic_consistency_score"] >= threshold and
+      review["interest_score"] >= threshold and review["shareability_score"] >= threshold
+  end
+
+  defp normalize_quality_threshold(value) when is_integer(value), do: min(max(value, 0), 100)
+  defp normalize_quality_threshold(_value), do: 75
+  defp normalize_revision_limit(value) when is_integer(value), do: min(max(value, 0), 2)
+  defp normalize_revision_limit(_value), do: 1
 
   defp publishing_jobs(%EditorialBatch{} = batch, start_date, opts) do
     times = Map.merge(@publishing_times, Keyword.get(opts, :times, %{}))
@@ -317,12 +609,11 @@ defmodule GridMediaManager.Automation do
     with {:ok, assets} <- reusable_plan_assets(plan),
          {:ok, destinations} <- canonical_destinations(assets),
          %Campaign{} = campaign <- Campaigns.get_campaign(plan.campaign_id) do
+      drafts = Campaigns.list_post_drafts_for_assets(campaign, Enum.map(assets, & &1.id))
+
       jobs =
         Enum.map(destinations, fn {platform, asset} ->
-          draft =
-            campaign
-            |> Campaigns.list_post_drafts(platform: platform, media_asset_id: asset.id)
-            |> Enum.find(&(&1.platform == platform))
+          draft = Enum.find(drafts, &(&1.platform == platform and &1.media_asset_id == asset.id))
 
           %{
             plan_id: plan.id,
@@ -396,30 +687,36 @@ defmodule GridMediaManager.Automation do
     end
   end
 
-  defp schedule_publishing_jobs(jobs) do
-    Enum.reduce_while(jobs, {:ok, []}, fn job, {:ok, completed} ->
-      cond do
-        job.draft.status == "scheduled" and is_binary(job.draft.external_post_id) ->
-          {:cont, {:ok, [publishing_result(job, job.draft, :already_scheduled) | completed]}}
+  defp schedule_publishing_jobs(jobs, max_concurrency) do
+    results =
+      Task.async_stream(jobs, &schedule_publishing_job/1,
+        ordered: true,
+        max_concurrency: normalize_concurrency(max_concurrency),
+        timeout: :infinity
+      )
+      |> Enum.map(fn
+        {:ok, result} -> result
+        {:exit, reason} -> {:error, %{reason: {:task_exit, reason}}}
+      end)
 
-        true ->
-          case Campaigns.schedule_post_draft(job.draft.id, job.scheduled_for) do
-            {:ok, draft} ->
-              {:cont, {:ok, [publishing_result(job, draft, :scheduled) | completed]}}
+    failures = for {:error, failure} <- results, do: failure
+    completed = for {:ok, post} <- results, do: post
 
-            {:error, reason} ->
-              {:halt,
-               {:error,
-                %{
-                  failed: publishing_error(job, reason),
-                  completed: Enum.reverse(completed)
-                }}}
-          end
+    if failures == [] do
+      {:ok, %{status: :complete, posts: completed}}
+    else
+      {:error, %{failed: failures, completed: completed}}
+    end
+  end
+
+  defp schedule_publishing_job(job) do
+    if job.draft.status == "scheduled" and is_binary(job.draft.external_post_id) do
+      {:ok, publishing_result(job, job.draft, :already_scheduled)}
+    else
+      case Campaigns.schedule_post_draft(job.draft.id, job.scheduled_for) do
+        {:ok, draft} -> {:ok, publishing_result(job, draft, :scheduled)}
+        {:error, reason} -> {:error, publishing_error(job, reason)}
       end
-    end)
-    |> case do
-      {:ok, completed} -> {:ok, %{status: :complete, posts: Enum.reverse(completed)}}
-      error -> error
     end
   end
 

@@ -133,6 +133,31 @@ defmodule GridMediaManager.Automation.LLMSelector do
   @impl true
   def select_story(topic, %Campaign{} = campaign, candidates)
       when is_binary(topic) and is_list(candidates) and candidates != [] do
+    select_story_with_feedback(topic, campaign, candidates, nil)
+  end
+
+  def select_story(_topic, %Campaign{}, []), do: {:error, :no_story_candidates}
+
+  def revise_story(topic, %Campaign{} = campaign, candidates, current_plan, review)
+      when is_binary(topic) and is_list(candidates) and candidates != [] and is_map(review) do
+    feedback = %{
+      current_hook: current_plan.hook,
+      current_selected_keys: current_plan.selected_keys,
+      verdict: review["verdict"],
+      scores: %{
+        overall: review["overall_score"],
+        thematic_consistency: review["thematic_consistency_score"],
+        interest: review["interest_score"],
+        shareability: review["shareability_score"]
+      },
+      concerns: review["concerns"],
+      recommendations: review["recommendations"]
+    }
+
+    select_story_with_feedback(topic, campaign, candidates, feedback)
+  end
+
+  defp select_story_with_feedback(topic, campaign, candidates, feedback) do
     keys = Enum.map(candidates, & &1.key)
     minimum_items = min(2, length(keys))
     maximum_items = min(6, length(keys))
@@ -202,11 +227,28 @@ defmodule GridMediaManager.Automation.LLMSelector do
         }
       end)
 
+    revision_instruction =
+      if feedback do
+        """
+        This is a revision pass. Correct the weaknesses identified by the senior Editor rather than
+        merely paraphrasing the current package. You may change the selected keys, narrative order,
+        hook, text visual, format, visual style, and cover direction, but must remain grounded in the
+        supplied moments.
+
+        Editor feedback and current selection:
+        #{Jason.encode!(feedback)}
+        """
+      else
+        ""
+      end
+
     prompt = """
     Requested topic: #{topic}
     Source grid: #{campaign.title}
 
     Return selected keys in narrative order. Do not add facts or select keys that are not supplied.
+
+    #{revision_instruction}
 
     #{EditorialGuidance.story_selection()}
 
@@ -220,8 +262,6 @@ defmodule GridMediaManager.Automation.LLMSelector do
 
     generate(prompt, schema, "editorial_story_selection")
   end
-
-  def select_story(_topic, %Campaign{}, []), do: {:error, :no_story_candidates}
 
   @impl true
   def select_cover(topic, hook, cover_brief, photos) when is_list(photos) and photos != [] do
