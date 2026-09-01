@@ -85,7 +85,7 @@ defmodule GridMediaManager.Automation.EditorialGuidance do
     destination contract regardless of that recommendation:
     - TikTok, Instagram, and YouTube receive a paced short-form vertical story video.
     - LinkedIn and Facebook receive substantive long-form copy with a cover image and fixed CTA image.
-    - X receives one strongest standalone quotation or short section followed by the fixed CTA image.
+    - X receives a cover image, one strongest standalone quotation or short section, and the fixed CTA image.
 
     Choose the recommended emphasis for audience impact and comprehension, not maximum channel coverage. Dense arguments
     need more reading space; a sharp question and a few visual beats suit short video. Prefer

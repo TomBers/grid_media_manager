@@ -528,6 +528,32 @@ defmodule GridMediaManager.Social.BufferTest do
              {:error, "The selected channel queue is full"}
   end
 
+  test "deletes a Buffer post by id" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(raw_body)
+
+      assert request["query"] =~ "mutation DeletePost"
+      assert request["variables"]["input"] == %{"id" => "post-123"}
+
+      Req.Test.json(conn, %{
+        "data" => %{"deletePost" => %{"id" => "post-123"}}
+      })
+    end)
+
+    assert Buffer.delete_post("post-123") == {:ok, %{id: "post-123"}}
+  end
+
+  test "returns deletePost errors" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      Req.Test.json(conn, %{
+        "data" => %{"deletePost" => %{"message" => "Post cannot be deleted"}}
+      })
+    end)
+
+    assert Buffer.delete_post("post-123") == {:error, "Post cannot be deleted"}
+  end
+
   test "returns top-level GraphQL errors" do
     Req.Test.expect(__MODULE__, fn conn ->
       Req.Test.json(conn, %{

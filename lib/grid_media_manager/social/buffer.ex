@@ -109,6 +109,19 @@ defmodule GridMediaManager.Social.Buffer do
   }
   """
 
+  @delete_post_mutation """
+  mutation DeletePost($input: DeletePostInput!) {
+    deletePost(input: $input) {
+      ... on DeletePostSuccess {
+        id
+      }
+      ... on VoidMutationError {
+        message
+      }
+    }
+  }
+  """
+
   @doc "Returns whether a non-blank Buffer API key is configured."
   def configured? do
     not is_nil(api_key()) or not is_nil(api_key("text"))
@@ -224,6 +237,33 @@ defmodule GridMediaManager.Social.Buffer do
 
   def schedule(%PostDraft{}, _opts), do: {:error, "options must be a keyword list or map"}
   def schedule(_draft, _opts), do: {:error, "post draft must be a PostDraft"}
+
+  @doc "Deletes a Buffer post by its external post ID."
+  def delete_post(post_id, opts \\ [])
+
+  def delete_post(post_id, opts) when is_list(opts) or is_map(opts) do
+    with {:ok, key} <- configured_api_key(option(opts, :api_key)),
+         {:ok, post_id} <- required_string(post_id, "post_id is required") do
+      request_options =
+        [
+          url: endpoint(),
+          headers: [{"authorization", "Bearer #{key}"}],
+          json: %{
+            "query" => @delete_post_mutation,
+            "variables" => %{"input" => %{"id" => post_id}}
+          },
+          receive_timeout: receive_timeout(),
+          retry: false
+        ]
+        |> maybe_put(:plug, config_value(:plug))
+
+      request_options
+      |> Req.post()
+      |> handle_delete_response()
+    end
+  end
+
+  def delete_post(_post_id, _opts), do: {:error, "options must be a keyword list or map"}
 
   defp create_post(key, input) do
     request_options =
@@ -525,6 +565,33 @@ defmodule GridMediaManager.Social.Buffer do
   end
 
   defp handle_response({:error, reason}) do
+    {:error, "Buffer API request failed: #{request_error_message(reason)}"}
+  end
+
+  defp handle_delete_response({:ok, %{status: status, body: body}}) when status in 200..299 do
+    case decode_body(body) do
+      %{"errors" => errors} when is_list(errors) and errors != [] ->
+        {:error, "Buffer GraphQL error: #{join_error_messages(errors)}"}
+
+      %{"data" => %{"deletePost" => %{"id" => id}}} when is_binary(id) ->
+        {:ok, %{id: id}}
+
+      %{"data" => %{"deletePost" => %{"message" => message}}} when is_binary(message) ->
+        {:error, message}
+
+      _unexpected ->
+        {:error, "Buffer API returned an unexpected response"}
+    end
+  end
+
+  defp handle_delete_response({:ok, %{status: status, body: body}}) do
+    case response_error_message(decode_body(body)) do
+      nil -> {:error, "Buffer API request failed with HTTP status #{status}"}
+      message -> {:error, "Buffer API request failed (HTTP #{status}): #{message}"}
+    end
+  end
+
+  defp handle_delete_response({:error, reason}) do
     {:error, "Buffer API request failed: #{request_error_message(reason)}"}
   end
 

@@ -189,7 +189,7 @@ The orchestrator accepts a module implementing `GridMediaManager.Automation.Rend
 | Format | Canonical generator |
 | --- | --- |
 | `long_form` | `Campaigns.generate_long_form_post/3`; LinkedIn and Facebook only; long copy with cover image and fixed CTA image |
-| `x_post` | `Campaigns.generate_x_post/3`; X only; one selected quote or short section followed by the fixed CTA image |
+| `x_post` | `Campaigns.generate_x_post/3`; X only; cover image, one selected quote or short section, and the fixed CTA image |
 | `story_video` | `Campaigns.generate_story_video/3`; TikTok, Instagram, and YouTube only; short-form vertical video |
 | `portrait` | `Campaigns.generate_curated_carousel/3`; guided/manual flows only |
 | `combined_carousel` | `Campaigns.generate_curated_carousel_bundle/3`, then `Campaigns.generate_curated_carousel_video/2`; guided/manual flows only |
@@ -204,7 +204,7 @@ Each destination has an explicit shape:
 LinkedIn / Facebook: thumbnail-ready cover → fixed CTA image
                          + long-form platform copy
 
-X: selected quote or short section → fixed CTA image
+X: thumbnail-ready cover → selected quote or short section → fixed CTA image
 
 TikTok / Instagram / YouTube: thumbnail-ready cover
                                → one or more concise editorial cards
@@ -212,7 +212,7 @@ TikTok / Instagram / YouTube: thumbnail-ready cover
                                → short-form vertical video
 ```
 
-`SlideSequence.build/3` owns content selection and normalisation. `StoryPackage.build/3` owns cover/content/CTA assembly and may omit the cover only for the explicit `x_post` contract. Formats must consume this sequence rather than independently creating covers, text cards, or closing frames.
+`SlideSequence.build/3` owns content selection and normalisation. `StoryPackage.build/3` owns cover/content/CTA assembly. Formats must consume this sequence rather than independently creating covers, text cards, or closing frames.
 
 The CTA slide metadata identifies and orders the frame. Its visual source of truth is always:
 
@@ -268,7 +268,7 @@ For each planned topic, verify:
 - `Automation.generate_batch_assets/2` returns a uniform status for the batch, every plan, and every asset.
 - A complete package contains exactly the three destination contracts: `long_form`, `x_post`, and `story_video`.
 - LinkedIn/Facebook long-form media is `cover → CTA`, with the substantive argument in platform copy.
-- X media is `selected quote or short section → CTA`, with no redundant generic cover.
+- X media is `cover → selected quote or short section → CTA`.
 - TikTok/Instagram/YouTube media is `cover → concise editorial frames → CTA` and is assembled as a short-form vertical video.
 - Every required artifact index is current and present.
 - Every portrait CTA uses `rationalgrid-follow-up.png` exactly.

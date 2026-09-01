@@ -108,6 +108,35 @@ defmodule GridMediaManager.Campaigns.BufferSchedulingTest do
     assert scheduled.error_message == nil
   end
 
+  test "cancels a scheduled Buffer post and makes its draft editable" do
+    assert {:ok, campaign} = Campaigns.import_payload(payload(), "buffer-cancellation")
+    draft = insert_text_draft(campaign)
+
+    assert {:ok, draft} =
+             Campaigns.update_post_draft(draft, %{
+               status: "scheduled",
+               scheduled_for: ~U[2026-09-02 19:05:00Z],
+               external_post_id: "buffer-post-to-delete"
+             })
+
+    Req.Test.expect(__MODULE__, fn conn ->
+      {:ok, raw_body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(raw_body)
+
+      assert request["query"] =~ "mutation DeletePost"
+      assert request["variables"]["input"] == %{"id" => "buffer-post-to-delete"}
+
+      Req.Test.json(conn, %{
+        "data" => %{"deletePost" => %{"id" => "buffer-post-to-delete"}}
+      })
+    end)
+
+    assert {:ok, cancelled} = Campaigns.cancel_scheduled_post_draft(draft.id)
+    assert cancelled.status == "draft"
+    assert cancelled.scheduled_for == nil
+    assert cancelled.external_post_id == nil
+  end
+
   test "does not expose authenticated browser artifacts through PUBLIC_BASE_URL" do
     assert {:ok, campaign} = Campaigns.import_payload(payload(), "buffer-public-media")
     assert {:ok, asset} = Campaigns.generate_grid_asset(campaign)

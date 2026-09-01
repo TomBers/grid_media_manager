@@ -3,10 +3,9 @@ defmodule GridMediaManager.Promotion.StoryPackage do
   Defines the single canonical frame sequence for visual stories.
 
   Stories normally start with a thumbnail-ready cover, contain one or more
-  editorial cards, and end with the same conversion-focused CTA. The explicit
-  X destination contract omits the redundant cover and uses one content card
-  followed by the CTA. Image carousels and videos render these sequences at
-  their target dimensions.
+  editorial cards, and end with the same conversion-focused CTA. The X
+  destination contract uses a cover, one content card, and the CTA. Image
+  carousels and videos render these sequences at their target dimensions.
   """
 
   @cta_title "Where do you stand?"

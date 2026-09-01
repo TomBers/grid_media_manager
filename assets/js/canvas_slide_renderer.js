@@ -643,8 +643,6 @@ export const CanvasSlideRenderer = {
         "data-cover-image-url",
         "data-cta-image-src",
       ],
-      childList: true,
-      subtree: true,
     })
     this.renderAll()
   },

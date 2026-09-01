@@ -412,6 +412,25 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
+  def cancel_scheduled_post_draft(id) do
+    draft = get_post_draft!(id)
+
+    with true <-
+           (draft.status == "scheduled" and is_binary(draft.external_post_id)) ||
+             {:error, "Only a scheduled Buffer post can be cancelled."},
+         %{api_key: api_key} <-
+           Buffer.account_for(draft.platform) ||
+             {:error, "Buffer account is not configured for this channel."},
+         {:ok, _deleted} <- Buffer.delete_post(draft.external_post_id, api_key: api_key) do
+      update_post_draft(draft, %{
+        status: "draft",
+        scheduled_for: nil,
+        external_post_id: nil,
+        error_message: nil
+      })
+    end
+  end
+
   def generate_grid_asset(%Campaign{} = campaign, style \\ ShareCard.default_style()) do
     campaign = get_campaign!(campaign.id)
 
@@ -451,7 +470,7 @@ defmodule GridMediaManager.Campaigns do
 
     generate_curated_carousel(campaign, candidates, style,
       reading_mode: :x_post,
-      include_cover: false,
+      include_cover: true,
       recommended_platforms: ["x"],
       title: "#{campaign.title} · X post",
       text: text

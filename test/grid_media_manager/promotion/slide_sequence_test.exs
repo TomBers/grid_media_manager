@@ -39,7 +39,7 @@ defmodule GridMediaManager.Promotion.SlideSequenceTest do
            }
   end
 
-  test "X posts contain one selected content card followed by the CTA without a cover" do
+  test "X posts contain a cover, one selected content card, and the CTA" do
     campaign = %Campaign{title: "A story"}
 
     candidate = %{
@@ -50,12 +50,13 @@ defmodule GridMediaManager.Promotion.SlideSequenceTest do
       label: "Answer"
     }
 
-    assert [content, cta] =
+    assert [cover, content, cta] =
              SlideSequence.build(campaign, [candidate],
                reading_mode: :x_post,
-               include_cover: false
+               include_cover: true
              )
 
+    assert cover["kind"] == "cover"
     assert content["kind"] == "node_text"
     assert content["title"] == "A concise section"
     assert cta["kind"] == "cta"

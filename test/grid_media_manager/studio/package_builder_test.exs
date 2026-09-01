@@ -84,8 +84,8 @@ defmodule GridMediaManager.Studio.PackageBuilderTest do
 
     x_post = Enum.find(complete_assets, &(&1.kind == "curated_carousel"))
     assert x_post.recommended_platforms == ["x"]
-    assert Enum.map(x_post.metadata["slides"], & &1["kind"]) == ["node_text", "cta"]
-    assert List.first(x_post.metadata["slides"])["title"] == standalone_candidate.title
+    assert Enum.map(x_post.metadata["slides"], & &1["kind"]) == ["cover", "node_text", "cta"]
+    assert Enum.at(x_post.metadata["slides"], 1)["title"] == standalone_candidate.title
 
     video = Enum.find(complete_assets, &(&1.kind == "curated_carousel_video"))
     assert video.recommended_platforms == Platforms.video_ids()
