@@ -587,10 +587,19 @@ defmodule GridMediaManager.RationalGrid.MediaPayload do
     if String.length(text) <= max do
       text
     else
-      text
-      |> String.slice(0, max - 1)
-      |> String.trim()
-      |> Kernel.<>("…")
+      sentences = Regex.scan(~r/.*?(?:[.!?](?:\s|$)|$)/u, text) |> List.flatten()
+
+      Enum.reduce_while(sentences, "", fn sentence, excerpt ->
+        candidate = String.trim(Enum.join([excerpt, sentence], " "))
+
+        if candidate != "" and String.length(candidate) <= max,
+          do: {:cont, candidate},
+          else: {:halt, excerpt}
+      end)
+      |> case do
+        "" -> sentences |> List.first() |> to_string() |> String.trim()
+        excerpt -> excerpt
+      end
     end
   end
 

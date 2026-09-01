@@ -27,7 +27,7 @@ defmodule GridMediaManager.Automation do
   @discovery_source_size 120
   @candidate_shortlist_size 32
   @formats ~w(story_video portrait long_form combined_carousel)
-  @package_generation_version 5
+  @package_generation_version 6
   @publishing_times %{
     "linkedin" => ~T[16:30:00],
     "facebook" => ~T[17:30:00],

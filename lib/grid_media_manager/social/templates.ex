@@ -448,7 +448,7 @@ defmodule GridMediaManager.Social.Templates do
         |> complete_sections_within(available)
         |> fallback(logical_blocks_within(copy, available))
 
-      shortened_copy = shortened <> "\n\n…\n\n" <> cta
+      shortened_copy = shortened <> "\n\n" <> cta
 
       if Platforms.within_limit?(shortened_copy, platform), do: shortened_copy, else: cta
     end
