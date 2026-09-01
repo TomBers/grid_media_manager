@@ -171,8 +171,32 @@ defmodule GridMediaManager.AutomationTest do
     assert Enum.all?(assets, &(&1.status == :complete))
 
     completed = Automation.get_batch(batch.id)
-    campaign = List.first(completed.plans).campaign
+    completed_plan = List.first(completed.plans)
+    campaign = completed_plan.campaign
     assert Campaigns.list_post_drafts(campaign) != []
+
+    assert completed_plan.selection_details["generated_asset_ids"] ==
+             Enum.map(assets, & &1.asset_id)
+
+    assert completed_plan.selection_details["package_generation_version"] == 1
+    assert is_binary(completed_plan.selection_details["campaign_visual_fingerprint"])
+
+    assert {:ok, resumed} =
+             Automation.generate_batch_assets(batch.id,
+               renderer: AutomationRendererStub,
+               renderer_options: [status: :complete]
+             )
+
+    assert Enum.map(List.first(resumed.plans).assets, & &1.asset_id) ==
+             completed_plan.selection_details["generated_asset_ids"]
+  end
+
+  test "bulk scheduling rejects an invalid start date before contacting Buffer" do
+    topic = "Invalid publishing date"
+    prepare_source(topic)
+
+    assert {:ok, batch} = Automation.create_batch([topic])
+    assert Automation.schedule_batch(batch.id, "not-a-date") == {:error, :invalid_start_date}
   end
 
   test "reports browser artifacts as resumable work" do

@@ -296,6 +296,19 @@ defmodule GridMediaManagerWeb.AutonomousPlannerLive do
                 <.icon name="hero-arrow-path" class="mr-2 size-4" /> Retry
               </button>
             </div>
+
+            <div
+              :if={!@planning? && Enum.any?(@batch.plans, &(&1.status == "planned"))}
+              class="flex justify-end border-t border-base-content/10 p-6 sm:px-8"
+            >
+              <.link
+                id="render-editorial-batch"
+                navigate={~p"/automation/#{@batch.id}/render"}
+                class="inline-flex items-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-950/20 transition hover:-translate-y-0.5 hover:bg-indigo-500"
+              >
+                Render all packages <.icon name="hero-arrow-right" class="ml-2 size-4" />
+              </.link>
+            </div>
           </section>
         </div>
       </main>

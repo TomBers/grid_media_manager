@@ -11,9 +11,13 @@ defmodule GridMediaManager.Automation do
   alias GridMediaManager.Automation.LLMSelector
   alias GridMediaManager.Campaigns
   alias GridMediaManager.Campaigns.Campaign
+  alias GridMediaManager.Campaigns.MediaAsset
+  alias GridMediaManager.Promotion.ArtifactStore
   alias GridMediaManager.Promotion.ShareCard
   alias GridMediaManager.RationalGrid.GridIndex
   alias GridMediaManager.Repo
+  alias GridMediaManager.Social.Buffer
+  alias GridMediaManager.Social.Platforms
   alias GridMediaManager.Studio.Workflow
   alias GridMediaManager.Studio.PackageBuilder
   alias GridMediaManager.Studio.VisualDirection
@@ -22,6 +26,15 @@ defmodule GridMediaManager.Automation do
   @discovery_source_size 120
   @candidate_shortlist_size 32
   @formats ~w(story_video portrait long_form combined_carousel)
+  @package_generation_version 1
+  @publishing_times %{
+    "linkedin" => ~T[16:30:00],
+    "facebook" => ~T[17:30:00],
+    "instagram" => ~T[15:22:00],
+    "tiktok" => ~T[19:13:00],
+    "youtube" => ~T[19:05:00],
+    "x" => ~T[19:05:00]
+  }
 
   def create_batch(topics) when is_binary(topics) do
     topics
@@ -248,6 +261,34 @@ defmodule GridMediaManager.Automation do
     end
   end
 
+  @doc """
+  Schedules the canonical six destination drafts for every generated plan in a batch.
+
+  The operation preflights artifacts, copy limits, future dates, and live Buffer
+  vacancies before submitting anything. Drafts that already have a Buffer post ID
+  are returned unchanged, making an interrupted run safe to resume.
+  """
+  def schedule_batch(batch_or_id, start_date, opts \\ [])
+
+  def schedule_batch(%EditorialBatch{id: id}, start_date, opts),
+    do: schedule_batch(id, start_date, opts)
+
+  def schedule_batch(batch_id, start_date, opts) when is_list(opts) do
+    with %EditorialBatch{} = batch <- get_batch(batch_id),
+         {:ok, start_date} <- parse_start_date(start_date),
+         {:ok, jobs} <- publishing_jobs(batch, start_date, opts),
+         :ok <- preflight_publishing_jobs(jobs),
+         {:ok, queue} <- Buffer.queue_snapshot(Platforms.ids()),
+         :ok <- ensure_queue_capacity(queue, jobs) do
+      schedule_publishing_jobs(jobs)
+    else
+      nil -> {:error, :editorial_batch_not_found}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  def schedule_batch(_batch_id, _start_date, _opts), do: {:error, :invalid_options}
+
   def platforms_for_format("story_video"), do: ["tiktok", "instagram", "youtube"]
   def platforms_for_format("portrait"), do: ["x", "linkedin", "facebook"]
   def platforms_for_format("long_form"), do: ["linkedin", "facebook"]
@@ -256,6 +297,167 @@ defmodule GridMediaManager.Automation do
     do: ["x", "linkedin", "facebook", "tiktok", "instagram", "youtube"]
 
   def platforms_for_format(_format), do: []
+
+  defp publishing_jobs(%EditorialBatch{} = batch, start_date, opts) do
+    times = Map.merge(@publishing_times, Keyword.get(opts, :times, %{}))
+
+    batch.plans
+    |> Enum.filter(&(&1.status == "planned"))
+    |> Enum.sort_by(& &1.position)
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {plan, offset}, {:ok, jobs} ->
+      case plan_publishing_jobs(plan, Date.add(start_date, offset), times) do
+        {:ok, plan_jobs} -> {:cont, {:ok, jobs ++ plan_jobs}}
+        {:error, reason} -> {:halt, {:error, %{plan_id: plan.id, reason: reason}}}
+      end
+    end)
+  end
+
+  defp plan_publishing_jobs(%EditorialPlan{} = plan, date, times) do
+    with {:ok, assets} <- reusable_plan_assets(plan),
+         {:ok, destinations} <- canonical_destinations(assets),
+         %Campaign{} = campaign <- Campaigns.get_campaign(plan.campaign_id) do
+      jobs =
+        Enum.map(destinations, fn {platform, asset} ->
+          draft =
+            campaign
+            |> Campaigns.list_post_drafts(platform: platform, media_asset_id: asset.id)
+            |> Enum.find(&(&1.platform == platform))
+
+          %{
+            plan_id: plan.id,
+            campaign_id: campaign.id,
+            platform: platform,
+            asset: asset,
+            draft: draft,
+            scheduled_for: scheduled_datetime(date, Map.fetch!(times, platform))
+          }
+        end)
+
+      {:ok, jobs}
+    else
+      :regenerate -> {:error, :assets_not_generated}
+      nil -> {:error, :campaign_not_found}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp canonical_destinations(assets) do
+    long_form = Enum.find(assets, &(&1.kind == "long_form_post"))
+    x_post = Enum.find(assets, &(&1.kind == "curated_carousel"))
+    video = Enum.find(assets, &(&1.kind == "curated_carousel_video"))
+
+    if long_form && x_post && video do
+      {:ok,
+       [
+         {"linkedin", long_form},
+         {"facebook", long_form},
+         {"x", x_post},
+         {"instagram", video},
+         {"tiktok", video},
+         {"youtube", video}
+       ]}
+    else
+      {:error, :canonical_package_incomplete}
+    end
+  end
+
+  defp preflight_publishing_jobs(jobs) do
+    now = DateTime.utc_now()
+
+    Enum.reduce_while(jobs, :ok, fn job, :ok ->
+      indexes = Campaigns.media_asset_slide_indexes(job.asset)
+
+      reason =
+        cond do
+          is_nil(job.draft) -> :canonical_draft_missing
+          job.draft.status == "scheduled" and is_binary(job.draft.external_post_id) -> nil
+          not Platforms.within_limit?(job.draft.body, job.platform) -> :copy_limit_exceeded
+          not ArtifactStore.ready?(job.asset, indexes) -> :artifacts_not_ready
+          DateTime.compare(job.scheduled_for, now) != :gt -> :schedule_not_in_future
+          true -> nil
+        end
+
+      if reason, do: {:halt, {:error, publishing_error(job, reason)}}, else: {:cont, :ok}
+    end)
+  end
+
+  defp ensure_queue_capacity(%{platforms: platforms}, jobs) do
+    required =
+      jobs
+      |> Enum.reject(&(&1.draft.status == "scheduled" and is_binary(&1.draft.external_post_id)))
+      |> Enum.frequencies_by(& &1.platform)
+
+    case Enum.find(required, fn {platform, count} ->
+           get_in(platforms, [platform, :vacancies]) < count
+         end) do
+      nil -> :ok
+      {platform, count} -> {:error, {:insufficient_queue_capacity, platform, count}}
+    end
+  end
+
+  defp schedule_publishing_jobs(jobs) do
+    Enum.reduce_while(jobs, {:ok, []}, fn job, {:ok, completed} ->
+      cond do
+        job.draft.status == "scheduled" and is_binary(job.draft.external_post_id) ->
+          {:cont, {:ok, [publishing_result(job, job.draft, :already_scheduled) | completed]}}
+
+        true ->
+          case Campaigns.schedule_post_draft(job.draft.id, job.scheduled_for) do
+            {:ok, draft} ->
+              {:cont, {:ok, [publishing_result(job, draft, :scheduled) | completed]}}
+
+            {:error, reason} ->
+              {:halt,
+               {:error,
+                %{
+                  failed: publishing_error(job, reason),
+                  completed: Enum.reverse(completed)
+                }}}
+          end
+      end
+    end)
+    |> case do
+      {:ok, completed} -> {:ok, %{status: :complete, posts: Enum.reverse(completed)}}
+      error -> error
+    end
+  end
+
+  defp publishing_result(job, draft, status) do
+    %{
+      plan_id: job.plan_id,
+      platform: job.platform,
+      draft_id: draft.id,
+      external_post_id: draft.external_post_id,
+      scheduled_for: draft.scheduled_for,
+      status: status
+    }
+  end
+
+  defp publishing_error(job, reason) do
+    %{
+      plan_id: job.plan_id,
+      platform: job.platform,
+      draft_id: job.draft && job.draft.id,
+      reason: reason
+    }
+  end
+
+  defp scheduled_datetime(date, %Time{} = time) do
+    {:ok, naive} = NaiveDateTime.new(date, time)
+    DateTime.from_naive!(naive, "Etc/UTC")
+  end
+
+  defp parse_start_date(%Date{} = date), do: {:ok, date}
+
+  defp parse_start_date(value) when is_binary(value) do
+    case Date.from_iso8601(value) do
+      {:ok, date} -> {:ok, date}
+      {:error, _reason} -> {:error, :invalid_start_date}
+    end
+  end
+
+  defp parse_start_date(_value), do: {:error, :invalid_start_date}
 
   def shortlist_grids(topic) when is_binary(topic) do
     topic = normalize_topic(topic)
@@ -328,7 +530,7 @@ defmodule GridMediaManager.Automation do
   end
 
   defp generate_plan_assets(%EditorialPlan{status: "planned"} = plan, renderer, renderer_opts) do
-    case generate_plan_package(plan.id) do
+    case generated_plan_package(plan) do
       %{assets: assets, errors: generation_errors} ->
         asset_results = Enum.map(assets, &render_asset(plan, &1, renderer, renderer_opts))
         render_errors = render_errors(asset_results)
@@ -348,6 +550,79 @@ defmodule GridMediaManager.Automation do
 
   defp generate_plan_assets(%EditorialPlan{} = plan, _renderer, _renderer_opts) do
     failed_plan(plan, plan.error_message || :editorial_plan_not_ready)
+  end
+
+  defp generated_plan_package(%EditorialPlan{} = plan) do
+    case reusable_plan_assets(plan) do
+      {:ok, assets} ->
+        %{assets: assets, errors: []}
+
+      :regenerate ->
+        result = generate_plan_package(plan.id)
+
+        if result.errors == [] and result.assets != [] do
+          persist_generated_assets(plan, result.assets)
+        end
+
+        result
+    end
+  end
+
+  defp reusable_plan_assets(%EditorialPlan{} = plan) do
+    details = plan.selection_details || %{}
+    ids = Map.get(details, "generated_asset_ids", [])
+
+    if Map.get(details, "package_generation_version") == @package_generation_version and
+         Map.get(details, "renderer_version") == ArtifactStore.renderer_version() and
+         Map.get(details, "campaign_visual_fingerprint") ==
+           campaign_visual_fingerprint(plan.campaign_id) and
+         length(ids) == 3 and Enum.all?(ids, &is_integer/1) do
+      assets =
+        MediaAsset
+        |> where([asset], asset.campaign_id == ^plan.campaign_id and asset.id in ^ids)
+        |> Repo.all()
+        |> Map.new(&{&1.id, &1})
+
+      case Enum.map(ids, &Map.get(assets, &1)) do
+        [first, second, third] = ordered
+        when not is_nil(first) and not is_nil(second) and not is_nil(third) ->
+          {:ok, ordered}
+
+        _missing ->
+          :regenerate
+      end
+    else
+      :regenerate
+    end
+  end
+
+  defp persist_generated_assets(%EditorialPlan{} = plan, assets) do
+    details =
+      (plan.selection_details || %{})
+      |> Map.put("generated_asset_ids", Enum.map(assets, & &1.id))
+      |> Map.put("package_generation_version", @package_generation_version)
+      |> Map.put("renderer_version", ArtifactStore.renderer_version())
+      |> Map.put("campaign_visual_fingerprint", campaign_visual_fingerprint(plan.campaign_id))
+
+    plan
+    |> EditorialPlan.changeset(%{selection_details: details})
+    |> Repo.update!()
+  end
+
+  defp campaign_visual_fingerprint(campaign_id) do
+    case Campaigns.get_campaign(campaign_id) do
+      %Campaign{} = campaign ->
+        %{
+          mode: Campaigns.title_card_mode(campaign),
+          background: Campaigns.pexels_background(campaign)
+        }
+        |> :erlang.term_to_binary()
+        |> then(&:crypto.hash(:sha256, &1))
+        |> Base.encode16(case: :lower)
+
+      nil ->
+        nil
+    end
   end
 
   defp render_asset(plan, asset, renderer, renderer_opts) do

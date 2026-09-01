@@ -45,6 +45,7 @@ defmodule GridMediaManagerWeb.AutonomousPlannerLiveTest do
     assert has_element?(view, "#editorial-plans", "AI answer")
     assert has_element?(view, "#editorial-plans", "Deep ocean")
     assert has_element?(view, "#editorial-plans", "A reflective analytical palette")
+    assert has_element?(view, "#render-editorial-batch")
 
     Enum.each(completed.plans, fn plan ->
       assert has_element?(view, "#open-editorial-plan-#{plan.id}")

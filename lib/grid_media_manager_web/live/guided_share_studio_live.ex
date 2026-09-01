@@ -193,6 +193,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:bulk_schedule_form, to_form(%{"scheduled_for" => ""}, as: :bulk_schedule))
       |> assign(:generation_error, nil)
       |> assign(:generation_in_progress?, false)
+      |> assign(:render_return_to, render_return_to(params["return_to"]))
       |> assign(:pexels_configured?, VisualDirection.configured?())
       |> assign(:pexels_search_form, to_form(%{"query" => campaign.title}, as: :pexels))
       |> assign(:pexels_search_error, nil)
@@ -701,7 +702,13 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
   def handle_event("artifacts_saved", %{"asset_id" => asset_id}, socket) do
     with {:ok, _asset} <- review_output_asset(socket, to_string(asset_id)) do
-      {:noreply, refresh_review_drafts(socket)}
+      socket = refresh_review_drafts(socket)
+
+      if render_return_ready?(socket) do
+        {:noreply, push_navigate(socket, to: socket.assigns.render_return_to)}
+      else
+        {:noreply, socket}
+      end
     else
       _error -> {:noreply, socket}
     end
@@ -2796,6 +2803,23 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp client_artifacts_ready?(nil), do: true
+
+  defp render_return_ready?(%{assigns: %{render_return_to: return_to}} = socket)
+       when is_binary(return_to) do
+    socket.assigns.output_asset_ids
+    |> Enum.all?(fn asset_id ->
+      asset = Campaigns.get_media_asset!(asset_id)
+      ArtifactStore.ready?(asset, Campaigns.media_asset_slide_indexes(asset))
+    end)
+  end
+
+  defp render_return_ready?(_socket), do: false
+
+  defp render_return_to(path) when is_binary(path) do
+    if Regex.match?(~r{\A/automation/\d+/render\z}, path), do: path
+  end
+
+  defp render_return_to(_path), do: nil
 
   defp buffer_ready_for_platforms?(platforms) do
     Enum.all?(platforms, &(Buffer.account_for(&1) != nil))

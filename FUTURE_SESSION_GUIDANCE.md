@@ -66,6 +66,8 @@ Official references: [Buffer posts by channel](https://developers.buffer.com/exa
 
 Use `GridMediaManager.Automation` as the public orchestration boundary. Do not reproduce its planning logic in a LiveView, script, Mix task, or alternate media pipeline.
 
+For recurring queue fills, open `/automation/:batch_id/render` after planning. The coordinator persists the three canonical generated asset IDs on each editorial plan, skips packages that are already complete, opens one incomplete Studio package at a time, and returns automatically after its browser artifacts are stored. Once every package is ready, choose the first publishing date and use **Fill Buffer queues**. This calls `Automation.schedule_batch/3`, which preflights all artifacts, copy limits, future dates, and live vacancies before scheduling the canonical six drafts per package. A resumed scheduling run reuses drafts that already have Buffer post IDs instead of duplicating them.
+
 For automatic topic discovery:
 
 ```elixir
