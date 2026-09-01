@@ -352,7 +352,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert asset.text =~ "If a drug like soma existed today"
     assert asset.text =~ "Perfect comfort can become a cage."
     assert asset.text =~ "Long answer"
-    assert Enum.map(asset.metadata["slides"], & &1["kind"]) == ["cover", "cta"]
+    assert Enum.map(asset.metadata["slides"], & &1["kind"]) == ["cover", "node_text", "cta"]
     assert List.last(asset.metadata["slides"])["title"] == "Where do you stand?"
 
     assert Enum.map(asset.metadata["sources"], & &1["type"]) == [

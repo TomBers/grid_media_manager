@@ -365,7 +365,20 @@ defmodule GridMediaManager.Promotion.ShareCard do
         cover_title = long_form_cover_title(campaign, entries)
         text = entries |> Enum.map(& &1.text) |> Enum.join("\n\n")
         source_id = long_form_source_id(entries)
-        slides = StoryPackage.build(cover_title, [], cover_label: "")
+
+        slides =
+          StoryPackage.build(
+            cover_title,
+            [
+              %{
+                "kind" => "node_text",
+                "label" => "The argument in brief",
+                "title" => StoryPackage.compact_cover_title(cover_title),
+                "body" => long_form_preview(text)
+              }
+            ],
+            cover_label: ""
+          )
 
         %{
           title: "#{cover_title} · Long-form post",
@@ -638,6 +651,19 @@ defmodule GridMediaManager.Promotion.ShareCard do
 
   defp long_form_cover_title(campaign, [entry]), do: entry.cover_title |> fallback(campaign.title)
   defp long_form_cover_title(campaign, _entries), do: campaign.title
+
+  defp long_form_preview(text) do
+    text
+    |> Markdown.blocks()
+    |> Markdown.complete_thought_pages(
+      @short_video_max_characters,
+      @short_video_complete_thought_max_characters
+    )
+    |> List.first()
+    |> List.wrap()
+    |> List.flatten()
+    |> Enum.map_join(" ", & &1.text)
+  end
 
   defp related_node_title(_campaign, nil), do: nil
 

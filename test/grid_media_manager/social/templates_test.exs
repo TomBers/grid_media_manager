@@ -296,7 +296,7 @@ defmodule GridMediaManager.Social.TemplatesTest do
     refute linkedin =~ "1. This question"
 
     assert linkedin =~
-             "\n\n…\n\nExplore the evidence and connected questions.\nLearn more at RationalGrid.ai:"
+             "\n\n…\n\nRead the full argument and follow its connected questions.\nLearn more at RationalGrid.ai:"
 
     assert linkedin =~ "https://rationalgrid.ai/g/collective?node=node-1"
 

@@ -27,7 +27,7 @@ defmodule GridMediaManager.Automation do
   @discovery_source_size 120
   @candidate_shortlist_size 32
   @formats ~w(story_video portrait long_form combined_carousel)
-  @package_generation_version 1
+  @package_generation_version 5
   @publishing_times %{
     "linkedin" => ~T[16:30:00],
     "facebook" => ~T[17:30:00],
@@ -308,12 +308,14 @@ defmodule GridMediaManager.Automation do
   def review_batch(batch_id, opts) when is_list(opts) do
     editor = Keyword.get(opts, :editor, LLMEditor)
     force? = Keyword.get(opts, :force, true)
+    requested_plan_ids = Keyword.get(opts, :plan_ids)
 
     with %EditorialBatch{} = batch <- get_batch(batch_id),
          :ok <- validate_editor(editor) do
       results =
         batch.plans
         |> Enum.filter(&(&1.status == "planned"))
+        |> Enum.filter(&(is_nil(requested_plan_ids) or &1.id in requested_plan_ids))
         |> Task.async_stream(&review_plan(&1, editor, force?),
           ordered: true,
           max_concurrency: normalize_concurrency(Keyword.get(opts, :max_concurrency, 3)),
@@ -346,6 +348,7 @@ defmodule GridMediaManager.Automation do
     max_revisions = opts |> Keyword.get(:max_revisions, 1) |> normalize_revision_limit()
     selector = Keyword.get(opts, :selector, LLMSelector)
     editor = Keyword.get(opts, :editor, LLMEditor)
+    plan_ids = Keyword.get(opts, :plan_ids)
 
     generation_opts =
       Keyword.take(opts, [
@@ -357,9 +360,17 @@ defmodule GridMediaManager.Automation do
       ])
 
     with {:ok, generation} <- generate_batch_assets(batch_id, generation_opts),
-         {:ok, review} <- review_batch(batch_id, editor: editor, force: false),
+         {:ok, review} <-
+           review_batch(batch_id, editor: editor, force: false, plan_ids: plan_ids),
          {:ok, refinements} <-
-           refine_low_scoring_plans(batch_id, review, selector, threshold, max_revisions),
+           refine_low_scoring_plans(
+             batch_id,
+             review,
+             selector,
+             threshold,
+             max_revisions,
+             plan_ids
+           ),
          {:ok, final_generation, final_review} <-
            regenerate_refined_batch(
              batch_id,
@@ -367,7 +378,8 @@ defmodule GridMediaManager.Automation do
              review,
              refinements,
              generation_opts,
-             editor
+             editor,
+             plan_ids
            ) do
       {:ok,
        %{
@@ -405,6 +417,7 @@ defmodule GridMediaManager.Automation do
         )
         |> Map.put("model", LLMSelector.model())
         |> Map.put("generated_asset_ids", Enum.map(assets, & &1.id))
+        |> Map.put("generated_asset_signatures", asset_review_signatures(assets))
 
       details = Map.put(plan.selection_details || %{}, "editor_review", review)
 
@@ -423,7 +436,8 @@ defmodule GridMediaManager.Automation do
   defp assess_or_reuse_review(plan, assets, drafts, campaign, editor, false) do
     review = get_in(plan.selection_details || %{}, ["editor_review"])
 
-    if is_map(review) and review["generated_asset_ids"] == Enum.map(assets, & &1.id) do
+    if is_map(review) and
+         review["generated_asset_signatures"] == asset_review_signatures(assets) do
       {:ok, review}
     else
       editor.assess(plan, campaign, assets, drafts)
@@ -432,6 +446,15 @@ defmodule GridMediaManager.Automation do
 
   defp assess_or_reuse_review(plan, assets, drafts, campaign, editor, true),
     do: editor.assess(plan, campaign, assets, drafts)
+
+  defp asset_review_signatures(assets) do
+    Enum.map(assets, fn asset ->
+      %{
+        "id" => asset.id,
+        "render_signature" => get_in(asset.metadata || %{}, ["render_signature"])
+      }
+    end)
+  end
 
   defp validate_editor(editor) when is_atom(editor) do
     with {:module, ^editor} <- Code.ensure_loaded(editor),
@@ -451,12 +474,21 @@ defmodule GridMediaManager.Automation do
   defp stringify_map_keys(value) when is_list(value), do: Enum.map(value, &stringify_map_keys/1)
   defp stringify_map_keys(value), do: value
 
-  defp refine_low_scoring_plans(batch_id, review_result, selector, threshold, max_revisions) do
+  defp refine_low_scoring_plans(
+         batch_id,
+         review_result,
+         selector,
+         threshold,
+         max_revisions,
+         plan_ids
+       ) do
     batch = get_batch(batch_id)
     reviews = Map.new(review_result.plans, &{&1.plan_id, &1})
 
     results =
-      Enum.map(batch.plans, fn plan ->
+      batch.plans
+      |> Enum.filter(&(is_nil(plan_ids) or &1.id in plan_ids))
+      |> Enum.map(fn plan ->
         result = Map.get(reviews, plan.id)
         revision_count = Map.get(plan.selection_details || %{}, "quality_revision_count", 0)
 
@@ -567,11 +599,13 @@ defmodule GridMediaManager.Automation do
          review,
          refinements,
          generation_opts,
-         editor
+         editor,
+         plan_ids
        ) do
     if Enum.any?(refinements, &(&1.status == :revised)) do
       with {:ok, generation} <- generate_batch_assets(batch_id, generation_opts),
-           {:ok, review} <- review_batch(batch_id, editor: editor, force: false) do
+           {:ok, review} <-
+             review_batch(batch_id, editor: editor, force: false, plan_ids: plan_ids) do
         {:ok, generation, review}
       end
     else
@@ -580,8 +614,7 @@ defmodule GridMediaManager.Automation do
   end
 
   defp quality_pass?(review, threshold) do
-    review["verdict"] == "approve" and review["overall_score"] >= threshold and
-      review["thematic_consistency_score"] >= threshold and
+    review["overall_score"] >= threshold and review["thematic_consistency_score"] >= threshold and
       review["interest_score"] >= threshold and review["shareability_score"] >= threshold
   end
 

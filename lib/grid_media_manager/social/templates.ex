@@ -176,12 +176,12 @@ defmodule GridMediaManager.Social.Templates do
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "visual") do
     link = asset_link(campaign, asset)
     title = caption_title(campaign.title)
+    hook = visual_hook(asset, title)
 
     copy =
       case platform do
         "x" ->
-          excerpt = asset.text |> fallback(title)
-          "#{excerpt}\n\n#{cta_line(link)}"
+          "#{hook}\n\nWhich assumption changes once you see the full argument?\n\n#{cta_line(link)}"
 
         "linkedin" ->
           "#{title}\n\nOne visual idea, placed inside its wider argument.\n\n#{cta_line(link)}"
@@ -190,7 +190,13 @@ defmodule GridMediaManager.Social.Templates do
           "#{title}\n\nStart with the visual, then follow the evidence and decide where you stand.\n\n#{cta_line(link)}"
 
         "instagram" ->
-          "#{title}\n\nA visual entry point into a connected learning path.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
+          "#{title}\n\n#{hook}\n\nSwipe for the reasoning. Which part would you challenge?\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
+
+        "tiktok" ->
+          "#{title}\n\n#{hook}\n\nWatch to the final connection, then tell us where the argument breaks.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
+
+        "youtube" ->
+          "#{title}\n\n#{hook}\n\nA concise visual argument: the claim, its tension, and the takeaway. What follows if it is right?\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
 
         "substack" ->
           "#{title}\n\nA navigable map of explanations, questions, and related ideas.\n\n#{cta_line(link)}"
@@ -281,7 +287,7 @@ defmodule GridMediaManager.Social.Templates do
   end
 
   defp cta_line(link) do
-    "Explore the evidence and connected questions.\nLearn more at RationalGrid.ai:\n#{link || "https://rationalgrid.ai"}"
+    "Read the full argument and follow its connected questions.\nLearn more at RationalGrid.ai:\n#{link || "https://rationalgrid.ai"}"
   end
 
   defp lead_question(%Campaign{} = campaign) do
@@ -416,7 +422,19 @@ defmodule GridMediaManager.Social.Templates do
 
   defp fit_long_form_to_platform(sections, platform, link) do
     cta = cta_line(link)
-    copy = Enum.join(sections, "\n\n")
+
+    copy =
+      case platform do
+        "facebook" ->
+          sections
+          |> Enum.take(3)
+          |> Enum.join("\n\n")
+          |> Kernel.<>("\n\nWhich part of this argument would change your mind?")
+
+        _platform ->
+          Enum.join(sections, "\n\n")
+      end
+
     full_copy = copy <> "\n\n" <> cta
 
     if Platforms.within_limit?(full_copy, platform) do
@@ -489,6 +507,21 @@ defmodule GridMediaManager.Social.Templates do
   end
 
   defp compact_fallback(_link), do: "Learn more at RationalGrid.ai"
+
+  defp visual_hook(%MediaAsset{} = asset, fallback) do
+    asset.metadata
+    |> Kernel.||(%{})
+    |> Map.get("slides", [])
+    |> Enum.reject(&(Map.get(&1, "kind") in ["cover", "cta"]))
+    |> Enum.find_value(fn slide ->
+      [Map.get(slide, "title"), Map.get(slide, "body")]
+      |> Enum.find(&(is_binary(&1) and String.trim(&1) != ""))
+    end)
+    |> fallback(asset.text)
+    |> fallback(fallback)
+    |> String.trim()
+    |> String.slice(0, 220)
+  end
 
   defp fallback(nil, fallback), do: fallback
   defp fallback("", fallback), do: fallback

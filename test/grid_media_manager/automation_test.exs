@@ -178,7 +178,7 @@ defmodule GridMediaManager.AutomationTest do
     assert completed_plan.selection_details["generated_asset_ids"] ==
              Enum.map(assets, & &1.asset_id)
 
-    assert completed_plan.selection_details["package_generation_version"] == 1
+    assert completed_plan.selection_details["package_generation_version"] == 5
     assert is_binary(completed_plan.selection_details["campaign_visual_fingerprint"])
 
     assert {:ok, resumed} =

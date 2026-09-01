@@ -16,7 +16,7 @@ defmodule GridMediaManager.Promotion.StoryPackage do
     cover = %{
       "kind" => "cover",
       "label" => Keyword.get(opts, :cover_label, "RationalGrid story"),
-      "title" => title,
+      "title" => compact_cover_title(title),
       "body" => Keyword.get(opts, :cover_body, "")
     }
 
@@ -37,5 +37,25 @@ defmodule GridMediaManager.Promotion.StoryPackage do
       "title" => @cta_title,
       "body" => @cta_body
     }
+  end
+
+  def compact_cover_title(title) when is_binary(title) do
+    title = String.trim(title)
+
+    if String.length(title) <= 58 do
+      title
+    else
+      title
+      |> String.split(~r/\s+/, trim: true)
+      |> Enum.reduce_while([], fn word, selected ->
+        candidate = Enum.join(selected ++ [word], " ")
+
+        if String.length(candidate) <= 56,
+          do: {:cont, selected ++ [word]},
+          else: {:halt, selected}
+      end)
+      |> Enum.join(" ")
+      |> Kernel.<>("…")
+    end
   end
 end

@@ -132,7 +132,7 @@ defmodule GridMediaManager.CampaignsTest do
     assert asset.text =~ question.title
     assert asset.text =~ "First claim: confidence should follow evidence."
     assert asset.text =~ highlight.title
-    assert asset.metadata["slide_count"] == 2
+    assert asset.metadata["slide_count"] == 3
     assert List.last(asset.metadata["slides"])["body"] =~ "contribute your perspective"
 
     assert Enum.map(asset.metadata["sources"], & &1["type"]) == [

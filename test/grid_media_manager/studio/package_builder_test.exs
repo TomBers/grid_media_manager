@@ -80,7 +80,12 @@ defmodule GridMediaManager.Studio.PackageBuilderTest do
 
     long_form = Enum.find(complete_assets, &(&1.kind == "long_form_post"))
     assert long_form.recommended_platforms == Platforms.long_form_ids()
-    assert Enum.map(long_form.metadata["slides"], & &1["kind"]) == ["cover", "cta"]
+
+    assert Enum.map(long_form.metadata["slides"], & &1["kind"]) == [
+             "cover",
+             "node_text",
+             "cta"
+           ]
 
     x_post = Enum.find(complete_assets, &(&1.kind == "curated_carousel"))
     assert x_post.recommended_platforms == ["x"]
