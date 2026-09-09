@@ -106,7 +106,7 @@ defmodule GridMediaManager.CampaignsTest do
     assert long_form.kind == "long_form_post"
     assert long_form.text =~ "First claim"
     assert Enum.map(long_form.metadata["slides"], & &1["kind"]) == ["cover", "cta"]
-    assert List.last(long_form.metadata["slides"])["title"] == "Where do you stand?"
+    assert List.last(long_form.metadata["slides"])["title"] == "See what you think."
 
     assert Campaigns.list_post_drafts(campaign, media_asset_id: long_form.id)
            |> Enum.map(& &1.platform)
@@ -133,7 +133,7 @@ defmodule GridMediaManager.CampaignsTest do
     assert asset.text =~ "First claim: confidence should follow evidence."
     assert asset.text =~ highlight.title
     assert asset.metadata["slide_count"] == 3
-    assert List.last(asset.metadata["slides"])["body"] =~ "contribute your perspective"
+    assert List.last(asset.metadata["slides"])["body"] =~ "Explore this idea at rationalgrid.ai."
 
     assert Enum.map(asset.metadata["sources"], & &1["type"]) == [
              "question",
@@ -166,7 +166,9 @@ defmodule GridMediaManager.CampaignsTest do
     assert carousel.metadata["slides"] == video.metadata["slides"]
     assert List.first(carousel.metadata["slides"])["kind"] == "cover"
     assert List.last(carousel.metadata["slides"])["kind"] == "cta"
-    assert List.last(carousel.metadata["slides"])["body"] =~ "contribute your perspective"
+
+    assert List.last(carousel.metadata["slides"])["body"] =~
+             "Explore this idea at rationalgrid.ai."
 
     assert video.metadata["selected_slide_indexes"] ==
              carousel.metadata["selected_slide_indexes"]

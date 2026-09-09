@@ -489,7 +489,7 @@ function drawQuote(context, slide, palette, frame) {
 }
 
 function drawCta(context, image, frame) {
-  context.fillStyle = "#081323"
+  context.fillStyle = "#020617"
   context.fillRect(0, 0, WIDTH, frame.height)
 
   const height = WIDTH * (image.naturalHeight / image.naturalWidth)
@@ -670,7 +670,9 @@ export const CanvasSlideRenderer = {
       const video = this.root.dataset.videoFrame === "true"
       await loadCanvasFont()
       const ctaImage = await loadImage(
-        this.root.dataset.ctaImageSrc || "/images/rationalgrid-follow-up.png"
+        this.root.dataset.ctaImageSrc || (video
+          ? "/images/rationalgrid-cta-story.png"
+          : "/images/rationalgrid-cta-carousel.png")
       )
       const coverImage = this.root.dataset.coverImageUrl
         ? await loadImage(this.root.dataset.coverImageUrl)

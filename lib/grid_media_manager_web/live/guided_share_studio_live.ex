@@ -2089,7 +2089,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         data-style={@asset.style}
         data-video-frame={if(browser_canvas_video?(@asset), do: "true", else: "false")}
         data-cover-image-url={@cover_image_url}
-        data-cta-image-src="/images/rationalgrid-follow-up.png"
+        data-cta-image-src={
+          if(browser_canvas_video?(@asset),
+            do: ~p"/images/rationalgrid-cta-story.png",
+            else: ~p"/images/rationalgrid-cta-carousel.png"
+          )
+        }
         data-upload-url={client_artifact_upload_url(@asset)}
         data-asset-id={@asset.id}
         data-auto-save={if(@auto_save, do: "true", else: "false")}

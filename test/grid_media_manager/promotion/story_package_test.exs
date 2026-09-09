@@ -23,8 +23,8 @@ defmodule GridMediaManager.Promotion.StoryPackageTest do
 
     assert card["kind"] == "quote"
     assert cta["kind"] == "cta"
-    assert cta["label"] == "Join the conversation"
-    assert cta["title"] == "Where do you stand?"
-    assert cta["body"] =~ "contribute your perspective"
+    assert cta["label"] == "RationalGrid"
+    assert cta["title"] == "See what you think."
+    assert cta["body"] =~ "Explore this idea at rationalgrid.ai."
   end
 end

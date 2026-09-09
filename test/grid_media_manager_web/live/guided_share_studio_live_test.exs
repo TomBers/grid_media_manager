@@ -284,7 +284,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assets = Campaigns.list_media_assets(campaign)
     assert [%{kind: "curated_carousel", style: "warm_paper"} = carousel] = assets
     assert carousel.metadata["slide_count"] >= 3
-    assert List.last(carousel.metadata["slides"])["label"] == "Join the conversation"
+    assert List.last(carousel.metadata["slides"])["label"] == "RationalGrid"
     last_slide = carousel.metadata["slide_count"]
     assert carousel.metadata["selected_slide_indexes"] == Enum.to_list(1..last_slide)
     assert has_element?(view, "#curated-carousel-order-#{carousel.id}")
@@ -353,7 +353,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert asset.text =~ "Perfect comfort can become a cage."
     assert asset.text =~ "Long answer"
     assert Enum.map(asset.metadata["slides"], & &1["kind"]) == ["cover", "node_text", "cta"]
-    assert List.last(asset.metadata["slides"])["title"] == "Where do you stand?"
+    assert List.last(asset.metadata["slides"])["title"] == "See what you think."
 
     assert Enum.map(asset.metadata["sources"], & &1["type"]) == [
              "question",
@@ -362,6 +362,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
            ]
 
     assert has_element?(view, "#curated-carousel-slides-#{asset.id}[data-auto-save='true']")
+
+    assert has_element?(
+             view,
+             "#curated-carousel-slides-#{asset.id}[data-cta-image-src='/images/rationalgrid-cta-carousel.png']"
+           )
   end
 
   test "combines multiple selected moments into one carousel output", %{conn: conn} do
@@ -384,7 +389,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert video.metadata["slide_count"] >= 4
     refute Enum.any?(assets, &(&1.kind == "curated_carousel"))
 
-    assert List.last(video.metadata["slides"])["title"] == "Where do you stand?"
+    assert List.last(video.metadata["slides"])["title"] == "See what you think."
+
+    assert has_element?(
+             view,
+             "#curated-carousel-slides-#{video.id}[data-cta-image-src='/images/rationalgrid-cta-story.png']"
+           )
   end
 
   test "creates video and image outputs together from one design", %{conn: conn} do
