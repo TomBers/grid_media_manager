@@ -12,15 +12,22 @@ defmodule GridMediaManager.Social.PlatformsTest do
     refute "substack" in Platforms.ids()
   end
 
-  test "X character counts exclude hashtags" do
+  test "X character counts include hashtags" do
     text = "A post about maps #RationalGrid #Argument_Mapping"
 
-    assert Platforms.character_count(text, "x") == String.length("A post about maps  ")
+    assert Platforms.character_count(text, "x") == String.length(text)
     assert Platforms.character_count(text, "linkedin") == String.length(text)
   end
 
   test "within_limit?/2 uses the platform-aware count" do
-    assert Platforms.within_limit?(String.duplicate("a", 279) <> " #tag", "x")
+    refute Platforms.within_limit?(String.duplicate("a", 279) <> " #tag", "x")
+
+    assert Platforms.character_count(
+             "Read https://rationalgrid.ai/" <> String.duplicate("a", 300),
+             "x"
+           ) == 28
+
+    assert Platforms.character_count("中🙂", "x") == 4
     refute Platforms.within_limit?(String.duplicate("a", 301), "bluesky")
   end
 end

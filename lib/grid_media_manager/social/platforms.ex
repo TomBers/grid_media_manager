@@ -69,11 +69,23 @@ defmodule GridMediaManager.Social.Platforms do
     end
   end
 
-  @doc "Returns the platform-visible character count for social copy."
+  @doc "Counts X URLs as 23 characters and includes hashtags; Unicode is counted conservatively."
   def character_count(text, "x") when is_binary(text) do
-    text
-    |> String.replace(~r/(^|\s)#[\p{L}\p{N}_]+/u, "\\1")
-    |> String.length()
+    urls = Regex.scan(~r/https?:\/\/[^\s]+/u, text) |> length()
+    remaining = String.replace(text, ~r/https?:\/\/[^\s]+/u, "")
+
+    count =
+      remaining
+      |> String.to_charlist()
+      |> Enum.reduce(0, fn char, total ->
+        total +
+          if(char in 0..4351 or char in 8192..8205 or char in 8208..8223 or char in 8242..8247,
+            do: 1,
+            else: 2
+          )
+      end)
+
+    count + urls * 23
   end
 
   def character_count(text, _platform) when is_binary(text), do: String.length(text)

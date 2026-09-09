@@ -68,7 +68,7 @@ defmodule GridMediaManager.Studio.Workflow do
   defp generate_for_campaign(campaign, candidates, opts) do
     style = opts |> Keyword.get(:style) |> ShareCard.normalize_style()
     format = normalize_format(Keyword.get(opts, :format, "landscape"))
-    editorial_opts = Keyword.take(opts, [:editorial_hook])
+    editorial_opts = Keyword.take(opts, [:editorial_hook, :video_script])
 
     result =
       cond do

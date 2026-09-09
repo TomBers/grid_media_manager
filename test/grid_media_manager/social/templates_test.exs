@@ -101,7 +101,8 @@ defmodule GridMediaManager.Social.TemplatesTest do
     assert instagram_copy =~ "#"
     assert instagram_copy =~ "Watch the reasoning unfold."
     refute instagram_copy =~ "Swipe"
-    assert youtube_copy =~ "RationalGrid.ai"
+    assert youtube_copy =~ "rationalgrid.ai"
+    assert youtube_copy =~ "Shorts description links are not clickable"
   end
 
   test "X keeps a complete hook and its deep link when supporting copy does not fit" do
@@ -115,7 +116,9 @@ defmodule GridMediaManager.Social.TemplatesTest do
 
     body = Templates.body(campaign, asset, "x", "visual")
 
-    assert body == hook <> "\n\n" <> campaign.grid_url
+    assert String.starts_with?(body, hook)
+    assert body =~ campaign.grid_url
+    assert body =~ "utm_source=x"
     assert Platforms.within_limit?(body, "x")
   end
 
@@ -127,7 +130,8 @@ defmodule GridMediaManager.Social.TemplatesTest do
     body = Templates.body(campaign, asset, "x", "visual")
 
     assert String.starts_with?(body, hook)
-    assert String.ends_with?(body, campaign.grid_url)
+    assert body =~ campaign.grid_url
+    assert body =~ "utm_source=x"
     assert Platforms.within_limit?(body, "x")
   end
 

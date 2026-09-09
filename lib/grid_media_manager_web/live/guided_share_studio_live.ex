@@ -2359,6 +2359,13 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
           Save finished assets to open this file
         </span>
       </div>
+      <p
+        :if={match?({:error, _}, GridMediaManager.Promotion.ShortVideo.validate_asset(@asset))}
+        id={"video-pacing-warning-#{@asset.id}"}
+        class="mt-3 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200"
+      >
+        {elem(GridMediaManager.Promotion.ShortVideo.validate_asset(@asset), 1)}
+      </p>
     </article>
     """
   end
@@ -2867,6 +2874,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
     Enum.filter(drafts, fn draft ->
       PostDraft.schedulable?(draft) and
         Platforms.within_limit?(draft.body, draft.platform) and
+        GridMediaManager.Promotion.ShortVideo.validate_asset(draft.media_asset) == :ok and
         Buffer.account_for(draft.platform) != nil and
         client_artifacts_ready?(draft.media_asset) and
         if draft.platform in Platforms.video_ids(),

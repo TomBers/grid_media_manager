@@ -178,7 +178,7 @@ defmodule GridMediaManager.AutomationTest do
     assert completed_plan.selection_details["generated_asset_ids"] ==
              Enum.map(assets, & &1.asset_id)
 
-    assert completed_plan.selection_details["package_generation_version"] == 7
+    assert completed_plan.selection_details["package_generation_version"] == 8
     assert is_binary(completed_plan.selection_details["campaign_visual_fingerprint"])
 
     assert {:ok, resumed} =
@@ -208,6 +208,113 @@ defmodule GridMediaManager.AutomationTest do
 
     assert {:ok, batch} = Automation.create_batch([topic])
     assert Automation.schedule_batch(batch.id, "not-a-date") == {:error, :invalid_start_date}
+  end
+
+  test "queue fill previews only vacancies, requires review and never schedules during preview" do
+    previous = Application.get_env(:grid_media_manager, :buffer)
+    previous_store = Application.get_env(:grid_media_manager, :artifact_store_path)
+    root = Path.join(System.tmp_dir!(), "queue-fill-test-#{System.unique_integer([:positive])}")
+    Application.put_env(:grid_media_manager, :artifact_store_path, root)
+
+    on_exit(fn ->
+      Application.put_env(:grid_media_manager, :buffer, previous)
+
+      if previous_store,
+        do: Application.put_env(:grid_media_manager, :artifact_store_path, previous_store),
+        else: Application.delete_env(:grid_media_manager, :artifact_store_path)
+
+      File.rm_rf!(root)
+    end)
+
+    platforms = GridMediaManager.Social.Platforms.ids()
+
+    Application.put_env(:grid_media_manager, :buffer,
+      text_api_key: "test-key",
+      video_api_key: "test-key",
+      text_organization_id: "test-org",
+      video_organization_id: "test-org",
+      text_channels: Map.new(platforms, &{&1, &1}),
+      video_channels: Map.new(platforms, &{&1, &1}),
+      endpoint: "https://buffer.test/graphql",
+      plug: {Req.Test, __MODULE__}
+    )
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+      assert request["query"] =~ "query BufferQueuePosts"
+
+      posts =
+        for platform <- request["variables"]["input"]["filter"]["channelIds"],
+            index <- 1..if(platform == "x", do: 10, else: 9) do
+          %{
+            "node" => %{
+              "id" => "#{platform}-#{index}",
+              "channelId" => platform,
+              "status" => "scheduled",
+              "dueAt" => "2090-09-09T09:00:00Z"
+            }
+          }
+        end
+
+      Req.Test.json(conn, %{
+        "data" => %{
+          "posts" => %{
+            "edges" => posts,
+            "pageInfo" => %{"hasNextPage" => false, "endCursor" => nil}
+          }
+        }
+      })
+    end)
+
+    topic = "Reviewable queue fill"
+    prepare_source(topic)
+    {:ok, batch} = Automation.create_batch([topic])
+    {:ok, batch} = Automation.run_batch(batch, selector: EditorialSelectorStub)
+    plan = hd(batch.plans)
+
+    details =
+      Map.put(plan.selection_details, "video_script", [
+        "A first complete thought.",
+        "A second complete thought.",
+        "What would change your mind?"
+      ])
+
+    Repo.update!(Automation.EditorialPlan.changeset(plan, %{selection_details: details}))
+    {:ok, _} = Automation.generate_batch_assets(batch.id, renderer: AutomationRendererStub)
+    plan = hd(Automation.get_batch(batch.id).plans)
+
+    assets =
+      Enum.map(plan.selection_details["generated_asset_ids"], &Campaigns.get_media_asset!/1)
+
+    campaign = Campaigns.get_campaign!(plan.campaign_id)
+
+    assert {:error, :editor_review_required} =
+             Automation.queue_fill_plan(batch.id, ~D[2090-09-08])
+
+    for asset <- assets, index <- Campaigns.media_asset_slide_indexes(asset) do
+      {:ok, _} =
+        Campaigns.store_client_artifact(
+          Campaigns.get_media_asset!(asset.id),
+          index,
+          <<137, 80, 78, 71, 13, 10, 26, 10, 0>>
+        )
+    end
+
+    for draft <- Campaigns.list_post_drafts_for_assets(campaign, Enum.map(assets, & &1.id)) do
+      {:ok, _} = Campaigns.approve_post_draft(draft.id)
+    end
+
+    assert {:ok, %{jobs: jobs}} = Automation.queue_fill_plan(batch.id, ~D[2090-09-08])
+    assert length(jobs) == 5
+    refute Enum.any?(jobs, &(&1.platform == "x"))
+
+    assert Enum.all?(
+             jobs,
+             &(Date.compare(DateTime.to_date(&1.scheduled_for), ~D[2090-09-09]) == :gt)
+           )
+
+    assert Enum.all?(jobs, &is_nil(&1.draft.external_post_id))
   end
 
   test "quality preparation revises a weak package once and reuses the final review" do

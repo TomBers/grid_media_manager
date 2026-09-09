@@ -72,3 +72,15 @@ The reusable seams are the content planner (`ShareCard` and `SlideSequence`), wo
 FFmpeg must be on `PATH` to create MP4s. A custom executable can be configured with `config :grid_media_manager, :ffmpeg_path, "/path/to/ffmpeg"`.
 
 Buffer needs durable public HTTPS media, so production scheduling normally also needs S3-compatible storage. Editing a slide invalidates saved artifacts and published URLs; the user must save the new browser render before it can be scheduled.
+
+## Engagement and results
+
+`/results` stores the latest Buffer metrics matched by platform and external post ID to studio drafts. Refresh is read-only at Buffer. An explicit `sent` response reconciles a scheduled draft to published without deleting its media. Refreshes replace cumulative counters; they never add them together. Missing metrics remain unavailable. The table compares posts aged 72 hours to 90 days within a channel; totals are cumulative, not controlled experiments or equal-age comparisons. Buffer's metrics API is experimental.
+
+New captions tag RationalGrid links with `utm_source`, `utm_medium=social`, `utm_campaign=grid-ID` and `utm_content=asset-ID-angle`, preserving deep-link parameters and fragments. Measuring website visits or conversions still requires analytics on RationalGrid. Shorts descriptions explicitly identify their reference URL as non-clickable.
+
+Autopilot refreshes metrics when the last successful matched-post sync is over six hours old, then includes channel-specific examples with clicks, saves, shares or comments in topic selection. These are weak editorial signals; small samples do not establish a winning topic or time.
+
+New planned videos carry three concise `video_script` beats. Publishing checks the selected sequence for 4–6 frames, at most 25 visible words per non-CTA frame, and at most 45 seconds. Text reading time is preserved; a concise opening has a three-second minimum. Dense manually selected source excerpts remain editable and receive a pacing warning rather than being silently truncated. The original source is unchanged.
+
+`Automation.queue_fill_plan/2` previews available slots; `Automation.fill_queues/2` submits them. It respects the ten-post limit per channel, existing queue dates, explicit draft approval or current Editor approval, media readiness, copy limits and pacing. Re-running skips drafts already scheduled or published. Slots use alternating UTC test windows in `Social.PostingSchedule`, informed by [Buffer's 2026 timing research](https://buffer.com/resources/best-time-to-post-social-media/), with a UK audience as the initial assumption. These UTC windows do not automatically adjust for daylight saving. X, Facebook, LinkedIn and Instagram use weekdays; TikTok and Shorts also use weekends. Review actual results and audience geography before changing the windows.

@@ -13,7 +13,7 @@ defmodule GridMediaManager.Promotion.CarouselVideoTest do
       "body" => String.duplicate("Evidence needs enough time to be read clearly. ", 6)
     }
 
-    assert CarouselVideo.slide_duration(concise) == 4.5
+    assert CarouselVideo.slide_duration(concise) == 3.0
     assert CarouselVideo.slide_duration(detailed) > CarouselVideo.slide_duration(concise)
     assert CarouselVideo.slide_duration(detailed) <= 14.0
   end

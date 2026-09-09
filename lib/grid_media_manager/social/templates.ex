@@ -14,6 +14,18 @@ defmodule GridMediaManager.Social.Templates do
   alias GridMediaManager.Social.Platforms
 
   def body(%Campaign{} = campaign, asset, platform, angle) do
+    link = if asset, do: asset_link(campaign, asset), else: campaign.grid_url
+    content = if asset, do: "asset-#{asset.id}-#{angle}", else: angle
+    tracked_link = GridMediaManager.Social.Tracking.url(link, platform, campaign.id, content)
+
+    # Supply the tagged destination before fitting copy to the platform allowance.
+    campaign = %{campaign | grid_url: tracked_link}
+
+    asset =
+      if asset,
+        do: %{asset | metadata: Map.put(asset.metadata || %{}, "caption_link", tracked_link)},
+        else: asset
+
     body_for_platform(campaign, asset, platform, angle)
   end
 
@@ -203,10 +215,10 @@ defmodule GridMediaManager.Social.Templates do
           "#{opening}\n\n#{instagram_instruction(asset)} Which part would you challenge?\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "tiktok" ->
-          "#{opening}\n\nWatch to the final connection, then tell us where the argument breaks.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
+          "#{opening}\n\nWatch the reasoning unfold. Which part would you challenge?\n\nExplore this idea at rationalgrid.ai.\n#{link}\n\n#{hashtags(campaign)}"
 
         "youtube" ->
-          "#{opening}\n\nA concise visual argument: the claim, its tension, and the takeaway. What follows if it is right?\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
+          "#{opening}\n\nWhat would change your mind? Explore this idea at rationalgrid.ai.\n\nFor reference (Shorts description links are not clickable):\n#{link}\n\n#Shorts #RationalGrid"
 
         "substack" ->
           "#{title}\n\nA navigable map of explanations, questions, and related ideas.\n\n#{cta_line(link)}"
@@ -326,7 +338,8 @@ defmodule GridMediaManager.Social.Templates do
   defp asset_platforms(%MediaAsset{}), do: Platforms.text_ids()
 
   defp asset_link(%Campaign{} = campaign, %MediaAsset{} = asset) do
-    highlight_link(campaign, asset) || node_link(campaign, asset) || campaign.grid_url ||
+    Map.get(asset.metadata || %{}, "caption_link") || highlight_link(campaign, asset) ||
+      node_link(campaign, asset) || campaign.grid_url ||
       asset.url
   end
 

@@ -392,6 +392,7 @@ defmodule GridMediaManager.Campaigns do
          true <-
            Platforms.within_limit?(draft.body, draft.platform) ||
              {:error, "The draft is over the #{Platforms.label(draft.platform)} character limit."},
+         :ok <- GridMediaManager.Promotion.ShortVideo.validate_asset(draft.media_asset),
          {:ok, media} <- buffer_media(campaign, draft.media_asset),
          {:ok, scheduled_for} <- parse_scheduled_for(scheduled_for),
          :lt <- DateTime.compare(DateTime.utc_now(), scheduled_for) do
@@ -503,7 +504,18 @@ defmodule GridMediaManager.Campaigns do
       when is_list(candidates) and length(candidates) >= 1 do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
-    slides = SlideSequence.build(campaign, candidates, reading_mode: :short_video)
+    script = Keyword.get(opts, :video_script)
+
+    slides =
+      if GridMediaManager.Promotion.ShortVideo.valid_script?(script) do
+        GridMediaManager.Promotion.StoryPackage.build(
+          campaign.title,
+          GridMediaManager.Promotion.ShortVideo.script_slides(script)
+        )
+      else
+        SlideSequence.build(campaign, candidates, reading_mode: :short_video)
+      end
+
     token = curated_carousel_token(candidates, slides, style)
 
     campaign

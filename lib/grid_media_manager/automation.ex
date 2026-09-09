@@ -27,7 +27,7 @@ defmodule GridMediaManager.Automation do
   @discovery_source_size 120
   @candidate_shortlist_size 32
   @formats ~w(story_video portrait long_form combined_carousel)
-  @package_generation_version 7
+  @package_generation_version 8
   @publishing_times %{
     "linkedin" => ~T[16:30:00],
     "facebook" => ~T[17:30:00],
@@ -296,6 +296,72 @@ defmodule GridMediaManager.Automation do
 
   def schedule_batch(_batch_id, _start_date, _opts), do: {:error, :invalid_options}
 
+  @doc "Previews only the vacancies in live queues, using reviewed packages and channel-specific UTC test windows."
+  def queue_fill_plan(batch_id, start_date) do
+    with %EditorialBatch{} = batch <- get_batch(batch_id),
+         {:ok, start_date} <- parse_start_date(start_date),
+         {:ok, jobs} <- publishing_jobs(batch, start_date, []),
+         {:ok, queue} <- Buffer.queue_snapshot(Platforms.ids()) do
+      jobs =
+        Platforms.ids()
+        |> Enum.flat_map(fn platform ->
+          channel = Map.fetch!(queue.platforms, platform)
+
+          pending =
+            jobs
+            |> Enum.filter(
+              &((&1.platform == platform and &1.draft) &&
+                  &1.draft.status not in ["scheduled", "published"])
+            )
+            |> Enum.take(channel.vacancies)
+
+          slots =
+            GridMediaManager.Social.PostingSchedule.slots(
+              platform,
+              length(pending),
+              channel.posts,
+              start_date: start_date
+            )
+
+          Enum.zip_with(pending, slots, &%{&1 | scheduled_for: &2})
+        end)
+
+      reviewed? =
+        Enum.all?(jobs, fn job ->
+          plan = Enum.find(batch.plans, &(&1.id == job.plan_id))
+          review = get_in(plan.selection_details, ["editor_review"])
+          {:ok, assets} = reusable_plan_assets(plan)
+          campaign = Campaigns.get_campaign!(plan.campaign_id)
+          drafts = canonical_review_drafts(campaign, assets)
+
+          explicitly_approved? =
+            length(drafts) == 6 and
+              Enum.all?(drafts, &(&1.status in ["approved", "scheduled", "published"]))
+
+          explicitly_approved? or
+            (is_map(review) and review["verdict"] == "approve" and quality_pass?(review, 75) and
+               review["generated_asset_signatures"] == asset_review_signatures(assets) and
+               review["draft_signatures"] == draft_review_signatures(drafts))
+        end)
+
+      with true <- reviewed? || {:error, :editor_review_required},
+           :ok <- preflight_publishing_jobs(jobs),
+           :ok <- ensure_queue_capacity(queue, jobs) do
+        {:ok, %{jobs: jobs, queue: queue}}
+      end
+    else
+      nil -> {:error, :editorial_batch_not_found}
+      error -> error
+    end
+  end
+
+  @doc "Fills available Buffer slots without changing posts already queued."
+  def fill_queues(batch_id, start_date) do
+    with {:ok, %{jobs: jobs}} <- queue_fill_plan(batch_id, start_date) do
+      schedule_publishing_jobs(jobs, 1)
+    end
+  end
+
   @doc """
   Runs a senior-editor assessment against every complete generated package in a batch.
 
@@ -406,7 +472,7 @@ defmodule GridMediaManager.Automation do
   defp review_plan(%EditorialPlan{} = plan, editor, force?) do
     with {:ok, assets} <- reusable_plan_assets(plan),
          %Campaign{} = campaign <- Campaigns.get_campaign(plan.campaign_id),
-         drafts <- Campaigns.list_post_drafts_for_assets(campaign, Enum.map(assets, & &1.id)),
+         drafts <- canonical_review_drafts(campaign, assets),
          {:ok, review} <- assess_or_reuse_review(plan, assets, drafts, campaign, editor, force?) do
       review =
         review
@@ -418,6 +484,7 @@ defmodule GridMediaManager.Automation do
         |> Map.put("model", LLMSelector.model())
         |> Map.put("generated_asset_ids", Enum.map(assets, & &1.id))
         |> Map.put("generated_asset_signatures", asset_review_signatures(assets))
+        |> Map.put("draft_signatures", draft_review_signatures(drafts))
 
       details = Map.put(plan.selection_details || %{}, "editor_review", review)
 
@@ -437,7 +504,8 @@ defmodule GridMediaManager.Automation do
     review = get_in(plan.selection_details || %{}, ["editor_review"])
 
     if is_map(review) and
-         review["generated_asset_signatures"] == asset_review_signatures(assets) do
+         review["generated_asset_signatures"] == asset_review_signatures(assets) and
+         review["draft_signatures"] == draft_review_signatures(drafts) do
       {:ok, review}
     else
       editor.assess(plan, campaign, assets, drafts)
@@ -451,9 +519,41 @@ defmodule GridMediaManager.Automation do
     Enum.map(assets, fn asset ->
       %{
         "id" => asset.id,
-        "render_signature" => get_in(asset.metadata || %{}, ["render_signature"])
+        "render_signature" =>
+          :crypto.hash(
+            :sha256,
+            :erlang.term_to_binary(
+              {asset.title, asset.text, asset.kind, asset.style,
+               Map.take(asset.metadata || %{}, [
+                 "slides",
+                 "selected_slide_indexes",
+                 "render_signature"
+               ])}
+            )
+          )
+          |> Base.encode16(case: :lower)
       }
     end)
+  end
+
+  defp draft_review_signatures(drafts) do
+    drafts
+    |> Enum.sort_by(& &1.id)
+    |> Enum.map(fn draft ->
+      %{
+        "id" => draft.id,
+        "body_sha256" => :crypto.hash(:sha256, draft.body) |> Base.encode16(case: :lower)
+      }
+    end)
+  end
+
+  defp canonical_review_drafts(campaign, assets) do
+    {:ok, destinations} = canonical_destinations(assets)
+    pairs = MapSet.new(destinations, fn {platform, asset} -> {platform, asset.id} end)
+
+    campaign
+    |> Campaigns.list_post_drafts_for_assets(Enum.map(assets, & &1.id))
+    |> Enum.filter(&MapSet.member?(pairs, {&1.platform, &1.media_asset_id}))
   end
 
   defp validate_editor(editor) when is_atom(editor) do
@@ -535,6 +635,7 @@ defmodule GridMediaManager.Automation do
           "editor_review"
         ])
         |> Map.merge(%{
+          "video_script" => story.video_script,
           "text_visual_key" => story.text_visual_key,
           "text_visual_role" => story.text_visual_role,
           "format_rationale" => story.format_rationale,
@@ -587,7 +688,7 @@ defmodule GridMediaManager.Automation do
          %Campaign{} = campaign <- Campaigns.get_campaign(plan.campaign_id) do
       campaign
       |> Campaigns.list_post_drafts_for_assets(Enum.map(assets, & &1.id))
-      |> Enum.any?(&(&1.status in ["scheduled", "published"]))
+      |> Enum.any?(&(&1.status in ["approved", "scheduled", "published"]))
     else
       _missing -> false
     end
@@ -694,12 +795,26 @@ defmodule GridMediaManager.Automation do
 
       reason =
         cond do
-          is_nil(job.draft) -> :canonical_draft_missing
-          job.draft.status == "scheduled" and is_binary(job.draft.external_post_id) -> nil
-          not Platforms.within_limit?(job.draft.body, job.platform) -> :copy_limit_exceeded
-          not ArtifactStore.ready?(job.asset, indexes) -> :artifacts_not_ready
-          DateTime.compare(job.scheduled_for, now) != :gt -> :schedule_not_in_future
-          true -> nil
+          is_nil(job.draft) ->
+            :canonical_draft_missing
+
+          job.draft.status == "scheduled" and is_binary(job.draft.external_post_id) ->
+            nil
+
+          not Platforms.within_limit?(job.draft.body, job.platform) ->
+            :copy_limit_exceeded
+
+          GridMediaManager.Promotion.ShortVideo.validate_asset(job.asset) != :ok ->
+            :video_pacing_edit_required
+
+          not ArtifactStore.ready?(job.asset, indexes) ->
+            :artifacts_not_ready
+
+          DateTime.compare(job.scheduled_for, now) != :gt ->
+            :schedule_not_in_future
+
+          true ->
+            nil
         end
 
       if reason, do: {:halt, {:error, publishing_error(job, reason)}}, else: {:cont, :ok}
@@ -1088,6 +1203,7 @@ defmodule GridMediaManager.Automation do
          status: "planned",
          error_message: nil,
          selection_details: %{
+           "video_script" => story.video_script,
            "source_rationale" => source_choice["rationale"],
            "source_confidence" => source_choice["confidence"],
            "story_confidence" => story.confidence,
@@ -1192,6 +1308,8 @@ defmodule GridMediaManager.Automation do
       length(selected_keys) in minimum..min(6, MapSet.size(available_keys)) and
         Enum.all?(selected_keys, &MapSet.member?(available_keys, &1)) and
         present_string?(choice["hook"]) and
+        (is_nil(choice["video_script"]) or
+           GridMediaManager.Promotion.ShortVideo.valid_script?(choice["video_script"])) and
         text_visual_key in selected_keys and
         text_visual_role in ["question", "quotation", "evidence", "cover"] and
         present_string?(choice["rationale"]) and
@@ -1209,6 +1327,7 @@ defmodule GridMediaManager.Automation do
        %{
          selected_keys: selected_keys,
          hook: choice["hook"],
+         video_script: choice["video_script"],
          text_visual_key: text_visual_key,
          text_visual_role: text_visual_role,
          rationale: choice["rationale"],

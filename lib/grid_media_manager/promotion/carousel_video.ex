@@ -15,14 +15,14 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   @width 1080
   @height 1920
-  @minimum_frame_seconds 4.5
+  @minimum_frame_seconds 3.0
   @maximum_frame_seconds 14.0
   @words_per_second 3.0
-  @reading_buffer_seconds 1.75
+  @reading_buffer_seconds 0.75
   @frame_rate 30
   @render_timeout 300_000
   @render_timeout_per_second 5_000
-  @cache_version 28
+  @cache_version 29
 
   def available?, do: is_binary(ffmpeg_path())
 
