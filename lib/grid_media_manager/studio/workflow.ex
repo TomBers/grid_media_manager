@@ -68,23 +68,24 @@ defmodule GridMediaManager.Studio.Workflow do
   defp generate_for_campaign(campaign, candidates, opts) do
     style = opts |> Keyword.get(:style) |> ShareCard.normalize_style()
     format = normalize_format(Keyword.get(opts, :format, "landscape"))
+    editorial_opts = Keyword.take(opts, [:editorial_hook])
 
     result =
       cond do
         format == "combined_carousel" ->
-          generate_combined_carousel(campaign, candidates, style)
+          generate_combined_carousel(campaign, candidates, style, editorial_opts)
 
         format == "story_video" ->
-          generate_story_video(campaign, candidates, style)
+          generate_story_video(campaign, candidates, style, editorial_opts)
 
         format == "x_post" ->
-          generate_x_post(campaign, candidates, style)
+          generate_x_post(campaign, candidates, style, editorial_opts)
 
         format == "long_form" ->
-          generate_long_form_post(campaign, candidates, style)
+          generate_long_form_post(campaign, candidates, style, editorial_opts)
 
         format == "portrait" ->
-          generate_text_carousel(campaign, candidates, style)
+          generate_text_carousel(campaign, candidates, style, editorial_opts)
 
         true ->
           {assets, errors} =
@@ -113,8 +114,8 @@ defmodule GridMediaManager.Studio.Workflow do
     result
   end
 
-  defp generate_text_carousel(campaign, candidates, style) do
-    case Campaigns.generate_curated_carousel(campaign, candidates, style) do
+  defp generate_text_carousel(campaign, candidates, style, opts) do
+    case Campaigns.generate_curated_carousel(campaign, candidates, style, opts) do
       {:ok, carousel} ->
         %{assets: [carousel], errors: []}
 
@@ -124,8 +125,8 @@ defmodule GridMediaManager.Studio.Workflow do
     end
   end
 
-  defp generate_combined_carousel(campaign, candidates, style) do
-    case Campaigns.generate_curated_carousel_bundle(campaign, candidates, style) do
+  defp generate_combined_carousel(campaign, candidates, style, opts) do
+    case Campaigns.generate_curated_carousel_bundle(campaign, candidates, style, opts) do
       {:ok, carousel} ->
         case Campaigns.generate_curated_carousel_video(campaign, carousel) do
           {:ok, video} ->
@@ -146,8 +147,8 @@ defmodule GridMediaManager.Studio.Workflow do
     end
   end
 
-  defp generate_x_post(campaign, candidates, style) do
-    case Campaigns.generate_x_post(campaign, candidates, style) do
+  defp generate_x_post(campaign, candidates, style, opts) do
+    case Campaigns.generate_x_post(campaign, candidates, style, opts) do
       {:ok, asset} ->
         %{assets: [asset], errors: []}
 
@@ -157,8 +158,8 @@ defmodule GridMediaManager.Studio.Workflow do
     end
   end
 
-  defp generate_story_video(campaign, candidates, style) do
-    case Campaigns.generate_story_video(campaign, candidates, style) do
+  defp generate_story_video(campaign, candidates, style, opts) do
+    case Campaigns.generate_story_video(campaign, candidates, style, opts) do
       {:ok, video} ->
         %{assets: [video], errors: []}
 
@@ -168,8 +169,8 @@ defmodule GridMediaManager.Studio.Workflow do
     end
   end
 
-  defp generate_long_form_post(campaign, candidates, style) do
-    case Campaigns.generate_long_form_post(campaign, candidates, style) do
+  defp generate_long_form_post(campaign, candidates, style, opts) do
+    case Campaigns.generate_long_form_post(campaign, candidates, style, opts) do
       {:ok, asset} ->
         %{assets: [asset], errors: []}
 

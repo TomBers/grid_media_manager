@@ -94,7 +94,7 @@ defmodule GridMediaManager.Social.Templates do
           "“#{quote}”\n\n#{cta_line(link)}"
       end
 
-    fit_to_platform(copy, platform, link)
+    fit_to_platform(copy, platform, link, "“#{quote}”")
   end
 
   defp body_for_platform(
@@ -125,7 +125,7 @@ defmodule GridMediaManager.Social.Templates do
           "#{question}\n\n#{cta_line(link)}"
       end
 
-    fit_to_platform(copy, platform, link)
+    fit_to_platform(copy, platform, link, question)
   end
 
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "key_node") do
@@ -154,7 +154,7 @@ defmodule GridMediaManager.Social.Templates do
           "#{node_title}\n\n#{node_text}\n\n#{cta_line(link)}"
       end
 
-    fit_to_platform(copy, platform, link)
+    fit_to_platform(copy, platform, link, node_title)
   end
 
   defp body_for_platform(
@@ -170,13 +170,23 @@ defmodule GridMediaManager.Social.Templates do
       |> fallback(asset.title |> fallback("Long-form answer") |> to_string())
 
     sections = Markdown.social_sections(source)
-    fit_long_form_to_platform(sections, platform, asset_link(campaign, asset))
+
+    fit_long_form_to_platform(
+      sections,
+      platform,
+      asset_link(campaign, asset),
+      editorial_hook(asset)
+    )
   end
 
   defp body_for_platform(%Campaign{} = campaign, %MediaAsset{} = asset, platform, "visual") do
     link = asset_link(campaign, asset)
     title = caption_title(campaign.title)
     hook = visual_hook(asset, title)
+    headline = editorial_hook(asset) || title
+
+    opening =
+      if editorial_hook(asset), do: hook, else: Enum.join(Enum.uniq([title, hook]), "\n\n")
 
     copy =
       case platform do
@@ -184,19 +194,19 @@ defmodule GridMediaManager.Social.Templates do
           "#{hook}\n\nWhich assumption changes once you see the full argument?\n\n#{cta_line(link)}"
 
         "linkedin" ->
-          "#{title}\n\nOne visual idea, placed inside its wider argument.\n\n#{cta_line(link)}"
+          "#{headline}\n\nOne visual idea, placed inside its wider argument.\n\n#{cta_line(link)}"
 
         "facebook" ->
-          "#{title}\n\nStart with the visual, then follow the evidence and decide where you stand.\n\n#{cta_line(link)}"
+          "#{headline}\n\nStart with the visual, then follow the evidence and decide where you stand.\n\n#{cta_line(link)}"
 
         "instagram" ->
-          "#{title}\n\n#{hook}\n\nSwipe for the reasoning. Which part would you challenge?\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
+          "#{opening}\n\n#{instagram_instruction(asset)} Which part would you challenge?\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "tiktok" ->
-          "#{title}\n\n#{hook}\n\nWatch to the final connection, then tell us where the argument breaks.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
+          "#{opening}\n\nWatch to the final connection, then tell us where the argument breaks.\n\n#{cta_line(link)}\n\n#{hashtags(campaign)}"
 
         "youtube" ->
-          "#{title}\n\n#{hook}\n\nA concise visual argument: the claim, its tension, and the takeaway. What follows if it is right?\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
+          "#{opening}\n\nA concise visual argument: the claim, its tension, and the takeaway. What follows if it is right?\n\n#{cta_line(link)}\n\n#Shorts #RationalGrid"
 
         "substack" ->
           "#{title}\n\nA navigable map of explanations, questions, and related ideas.\n\n#{cta_line(link)}"
@@ -205,7 +215,7 @@ defmodule GridMediaManager.Social.Templates do
           "#{title}\n\n#{cta_line(link)}"
       end
 
-    fit_to_platform(copy, platform, link)
+    fit_to_platform(copy, platform, link, hook)
   end
 
   defp body_for_platform(%Campaign{} = campaign, _asset, platform, "question") do
@@ -226,7 +236,7 @@ defmodule GridMediaManager.Social.Templates do
           "#{question}\n\n#{cta_line(campaign.grid_url)}"
       end
 
-    fit_to_platform(copy, platform, campaign.grid_url)
+    fit_to_platform(copy, platform, campaign.grid_url, question)
   end
 
   defp body_for_platform(%Campaign{} = campaign, _asset, platform, "explainer") do
@@ -247,7 +257,7 @@ defmodule GridMediaManager.Social.Templates do
           "#{title}\n\nA map for exploring the ideas, not just reading about them.\n#{cta_line(campaign.grid_url)}"
       end
 
-    fit_to_platform(copy, platform, campaign.grid_url)
+    fit_to_platform(copy, platform, campaign.grid_url, title)
   end
 
   defp body_for_platform(%Campaign{} = campaign, _asset, platform, "discussion") do
@@ -268,7 +278,7 @@ defmodule GridMediaManager.Social.Templates do
           "#{question}\n\nWhere do you land?\n\n#{cta_line(campaign.grid_url)}"
       end
 
-    fit_to_platform(copy, platform, campaign.grid_url)
+    fit_to_platform(copy, platform, campaign.grid_url, question)
   end
 
   defp full_node_text(%Campaign{} = campaign, %MediaAsset{} = asset) do
@@ -406,21 +416,20 @@ defmodule GridMediaManager.Social.Templates do
     |> fallback("#RationalGrid #ArgumentMapping")
   end
 
-  defp fit_to_platform(copy, platform, link) do
+  defp fit_to_platform(copy, platform, link, opening) do
     if Platforms.within_limit?(copy, platform) do
       copy
     else
-      fallback_copy = compact_fallback(link)
+      opening = String.trim(opening)
+      link = fallback(link, "https://rationalgrid.ai")
+      concise = opening <> "\n\n" <> link
 
-      if Platforms.within_limit?(fallback_copy, platform) do
-        fallback_copy
-      else
-        "Learn more at RationalGrid.ai"
-      end
+      [opening <> "\n\n" <> cta_line(link), concise]
+      |> Enum.find(concise, &Platforms.within_limit?(&1, platform))
     end
   end
 
-  defp fit_long_form_to_platform(sections, platform, link) do
+  defp fit_long_form_to_platform(sections, platform, link, hook) do
     cta = cta_line(link)
 
     copy =
@@ -435,6 +444,8 @@ defmodule GridMediaManager.Social.Templates do
           Enum.join(sections, "\n\n")
       end
 
+    copy = prepend_hook(copy, hook)
+    sections = if hook, do: [hook | sections], else: sections
     full_copy = copy <> "\n\n" <> cta
 
     if Platforms.within_limit?(full_copy, platform) do
@@ -502,12 +513,6 @@ defmodule GridMediaManager.Social.Templates do
   defp append_list_group(groups, []), do: groups
   defp append_list_group(groups, items), do: groups ++ [Enum.join(items, "\n\n")]
 
-  defp compact_fallback(link) when is_binary(link) and link != "" do
-    cta_line(link)
-  end
-
-  defp compact_fallback(_link), do: "Learn more at RationalGrid.ai"
-
   defp visual_hook(%MediaAsset{} = asset, fallback) do
     asset.metadata
     |> Kernel.||(%{})
@@ -519,9 +524,33 @@ defmodule GridMediaManager.Social.Templates do
     end)
     |> fallback(asset.text)
     |> fallback(fallback)
+    |> then(&(editorial_hook(asset) || &1))
     |> String.trim()
-    |> String.slice(0, 220)
   end
+
+  defp editorial_hook(%MediaAsset{metadata: metadata}) do
+    case Map.get(metadata || %{}, "editorial_hook") do
+      hook when is_binary(hook) -> if String.trim(hook) != "", do: String.trim(hook)
+      _ -> nil
+    end
+  end
+
+  defp prepend_hook(copy, nil), do: copy
+
+  defp prepend_hook(copy, hook) do
+    if String.starts_with?(copy, hook), do: copy, else: hook <> "\n\n" <> copy
+  end
+
+  defp instagram_instruction(%MediaAsset{mime_type: "video/mp4"}),
+    do: "Watch the reasoning unfold."
+
+  defp instagram_instruction(%MediaAsset{kind: "curated_carousel_video"}),
+    do: "Watch the reasoning unfold."
+
+  defp instagram_instruction(%MediaAsset{kind: "curated_carousel"}),
+    do: "Swipe for the reasoning."
+
+  defp instagram_instruction(%MediaAsset{}), do: "Explore the reasoning."
 
   defp fallback(nil, fallback), do: fallback
   defp fallback("", fallback), do: fallback

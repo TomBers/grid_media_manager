@@ -449,9 +449,12 @@ defmodule GridMediaManager.Campaigns do
     |> then(&upsert_generated_asset_with_drafts(campaign, &1))
   end
 
-  def generate_curated_carousel(%Campaign{} = campaign, candidates, style)
+  def generate_curated_carousel(campaign, candidates, style, opts \\ [])
+
+  def generate_curated_carousel(%Campaign{} = campaign, candidates, style, opts)
       when is_list(candidates) and length(candidates) >= 1 do
-    generate_curated_carousel(campaign, candidates, style,
+    do_generate_curated_carousel(campaign, candidates, style,
+      editorial_hook: Keyword.get(opts, :editorial_hook),
       reading_mode: :full,
       include_cover: true,
       recommended_platforms: Platforms.text_ids(),
@@ -460,12 +463,13 @@ defmodule GridMediaManager.Campaigns do
     )
   end
 
-  def generate_curated_carousel(%Campaign{}, _candidates, _style),
+  def generate_curated_carousel(%Campaign{}, _candidates, _style, _opts),
     do: {:error, :not_enough_candidates}
 
-  def generate_curated_carousel_bundle(%Campaign{} = campaign, candidates, style)
+  def generate_curated_carousel_bundle(%Campaign{} = campaign, candidates, style, opts \\ [])
       when is_list(candidates) and length(candidates) >= 1 do
-    generate_curated_carousel(campaign, candidates, style,
+    do_generate_curated_carousel(campaign, candidates, style,
+      editorial_hook: Keyword.get(opts, :editorial_hook),
       reading_mode: :short_video,
       include_cover: true,
       recommended_platforms: Platforms.text_ids(),
@@ -474,11 +478,14 @@ defmodule GridMediaManager.Campaigns do
     )
   end
 
-  def generate_x_post(%Campaign{} = campaign, candidates, style)
+  def generate_x_post(campaign, candidates, style, opts \\ [])
+
+  def generate_x_post(%Campaign{} = campaign, candidates, style, opts)
       when is_list(candidates) and length(candidates) >= 1 do
     text = candidates |> List.first() |> Map.get(:title, campaign.title)
 
-    generate_curated_carousel(campaign, candidates, style,
+    do_generate_curated_carousel(campaign, candidates, style,
+      editorial_hook: Keyword.get(opts, :editorial_hook),
       reading_mode: :x_post,
       include_cover: true,
       recommended_platforms: ["x"],
@@ -487,9 +494,12 @@ defmodule GridMediaManager.Campaigns do
     )
   end
 
-  def generate_x_post(%Campaign{}, _candidates, _style), do: {:error, :not_enough_candidates}
+  def generate_x_post(%Campaign{}, _candidates, _style, _opts),
+    do: {:error, :not_enough_candidates}
 
-  def generate_story_video(%Campaign{} = campaign, candidates, style)
+  def generate_story_video(campaign, candidates, style, opts \\ [])
+
+  def generate_story_video(%Campaign{} = campaign, candidates, style, opts)
       when is_list(candidates) and length(candidates) >= 1 do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
@@ -498,13 +508,13 @@ defmodule GridMediaManager.Campaigns do
 
     campaign
     |> CarouselVideo.curated_asset_attr(token, slides, style)
-    |> then(&upsert_generated_asset_with_drafts(campaign, &1))
+    |> then(&upsert_generated_asset_with_drafts(campaign, &1, opts))
   end
 
-  def generate_story_video(%Campaign{}, _candidates, _style),
+  def generate_story_video(%Campaign{}, _candidates, _style, _opts),
     do: {:error, :not_enough_candidates}
 
-  defp generate_curated_carousel(%Campaign{} = campaign, candidates, style, opts) do
+  defp do_generate_curated_carousel(%Campaign{} = campaign, candidates, style, opts) do
     campaign = get_campaign!(campaign.id)
     style = ShareCard.normalize_style(style)
 
@@ -537,7 +547,7 @@ defmodule GridMediaManager.Campaigns do
         "selected_slide_indexes" => ShareCard.curated_carousel_selected_slide_indexes(slides)
       }
     }
-    |> then(&upsert_generated_asset_with_drafts(campaign, &1))
+    |> then(&upsert_generated_asset_with_drafts(campaign, &1, opts))
   end
 
   def update_curated_carousel_selection(%MediaAsset{kind: "curated_carousel"} = asset, selection)
@@ -578,7 +588,11 @@ defmodule GridMediaManager.Campaigns do
     |> CarouselVideo.curated_asset_attr(carousel.source_id, slides, carousel.style,
       selected_slide_indexes: Map.get(carousel.metadata || %{}, "selected_slide_indexes")
     )
-    |> then(&upsert_generated_asset_with_drafts(campaign, &1))
+    |> then(
+      &upsert_generated_asset_with_drafts(campaign, &1,
+        editorial_hook: Map.get(carousel.metadata || %{}, "editorial_hook")
+      )
+    )
   end
 
   def generate_highlight_asset(
@@ -614,30 +628,30 @@ defmodule GridMediaManager.Campaigns do
     end
   end
 
-  def generate_long_form_post(campaign, source, style \\ ShareCard.default_style())
+  def generate_long_form_post(campaign, source, style \\ ShareCard.default_style(), opts \\ [])
 
-  def generate_long_form_post(%Campaign{} = campaign, candidates, style)
+  def generate_long_form_post(%Campaign{} = campaign, candidates, style, opts)
       when is_list(candidates) and candidates != [] do
     campaign = get_campaign!(campaign.id)
 
     with attrs when is_map(attrs) <-
            ShareCard.long_form_asset_attr(campaign, candidates, style) do
-      upsert_generated_asset_with_drafts(campaign, attrs)
+      upsert_generated_asset_with_drafts(campaign, attrs, opts)
     else
       _ -> {:error, :unsupported_content}
     end
   end
 
-  def generate_long_form_post(%Campaign{}, candidates, _style) when is_list(candidates),
+  def generate_long_form_post(%Campaign{}, candidates, _style, _opts) when is_list(candidates),
     do: {:error, :not_enough_candidates}
 
-  def generate_long_form_post(%Campaign{} = campaign, node_id, style) do
+  def generate_long_form_post(%Campaign{} = campaign, node_id, style, opts) do
     campaign = get_campaign!(campaign.id)
 
     with node when is_map(node) <- ShareCard.find_key_node(campaign, node_id),
          attrs when is_map(attrs) <-
            ShareCard.key_node_long_form_asset_attr(campaign, node, style) do
-      upsert_generated_asset_with_drafts(campaign, attrs)
+      upsert_generated_asset_with_drafts(campaign, attrs, opts)
     else
       _ -> {:error, :not_found}
     end
@@ -744,7 +758,9 @@ defmodule GridMediaManager.Campaigns do
 
   defp generated_media_asset?(_asset), do: false
 
-  defp upsert_generated_asset_with_drafts(%Campaign{} = campaign, attrs) do
+  defp upsert_generated_asset_with_drafts(%Campaign{} = campaign, attrs, opts \\ []) do
+    attrs = put_editorial_hook(attrs, Keyword.get(opts, :editorial_hook))
+
     Repo.transaction(fn ->
       attrs = put_generated_render_signature(campaign, attrs)
       asset = upsert_media_asset(campaign, attrs)
@@ -752,6 +768,40 @@ defmodule GridMediaManager.Campaigns do
       asset
     end)
   end
+
+  defp put_editorial_hook(attrs, hook) when is_binary(hook) do
+    case String.trim(hook) do
+      "" ->
+        attrs
+
+      hook ->
+        slides =
+          Enum.map(attrs.metadata["slides"] || [], fn
+            %{"kind" => "cover"} = slide -> Map.put(slide, "title", hook)
+            slide -> slide
+          end)
+
+        metadata =
+          attrs.metadata
+          |> Map.put("editorial_hook", hook)
+          |> Map.put("slides", slides)
+          |> refresh_video_timing(struct(MediaAsset, attrs))
+
+        # Different editorial openings must not overwrite another plan's assets or drafts.
+        digest = :crypto.hash(:sha256, hook) |> Base.encode16(case: :lower) |> binary_part(0, 16)
+        separator = if String.contains?(attrs.url, "?"), do: "&", else: "?"
+
+        %{
+          attrs
+          | title: hook,
+            metadata: metadata,
+            source_id: "#{attrs.source_id}-#{digest}",
+            url: attrs.url <> separator <> "editorial_hook=" <> digest
+        }
+    end
+  end
+
+  defp put_editorial_hook(attrs, _hook), do: attrs
 
   defp maybe_cleanup_published_media(media_asset_id) do
     drafts = Repo.all(from d in PostDraft, where: d.media_asset_id == ^media_asset_id)

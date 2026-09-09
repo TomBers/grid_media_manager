@@ -174,6 +174,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       |> assign(:expanded_thread_ids, expanded_thread_ids)
       |> assign(:step, restored_step)
       |> assign(:selected_style, restored_style)
+      |> assign(
+        :editorial_hook,
+        if(editorial_plan, do: editorial_plan.hook, else: Map.get(studio_state, "editorial_hook"))
+      )
       |> assign(:content_mode, restored_content_mode)
       |> assign(
         :selected_format,
@@ -2404,6 +2408,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       </.form>
 
       <p
+        :if={@item.character_over_limit}
+        id={"guided-draft-length-warning-#{@item.id}"}
+        role="status"
+        class="mt-2 text-sm font-medium text-amber-700 dark:text-amber-300"
+      >
+        Shorten this caption before scheduling. Keep the opening thought complete;
+        it exceeds the {Platforms.label(@item.draft.platform)} limit by {@item.character_count -
+          @item.character_limit} characters.
+      </p>
+
+      <p
         :if={not @item.editable?}
         class="mt-2 text-xs font-semibold text-base-content/50"
       >
@@ -2520,6 +2535,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
       "selected_format" => socket.assigns.selected_format,
       "content_mode" => socket.assigns.content_mode,
       "selected_platforms" => socket.assigns.selected_platforms,
+      "editorial_hook" => socket.assigns.editorial_hook,
       "candidate_filter" => socket.assigns.candidate_filter
     }
 
@@ -2537,10 +2553,13 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp start_package_generation(socket, content_mode) do
+    socket = persist_studio_state(socket)
     campaign = socket.assigns.campaign
     style = socket.assigns.selected_style
     all_candidates = socket.assigns.all_candidates
     selected_order = socket.assigns.selected_order
+
+    editorial_hook = socket.assigns.editorial_hook
 
     cover =
       VisualDirection.cover(
@@ -2556,6 +2575,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         content_mode: content_mode,
         style: style,
         format: PackageDefinition.format_for_mode(content_mode),
+        editorial_hook: editorial_hook,
         cover: cover
       )
     end)
@@ -2846,6 +2866,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp schedulable_drafts(drafts) do
     Enum.filter(drafts, fn draft ->
       PostDraft.schedulable?(draft) and
+        Platforms.within_limit?(draft.body, draft.platform) and
         Buffer.account_for(draft.platform) != nil and
         client_artifacts_ready?(draft.media_asset) and
         if draft.platform in Platforms.video_ids(),

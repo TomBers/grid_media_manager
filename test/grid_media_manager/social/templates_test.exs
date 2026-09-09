@@ -63,12 +63,12 @@ defmodule GridMediaManager.Social.TemplatesTest do
     assert node_body =~ "Why Comfort Can Become a Cage"
   end
 
-  test "all generated suggestions stay within their platform limit without truncating source text" do
+  test "oversized openings remain intact for editing instead of becoming link-only posts" do
     campaign = %{campaign() | title: String.duplicate("A very long campaign title ", 180)}
 
     asset = %MediaAsset{
       id: 1,
-      title: String.duplicate("A complete node title ", 180),
+      title: String.duplicate("A complete node title ", 300),
       kind: "key_node_card",
       text: String.duplicate("A complete source quote. ", 300),
       recommended_platforms: Platforms.ids()
@@ -77,8 +77,9 @@ defmodule GridMediaManager.Social.TemplatesTest do
     campaign
     |> Templates.draft_attrs([asset])
     |> Enum.each(fn draft ->
-      assert Platforms.within_limit?(draft.body, draft.platform)
-      assert draft.body =~ "Learn more at RationalGrid.ai"
+      refute Platforms.within_limit?(draft.body, draft.platform)
+      assert String.starts_with?(draft.body, "A Complete Node Title")
+      assert draft.body =~ campaign.grid_url
       refute String.ends_with?(draft.body, "…")
     end)
   end
@@ -98,7 +99,57 @@ defmodule GridMediaManager.Social.TemplatesTest do
 
     refute instagram_copy == youtube_copy
     assert instagram_copy =~ "#"
+    assert instagram_copy =~ "Watch the reasoning unfold."
+    refute instagram_copy =~ "Swipe"
     assert youtube_copy =~ "RationalGrid.ai"
+  end
+
+  test "X keeps a complete hook and its deep link when supporting copy does not fit" do
+    campaign = %{
+      campaign()
+      | grid_url: "https://rationalgrid.ai/g/" <> String.duplicate("a", 100)
+    }
+
+    hook = "What would change your mind about a claim you have believed for years?"
+    asset = %MediaAsset{kind: "curated_carousel", metadata: %{"editorial_hook" => hook}}
+
+    body = Templates.body(campaign, asset, "x", "visual")
+
+    assert body == hook <> "\n\n" <> campaign.grid_url
+    assert Platforms.within_limit?(body, "x")
+  end
+
+  test "X never clips a visual hook at 220 characters" do
+    hook = String.duplicate("A meaningful detail. ", 11) <> "What follows?"
+    campaign = %{campaign() | grid_url: "https://rationalgrid.ai/g/a"}
+    asset = %MediaAsset{kind: "curated_carousel", metadata: %{"slides" => [%{"title" => hook}]}}
+
+    body = Templates.body(campaign, asset, "x", "visual")
+
+    assert String.starts_with?(body, hook)
+    assert String.ends_with?(body, campaign.grid_url)
+    assert Platforms.within_limit?(body, "x")
+  end
+
+  test "multiline quotations retain their closing quotation mark when captions are shortened" do
+    quote = "A useful claim.\n\nA necessary qualification."
+    campaign = %{campaign() | title: String.duplicate("Long title ", 50)}
+    asset = %MediaAsset{kind: "highlight_card", text: quote}
+
+    body = Templates.body(campaign, asset, "x", "highlight")
+
+    assert String.starts_with?(body, "“#{quote}”\n\n")
+    assert Platforms.within_limit?(body, "x")
+  end
+
+  test "Instagram distinguishes swipeable carousels from individual images" do
+    carousel = %MediaAsset{kind: "curated_carousel", mime_type: "image/png"}
+    image = %MediaAsset{kind: "key_node_card", mime_type: "image/png"}
+
+    assert Templates.body(campaign(), carousel, "instagram", "visual") =~
+             "Swipe for the reasoning."
+
+    refute Templates.body(campaign(), image, "instagram", "visual") =~ "Swipe"
   end
 
   test "adapts copy within each supported platform group" do
