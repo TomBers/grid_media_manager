@@ -13,6 +13,8 @@ A Phoenix LiveView workflow for turning RationalGrid source text into editable s
 
 The browser canvas is the only visual renderer. Phoenix plans and persists editable text, style choices, and slide order; it does not contain an SVG or server-side card renderer. For short-form video, FFmpeg packages the exact saved PNG frames into an MP4 without recreating their layout.
 
+Generated videos include `priv/static/sounds/rationalgrid_theme.mp4` as an AAC soundtrack at 65% volume, looping to the selected frame duration with a short fade-in and a 1.5-second fade-out. The soundtrack content is part of the export cache key, so replacing the theme regenerates exports. A missing or unreadable theme stops export rather than silently producing a mute video. Editorial planning prefers a relevant photographic front cover, with text-only covers reserved for cases where an image would be misleading or generic.
+
 ## Development
 
 ```sh

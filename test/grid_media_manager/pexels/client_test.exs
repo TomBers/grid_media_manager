@@ -2,6 +2,7 @@ defmodule GridMediaManager.Pexels.ClientTest do
   use ExUnit.Case, async: false
 
   alias GridMediaManager.Pexels.Client
+  alias GridMediaManager.Studio.VisualDirection
 
   setup do
     previous_config = Application.get_env(:grid_media_manager, :pexels)
@@ -41,6 +42,20 @@ defmodule GridMediaManager.Pexels.ClientTest do
 
     Application.delete_env(:grid_media_manager, :pexels)
     refute Client.configured?()
+  end
+
+  test "planning tries a cover search even when the initial direction is typography" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert Plug.Conn.Query.decode(conn.query_string)["query"] == "open doorway"
+      Req.Test.json(conn, %{"photos" => []})
+    end)
+
+    story = %{cover_mode: "text", cover_search_query: "open doorway"}
+
+    assert VisualDirection.resolve_cover(nil, "Boundaries", story, true) == %{
+             "mode" => "text",
+             "status" => "no_results"
+           }
   end
 
   test "the environment API key takes precedence over application config" do

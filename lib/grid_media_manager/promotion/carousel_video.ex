@@ -1,9 +1,9 @@
 defmodule GridMediaManager.Promotion.CarouselVideo do
   @moduledoc """
-  Packages finished browser-rendered PNG frames into an H.264 MP4.
+  Packages finished browser-rendered PNG frames and the RationalGrid theme into an H.264 MP4.
 
   This module does not lay out text or draw visuals. Its only media operation is
-  transcoding the exact frames saved by the client canvas.
+  transcoding the exact frames saved by the client canvas with a looped, faded soundtrack.
   """
 
   require Logger
@@ -22,7 +22,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @frame_rate 30
   @render_timeout 300_000
   @render_timeout_per_second 5_000
-  @cache_version 29
+  @cache_version 30
 
   def available?, do: is_binary(ffmpeg_path())
 
@@ -115,14 +115,17 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
     with true <- Enum.all?(artifacts, &valid_artifact?/1),
          ffmpeg when is_binary(ffmpeg) <- ffmpeg_path(),
-         {:ok, cache_dir} <- ensure_cache_dir() do
+         {:ok, cache_dir} <- ensure_cache_dir(),
+         {:ok, soundtrack} <- theme_soundtrack() do
       durations = asset_frame_durations(asset, indexes)
-      output_path = Path.join(cache_dir, cache_filename(asset, indexes, artifacts, durations))
+
+      output_path =
+        Path.join(cache_dir, cache_filename(asset, indexes, artifacts, durations, soundtrack))
 
       if valid_video_file?(output_path) do
         {:ok, output_path}
       else
-        encode_frames(ffmpeg, durations, cache_dir, output_path, fn position ->
+        encode_frames(ffmpeg, durations, cache_dir, output_path, soundtrack, fn position ->
           artifacts
           |> Enum.at(position - 1)
           |> Map.fetch!("path")
@@ -170,7 +173,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     |> then(&(&1 ++ [last_index]))
   end
 
-  defp encode_frames(ffmpeg, durations, cache_dir, output_path, frame_fun) do
+  defp encode_frames(ffmpeg, durations, cache_dir, output_path, soundtrack, frame_fun) do
     work_dir = Path.join(cache_dir, "work-#{System.unique_integer([:positive, :monotonic])}")
 
     with :ok <- File.mkdir_p(work_dir) do
@@ -178,7 +181,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
         slide_paths = write_frames!(length(durations), frame_fun, work_dir)
         manifest_path = write_concat_manifest!(slide_paths, durations, work_dir)
         temporary_output = Path.join(work_dir, "artifact.mp4")
-        args = ffmpeg_args(manifest_path, temporary_output, durations)
+        args = ffmpeg_args(manifest_path, temporary_output, durations, soundtrack.path)
 
         case run_ffmpeg(ffmpeg, args, duration_seconds(durations)) do
           {:ok, _output} ->
@@ -231,7 +234,7 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
 
   defp escape_concat_path(path), do: String.replace(path, "'", "'\\''")
 
-  defp ffmpeg_args(manifest_path, output_path, durations) do
+  defp ffmpeg_args(manifest_path, output_path, durations, soundtrack_path) do
     duration = duration_seconds(durations)
 
     [
@@ -245,11 +248,26 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
       "0",
       "-i",
       manifest_path,
+      "-stream_loop",
+      "-1",
+      "-i",
+      soundtrack_path,
       "-vf",
       video_filter(),
       "-map",
       "0:v:0",
-      "-an",
+      "-map",
+      "1:a:0",
+      "-af",
+      audio_filter(duration),
+      "-c:a",
+      "aac",
+      "-b:a",
+      "128k",
+      "-ar",
+      "48000",
+      "-ac",
+      "2",
       "-c:v",
       "libx264",
       "-preset",
@@ -274,6 +292,22 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     "scale=#{@width}:#{@height}:force_original_aspect_ratio=decrease," <>
       "pad=#{@width}:#{@height}:(ow-iw)/2:(oh-ih)/2," <>
       "setsar=1,format=yuv420p,fps=#{@frame_rate}"
+  end
+
+  defp audio_filter(duration) do
+    fade_out_start = max(duration - 1.5, 0.0)
+
+    "asetpts=PTS-STARTPTS,volume=0.65,afade=t=in:st=0:d=0.35," <>
+      "afade=t=out:st=#{decimal(fade_out_start)}:d=1.5"
+  end
+
+  defp theme_soundtrack do
+    path = Application.app_dir(:grid_media_manager, "priv/static/sounds/rationalgrid_theme.mp4")
+
+    case File.read(path) do
+      {:ok, bytes} -> {:ok, %{path: path, sha256: :crypto.hash(:sha256, bytes)}}
+      {:error, reason} -> {:error, {:soundtrack_unavailable, reason}}
+    end
   end
 
   defp run_ffmpeg(executable, args, expected_duration) do
@@ -315,11 +349,12 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
     |> slide_durations(indexes)
   end
 
-  defp cache_filename(asset, indexes, artifacts, durations) do
+  defp cache_filename(asset, indexes, artifacts, durations, soundtrack) do
     signature = Enum.map(artifacts, &Map.take(&1, ["sha256", "byte_size"]))
 
     digest =
-      {@cache_version, asset.id, indexes, signature, durations, video_filter()}
+      {@cache_version, asset.id, indexes, signature, durations, video_filter(), soundtrack.sha256,
+       audio_filter(duration_seconds(durations))}
       |> :erlang.term_to_binary()
       |> then(&:crypto.hash(:sha256, &1))
       |> Base.url_encode64(padding: false)

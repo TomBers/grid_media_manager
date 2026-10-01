@@ -113,7 +113,9 @@ defmodule GridMediaManager.Automation.EditorialGuidance do
     Available editable canvas styles:
     #{style_list}
 
-    For a photo cover, write a short concrete Pexels query using visible subjects, setting,
+    Prefer an interesting, relevant photograph for the front cover. Always make a concrete
+    image-search plan, including for abstract topics, before considering a typography-led cover.
+    Write a short concrete Pexels query using visible subjects, setting,
     lighting, colour, and composition—not philosophical jargon. Prefer editorial metaphor,
     atmosphere, human scale, and useful negative space for title text. Avoid clichés such as
     glowing robot heads, stock handshakes, random circuit boards, chess pieces, and text inside

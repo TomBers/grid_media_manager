@@ -47,7 +47,7 @@ defmodule GridMediaManager.Studio.VisualDirection do
   def configured?, do: Pexels.configured?()
   def search(query, opts \\ []), do: Pexels.search(query, opts)
 
-  def resolve_cover(_selector, _topic, %{cover_mode: "text"}, _search?) do
+  def resolve_cover(_selector, _topic, %{cover_mode: "text"}, false) do
     %{"mode" => "text", "status" => "selected"}
   end
 
@@ -70,10 +70,10 @@ defmodule GridMediaManager.Studio.VisualDirection do
         }
 
       {:ok, []} ->
-        %{"mode" => "photo", "status" => "no_results"}
+        %{"mode" => "text", "status" => "no_results"}
 
       {:error, reason} ->
-        %{"mode" => "photo", "status" => "unavailable", "error" => error_message(reason)}
+        %{"mode" => "text", "status" => "unavailable", "error" => error_message(reason)}
     end
   end
 
