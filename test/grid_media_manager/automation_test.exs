@@ -274,7 +274,9 @@ defmodule GridMediaManager.AutomationTest do
     plan = hd(batch.plans)
 
     details =
-      Map.put(plan.selection_details, "video_script", [
+      plan.selection_details
+      |> Map.put("audience_market", "us")
+      |> Map.put("video_script", [
         "A first complete thought.",
         "A second complete thought.",
         "What would change your mind?"
@@ -307,14 +309,22 @@ defmodule GridMediaManager.AutomationTest do
 
     assert {:ok, %{jobs: jobs}} = Automation.queue_fill_plan(batch.id, ~D[2090-09-08])
     assert length(jobs) == 5
+    assert Enum.all?(jobs, &(&1.market == :us))
     refute Enum.any?(jobs, &(&1.platform == "x"))
 
     assert Enum.all?(
              jobs,
-             &(Date.compare(DateTime.to_date(&1.scheduled_for), ~D[2090-09-09]) == :gt)
+             &(Date.compare(DateTime.to_date(&1.scheduled_for), ~D[2090-09-08]) != :lt)
            )
 
     assert Enum.all?(jobs, &is_nil(&1.draft.external_post_id))
+
+    assert {:ok, %{jobs: next_day_jobs}} = Automation.queue_fill_plan(batch.id, Date.utc_today())
+
+    assert Enum.all?(
+             next_day_jobs,
+             &(Date.compare(DateTime.to_date(&1.scheduled_for), Date.utc_today()) == :gt)
+           )
   end
 
   test "quality preparation revises a weak package once and reuses the final review" do

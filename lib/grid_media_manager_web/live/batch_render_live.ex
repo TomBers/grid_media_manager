@@ -26,7 +26,9 @@ defmodule GridMediaManagerWeb.BatchRenderLive do
           |> assign(:schedule_result, nil)
           |> assign(
             :schedule_form,
-            to_form(%{"start_date" => Date.to_iso8601(Date.utc_today())}, as: :schedule)
+            to_form(%{"start_date" => Date.to_iso8601(Date.add(Date.utc_today(), 1))},
+              as: :schedule
+            )
           )
           |> assign(:error, nil)
 
@@ -180,7 +182,7 @@ defmodule GridMediaManagerWeb.BatchRenderLive do
                 </button>
               </.form>
               <p class="mt-3 text-xs leading-5 text-base-content/60">
-                Uses open days after existing queued posts and channel-specific test windows. Packages need Editor approval or approval of all six drafts, plus pacing checks. See Results to assess what works.
+                Starts no earlier than tomorrow, using two daily test windows: UK local time and US Eastern time, including weekends. Existing queued posts occupy the nearest window and are preserved. Packages need Editor approval or approval of all six drafts, plus pacing checks. See Results to assess what works.
               </p>
             </div>
 

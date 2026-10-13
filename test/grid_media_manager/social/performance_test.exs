@@ -82,14 +82,70 @@ defmodule GridMediaManager.Social.PerformanceTest do
              "https://example.com/source"
   end
 
-  test "queue slots respect occupied days, weekdays and the future-time buffer" do
-    now = ~U[2026-09-09 12:00:00Z]
-    queued = [%{due_at: "2026-09-10T19:00:00Z"}]
-    slots = PostingSchedule.slots("x", 8, queued, now: now)
-    assert length(slots) == 8
-    assert DateTime.to_date(hd(slots)) == ~D[2026-09-11]
-    assert Enum.all?(slots, &(Date.day_of_week(DateTime.to_date(&1)) <= 5))
-    assert length(Enum.uniq_by(slots, &DateTime.to_date/1)) == 8
+  test "queue slots fill both markets daily, preserve occupied windows and respect lead time" do
+    now = ~U[2026-10-13 09:00:00Z]
+    queued = [%{due_at: "2026-10-14T08:30:00Z"}]
+    slots = PostingSchedule.market_slots("x", 8, queued, now: now)
+    assert hd(slots) == %{market: :us, scheduled_for: ~U[2026-10-13 13:00:00Z]}
+    assert Enum.at(slots, 1) == %{market: :us, scheduled_for: ~U[2026-10-14 13:00:00Z]}
+    assert Enum.any?(slots, &(Date.day_of_week(DateTime.to_date(&1.scheduled_for)) == 6))
+
+    assert Enum.all?(Enum.frequencies_by(slots, &DateTime.to_date(&1.scheduled_for)), fn {_, n} ->
+             n <= 2
+           end)
+
     assert PostingSchedule.slots("x", 0, queued, now: now) == []
+    full_day = [%{due_at: "2026-10-14T08:00:00Z"}, %{due_at: "2026-10-14T13:00:00Z"}]
+
+    assert PostingSchedule.slots("x", 1, full_day, now: now, start_date: ~D[2026-10-14]) == [
+             ~U[2026-10-15 08:00:00Z]
+           ]
+  end
+
+  test "UK and US windows follow their separate clock changes" do
+    for {date, uk_hour, us_hour} <- [
+          {~D[2026-03-07], 9, 14},
+          {~D[2026-03-08], 9, 13},
+          {~D[2026-03-29], 8, 13},
+          {~D[2026-10-24], 8, 13},
+          {~D[2026-10-25], 9, 13},
+          {~D[2026-11-01], 9, 14}
+        ] do
+      [uk, us] = PostingSchedule.slots("x", 2, [], now: DateTime.new!(date, ~T[00:00:00]))
+      assert uk.hour == uk_hour
+      assert us.hour == us_hour
+    end
+  end
+
+  test "market content stays in its window despite occupied slots and partial retries" do
+    jobs = [
+      %{id: 1, market: :uk},
+      %{id: 2, market: :us},
+      %{id: 3, market: :uk},
+      %{id: 4, market: :us}
+    ]
+
+    queued = [%{due_at: "2026-10-14T08:00:00Z"}]
+    opts = [now: ~U[2026-10-13 00:00:00Z], start_date: ~D[2026-10-14]]
+    assigned = PostingSchedule.assign_jobs("x", jobs, queued, opts)
+    assert Enum.map(assigned, & &1.id) == [2, 1, 4, 3]
+    first = hd(assigned)
+    remaining = Enum.reject(jobs, &(&1.id == first.id))
+
+    retried =
+      PostingSchedule.assign_jobs(
+        "x",
+        remaining,
+        [%{due_at: DateTime.to_iso8601(first.scheduled_for)} | queued],
+        opts
+      )
+
+    assert retried == tl(assigned)
+
+    uk_only =
+      PostingSchedule.assign_jobs("x", Enum.filter(jobs, &(&1.market == :uk)), queued, opts)
+
+    assert length(uk_only) == 2
+    assert Enum.all?(uk_only, &(&1.market == :uk))
   end
 end

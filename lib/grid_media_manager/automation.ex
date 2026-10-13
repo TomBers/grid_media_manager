@@ -302,6 +302,9 @@ defmodule GridMediaManager.Automation do
          {:ok, start_date} <- parse_start_date(start_date),
          {:ok, jobs} <- publishing_jobs(batch, start_date, []),
          {:ok, queue} <- Buffer.queue_snapshot(Platforms.ids()) do
+      # The queue omits already-sent posts, so start on a complete future day.
+      start_date = Enum.max([start_date, Date.add(Date.utc_today(), 1)], Date)
+
       jobs =
         Platforms.ids()
         |> Enum.flat_map(fn platform ->
@@ -313,17 +316,26 @@ defmodule GridMediaManager.Automation do
               &((&1.platform == platform and &1.draft) &&
                   &1.draft.status not in ["scheduled", "published"])
             )
-            |> Enum.take(channel.vacancies)
+            |> Enum.map(fn job ->
+              plan = Enum.find(batch.plans, &(&1.id == job.plan_id))
 
-          slots =
-            GridMediaManager.Social.PostingSchedule.slots(
-              platform,
-              length(pending),
-              channel.posts,
-              start_date: start_date
-            )
+              market =
+                case plan.selection_details["audience_market"] do
+                  "uk" -> :uk
+                  "us" -> :us
+                  _ -> nil
+                end
 
-          Enum.zip_with(pending, slots, &%{&1 | scheduled_for: &2})
+              Map.put(job, :market, market)
+            end)
+
+          GridMediaManager.Social.PostingSchedule.assign_jobs(
+            platform,
+            pending,
+            channel.posts,
+            start_date: start_date
+          )
+          |> Enum.take(channel.vacancies)
         end)
 
       reviewed? =
