@@ -25,6 +25,7 @@ defmodule GridMediaManager.Automation.EditorialBatch do
     |> validate_required([:topics, :requested_count, :status])
     |> validate_number(:requested_count, greater_than_or_equal_to: 1, less_than_or_equal_to: 10)
     |> validate_inclusion(:status, @statuses)
+    |> validate_length(:theme, max: 255)
     |> validate_topics()
   end
 

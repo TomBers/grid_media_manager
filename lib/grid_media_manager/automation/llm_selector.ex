@@ -30,6 +30,7 @@ defmodule GridMediaManager.Automation.LLMSelector do
   @impl true
   def select_topics(count, theme, candidates)
       when is_integer(count) and count in 1..10 and is_list(candidates) do
+    _metrics_refresh = GridMediaManager.Social.Performance.refresh_if_stale()
     slugs = Enum.map(candidates, & &1.slug)
 
     topic_schema = %{
@@ -82,6 +83,9 @@ defmodule GridMediaManager.Automation.LLMSelector do
     Use only supplied source slugs and do not repeat a source.
 
     #{EditorialGuidance.topic_selection()}
+
+    Recent results from this studio (use as weak channel-specific inspiration; keep topic variety):
+    #{Jason.encode!(GridMediaManager.Social.Performance.editorial_feedback())}
 
     Available RationalGrid sources:
     #{Jason.encode!(payload)}
@@ -172,7 +176,13 @@ defmodule GridMediaManager.Automation.LLMSelector do
           "minItems" => minimum_items,
           "maxItems" => maximum_items
         },
-        "hook" => %{"type" => "string", "minLength" => 1, "maxLength" => 280},
+        "hook" => %{"type" => "string", "minLength" => 1, "maxLength" => 100},
+        "video_script" => %{
+          "type" => "array",
+          "items" => %{"type" => "string", "minLength" => 1, "maxLength" => 170},
+          "minItems" => 3,
+          "maxItems" => 3
+        },
         "text_visual_key" => %{"type" => "string", "enum" => keys},
         "text_visual_role" => %{
           "type" => "string",
@@ -197,6 +207,7 @@ defmodule GridMediaManager.Automation.LLMSelector do
       "required" => [
         "selected_keys",
         "hook",
+        "video_script",
         "text_visual_key",
         "text_visual_role",
         "rationale",
@@ -247,6 +258,12 @@ defmodule GridMediaManager.Automation.LLMSelector do
     Source grid: #{campaign.title}
 
     Return selected keys in narrative order. Do not add facts or select keys that are not supplied.
+    Write a hook of at most 12 words that poses the specific tension immediately.
+    Write video_script as exactly three complete, connected beats of at most 22 words EACH:
+    explain the idea, show its tension or limitation, then give a useful takeaway or specific question.
+    Paraphrase only the supplied selected moments. Never invent quotations, evidence or attribution.
+    These beats are displayed in sequence after the hook; they must make sense without the grid.
+    Keep essential qualifications, use plain language, and avoid repeating the hook.
 
     #{revision_instruction}
 

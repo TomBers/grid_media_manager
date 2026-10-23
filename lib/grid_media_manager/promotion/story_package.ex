@@ -8,8 +8,8 @@ defmodule GridMediaManager.Promotion.StoryPackage do
   carousels and videos render these sequences at their target dimensions.
   """
 
-  @cta_title "Where do you stand?"
-  @cta_body "Explore the complete map, follow the connections, and contribute your perspective on RationalGrid."
+  @cta_title "Challenge this idea."
+  @cta_body "Go beyond the answer. Test the claim. Follow the evidence. Compare perspectives. Say what you think at rationalgrid.ai."
 
   def build(title, content_slides, opts \\ [])
       when is_binary(title) and is_list(content_slides) and is_list(opts) do
@@ -33,7 +33,7 @@ defmodule GridMediaManager.Promotion.StoryPackage do
   def cta_slide do
     %{
       "kind" => "cta",
-      "label" => "Join the conversation",
+      "label" => "RationalGrid",
       "title" => @cta_title,
       "body" => @cta_body
     }

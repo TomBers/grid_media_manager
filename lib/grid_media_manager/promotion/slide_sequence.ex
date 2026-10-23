@@ -90,17 +90,7 @@ defmodule GridMediaManager.Promotion.SlideSequence do
   end
 
   defp short_video_slides(slide_groups) do
-    primary_slides =
-      slide_groups |> Enum.map(&List.first/1) |> Enum.reject(&is_nil/1) |> Enum.take(4)
-
-    remaining_count = 4 - length(primary_slides)
-
-    extra_slides =
-      slide_groups
-      |> Enum.flat_map(&Enum.drop(&1, 1))
-      |> Enum.take(remaining_count)
-
-    primary_slides ++ extra_slides
+    slide_groups |> Enum.flat_map(& &1) |> Enum.take(4)
   end
 
   defp persisted_block(block) do

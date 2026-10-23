@@ -26,7 +26,9 @@ defmodule GridMediaManagerWeb.BatchRenderLive do
           |> assign(:schedule_result, nil)
           |> assign(
             :schedule_form,
-            to_form(%{"start_date" => Date.to_iso8601(Date.utc_today())}, as: :schedule)
+            to_form(%{"start_date" => Date.to_iso8601(Date.add(Date.utc_today(), 1))},
+              as: :schedule
+            )
           )
           |> assign(:error, nil)
 
@@ -46,7 +48,7 @@ defmodule GridMediaManagerWeb.BatchRenderLive do
      socket
      |> assign(:scheduling?, true)
      |> assign(:error, nil)
-     |> start_async(:schedule_batch, fn -> Automation.schedule_batch(batch_id, start_date) end)}
+     |> start_async(:schedule_batch, fn -> Automation.fill_queues(batch_id, start_date) end)}
   end
 
   def handle_event("review", _params, socket) do
@@ -167,7 +169,7 @@ defmodule GridMediaManagerWeb.BatchRenderLive do
                 <.input
                   field={@schedule_form[:start_date]}
                   type="date"
-                  label="First publishing day"
+                  label="Earliest publishing day (UTC)"
                   required
                 />
                 <button
@@ -179,6 +181,9 @@ defmodule GridMediaManagerWeb.BatchRenderLive do
                   {if(@scheduling?, do: "Scheduling…", else: "Fill Buffer queues")}
                 </button>
               </.form>
+              <p class="mt-3 text-xs leading-5 text-base-content/60">
+                Starts no earlier than tomorrow, using two daily test windows: UK local time and US Eastern time, including weekends. Existing queued posts occupy the nearest window and are preserved. Packages need Editor approval or approval of all six drafts, plus pacing checks. See Results to assess what works.
+              </p>
             </div>
 
             <div

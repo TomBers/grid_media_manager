@@ -13,6 +13,8 @@ A Phoenix LiveView workflow for turning RationalGrid source text into editable s
 
 The browser canvas is the only visual renderer. Phoenix plans and persists editable text, style choices, and slide order; it does not contain an SVG or server-side card renderer. For short-form video, FFmpeg packages the exact saved PNG frames into an MP4 without recreating their layout.
 
+Generated videos include `priv/static/sounds/rationalgrid_theme.mp4` as an AAC soundtrack at 65% volume, looping to the selected frame duration with a short fade-in and a 1.5-second fade-out. The soundtrack content is part of the export cache key, so replacing the theme regenerates exports. A missing or unreadable theme stops export rather than silently producing a mute video. Editorial planning prefers a relevant photographic front cover, with text-only covers reserved for cases where an image would be misleading or generic.
+
 ## Development
 
 ```sh
@@ -72,3 +74,15 @@ The reusable seams are the content planner (`ShareCard` and `SlideSequence`), wo
 FFmpeg must be on `PATH` to create MP4s. A custom executable can be configured with `config :grid_media_manager, :ffmpeg_path, "/path/to/ffmpeg"`.
 
 Buffer needs durable public HTTPS media, so production scheduling normally also needs S3-compatible storage. Editing a slide invalidates saved artifacts and published URLs; the user must save the new browser render before it can be scheduled.
+
+## Engagement and results
+
+`/results` stores the latest Buffer metrics matched by platform and external post ID to studio drafts. Refresh is read-only at Buffer. An explicit `sent` response reconciles a scheduled draft to published without deleting its media. Refreshes replace cumulative counters; they never add them together. Missing metrics remain unavailable. The table compares posts aged 72 hours to 90 days within a channel; totals are cumulative, not controlled experiments or equal-age comparisons. Buffer's metrics API is experimental.
+
+New captions tag RationalGrid links with `utm_source`, `utm_medium=social`, `utm_campaign=grid-ID` and `utm_content=asset-ID-angle`, preserving deep-link parameters and fragments. Measuring website visits or conversions still requires analytics on RationalGrid. Shorts descriptions explicitly identify their reference URL as non-clickable.
+
+Autopilot refreshes metrics when the last successful matched-post sync is over six hours old, then includes channel-specific examples with clicks, saves, shares or comments in topic selection. These are weak editorial signals; small samples do not establish a winning topic or time.
+
+New planned videos carry three concise `video_script` beats. Publishing checks the selected sequence for 4–6 frames, at most 25 visible words per non-CTA frame, and at most 45 seconds. Text reading time is preserved; a concise opening has a three-second minimum. Dense manually selected source excerpts remain editable and receive a pacing warning rather than being silently truncated. The original source is unchanged.
+
+`Automation.queue_fill_plan/2` previews available slots; `Automation.fill_queues/2` submits them. It respects the ten-post limit per channel, existing queue dates, explicit draft approval or current Editor approval, media readiness, copy limits and pacing. Re-running skips drafts already scheduled or published. Slots now use two daily windows, including weekends: UK local time and US Eastern local time. X/Facebook use 09:00 in each market; LinkedIn 10:00; Instagram UK 12:00 / US 18:00; TikTok 18:00; YouTube 16:00. These are test windows, not established account optima or geographic delivery targeting. A plan can set `selection_details["audience_market"]` to `"uk"` or `"us"` to keep its content in the matching window; unlabelled plans can use either. One existing post occupies the nearest window on its UTC date; two or more block that date. Existing posts are never moved. Queue filling starts no earlier than the next UTC day, avoiding additions to posts already sent today (which the queue snapshot does not include). Daytime slots follow the current UK and US daylight-saving rules (2007 onwards), including their different transition weeks. The rules are explicit in `Social.PostingSchedule`; review them if legislation changes, or adopt an IANA database when adding other regions.

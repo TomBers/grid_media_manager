@@ -52,6 +52,13 @@ defmodule GridMediaManager.Automation.LLMEditor do
     is internal metadata; judge cover length from the rendered cover slide title. Platform captions
     should differ in framing and pacing, but they may accurately reuse the same source thesis.
 
+    Judge each destination as the combination of its media and its accompanying copy. LinkedIn
+    and Facebook deliberately have a cover and CTA image: their substantive explanation lives in
+    the caption, not extra slides. X has one concise idea card between its cover and CTA. Video
+    channels share one short vertical sequence with three explanatory beats. Do not require dense
+    text on these frames or penalise reuse of the same video on different platforms. Only the six
+    canonical destinations below will be published; do not assume extra versions are also scheduled.
+
     Approve when the package is coherent, grounded, specific, useful, and socially engaging with no
     material defect, normally scoring every dimension at least 75. Recommend revision for a concrete
     weakness that can be fixed using the supplied material. Reject only when the package lacks a viable
@@ -64,7 +71,8 @@ defmodule GridMediaManager.Automation.LLMEditor do
     generate(prompt, schema)
   end
 
-  defp package_payload(plan, campaign, assets, drafts) do
+  @doc false
+  def package_payload(plan, campaign, assets, drafts) do
     %{
       topic: plan.topic,
       hook: plan.hook,
@@ -75,8 +83,10 @@ defmodule GridMediaManager.Automation.LLMEditor do
           %{
             format: asset.kind,
             title: asset.title,
+            text: if(asset.kind == "long_form_post", do: asset.text),
             slides:
-              Enum.map(asset.metadata["slides"] || [], fn slide ->
+              Enum.map(GridMediaManager.Campaigns.media_asset_slide_indexes(asset), fn index ->
+                slide = Enum.at(asset.metadata["slides"] || [], index - 1) || %{}
                 Map.take(slide, ["kind", "title", "body", "label", "source"])
               end)
           }

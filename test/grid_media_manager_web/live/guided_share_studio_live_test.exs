@@ -102,6 +102,18 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
              "#design-platform-summary",
              "videos will be posted to TikTok, Instagram, and YouTube"
            )
+
+    view |> element("#create-story-package") |> render_click()
+    await_generation(view)
+
+    for asset <- Campaigns.list_media_assets(campaign) do
+      assert List.first(asset.metadata["slides"])["title"] == plan.hook
+      assert asset.metadata["editorial_hook"] == plan.hook
+    end
+
+    for draft <- Campaigns.list_post_drafts(campaign) do
+      assert String.starts_with?(draft.body, plan.hook)
+    end
   end
 
   test "labels questions extracted from answer bodies with their source", %{conn: conn} do
@@ -284,7 +296,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assets = Campaigns.list_media_assets(campaign)
     assert [%{kind: "curated_carousel", style: "warm_paper"} = carousel] = assets
     assert carousel.metadata["slide_count"] >= 3
-    assert List.last(carousel.metadata["slides"])["label"] == "Join the conversation"
+    assert List.last(carousel.metadata["slides"])["label"] == "RationalGrid"
     last_slide = carousel.metadata["slide_count"]
     assert carousel.metadata["selected_slide_indexes"] == Enum.to_list(1..last_slide)
     assert has_element?(view, "#curated-carousel-order-#{carousel.id}")
@@ -353,7 +365,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert asset.text =~ "Perfect comfort can become a cage."
     assert asset.text =~ "Long answer"
     assert Enum.map(asset.metadata["slides"], & &1["kind"]) == ["cover", "node_text", "cta"]
-    assert List.last(asset.metadata["slides"])["title"] == "Where do you stand?"
+    assert List.last(asset.metadata["slides"])["title"] == "Challenge this idea."
 
     assert Enum.map(asset.metadata["sources"], & &1["type"]) == [
              "question",
@@ -362,6 +374,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
            ]
 
     assert has_element?(view, "#curated-carousel-slides-#{asset.id}[data-auto-save='true']")
+
+    assert has_element?(
+             view,
+             "#curated-carousel-slides-#{asset.id}[data-cta-image-src='/images/rationalgrid-cta-carousel.png']"
+           )
   end
 
   test "combines multiple selected moments into one carousel output", %{conn: conn} do
@@ -384,7 +401,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert video.metadata["slide_count"] >= 4
     refute Enum.any?(assets, &(&1.kind == "curated_carousel"))
 
-    assert List.last(video.metadata["slides"])["title"] == "Where do you stand?"
+    assert List.last(video.metadata["slides"])["title"] == "Challenge this idea."
+
+    assert has_element?(
+             view,
+             "#curated-carousel-slides-#{video.id}[data-cta-image-src='/images/rationalgrid-cta-story-participate.png']"
+           )
   end
 
   test "creates video and image outputs together from one design", %{conn: conn} do
@@ -560,12 +582,22 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     view
     |> form("#guided-draft-form-#{draft.id}",
+      post_draft: %{body: String.duplicate("A full thought. ", 30)}
+    )
+    |> render_change()
+
+    assert has_element?(view, "#guided-draft-length-warning-#{draft.id}")
+
+    view
+    |> form("#guided-draft-form-#{draft.id}",
       post_draft: %{body: "A sharper invitation to join the conversation."}
     )
     |> render_change()
 
     assert Campaigns.get_post_draft!(draft.id).body ==
              "A sharper invitation to join the conversation."
+
+    refute has_element?(view, "#guided-draft-length-warning-#{draft.id}")
 
     view
     |> element("#guided-approve-draft-#{draft.id}")

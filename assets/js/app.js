@@ -25,6 +25,7 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/grid_media_manager"
 import topbar from "../vendor/topbar"
 import {CanvasSlideRenderer} from "./canvas_slide_renderer"
+import {CopyArticleHTML} from "./copy_article_html"
 
 const systemTheme = () => window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
 
@@ -49,7 +50,7 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
   if (!localStorage.getItem("phx:theme")) setTheme("system")
 })
 
-const Hooks = {...colocatedHooks, CanvasSlideRenderer}
+const Hooks = {...colocatedHooks, CanvasSlideRenderer, CopyArticleHTML}
 
 Hooks.CopyToClipboard = {
   mounted() {

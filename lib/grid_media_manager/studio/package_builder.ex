@@ -34,6 +34,8 @@ defmodule GridMediaManager.Studio.PackageBuilder do
       style: style,
       format: Keyword.get(opts, :format, PackageDefinition.format_for_mode(mode)),
       cover: cover,
+      editorial_hook: Map.get(plan, :hook),
+      video_script: Map.get(plan.selection_details || %{}, "video_script"),
       text_visual_key: Map.get(plan.selection_details || %{}, "text_visual_key")
     )
   end
@@ -58,7 +60,12 @@ defmodule GridMediaManager.Studio.PackageBuilder do
 
     case VisualDirection.apply(campaign, cover) do
       {:ok, campaign} ->
-        Workflow.generate(campaign, candidates, style: style, format: format)
+        Workflow.generate(campaign, candidates,
+          style: style,
+          format: format,
+          editorial_hook: Keyword.get(opts, :editorial_hook),
+          video_script: Keyword.get(opts, :video_script)
+        )
 
       {:error, reason} ->
         %{
