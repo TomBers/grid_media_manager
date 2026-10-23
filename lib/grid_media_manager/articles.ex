@@ -110,6 +110,58 @@ defmodule GridMediaManager.Articles do
 
   def node_url(draft, id), do: draft.source_url <> "?" <> URI.encode_query(%{"node" => id})
 
+  @doc "Adds reading links only for new source nodes contributing to each section."
+  def reading_sections(draft) do
+    draft.content["sections"]
+    |> Enum.map_reduce(MapSet.new(), fn section, linked ->
+      ids =
+        case section["passages"] do
+          passages when is_list(passages) -> Enum.map(passages, & &1["node_id"])
+          _ -> Enum.take(section["node_ids"], -1)
+        end
+        |> Enum.uniq()
+
+      new_ids = Enum.reject(ids, &MapSet.member?(linked, &1))
+
+      links =
+        Enum.map(new_ids, fn id ->
+          %{
+            id: id,
+            label:
+              if(length(new_ids) == 1,
+                do: "Explore this thread in the grid",
+                else: "Read source node #{id}"
+              )
+          }
+        end)
+
+      section =
+        section
+        |> Map.put(:reading_links, links)
+        |> Map.put(:reading_passages, reading_passages(section))
+
+      {section, Enum.reduce(ids, linked, &MapSet.put(&2, &1))}
+    end)
+    |> elem(0)
+  end
+
+  # Headings are stored separately from the verbatim passage text. Restore each
+  # heading at the start of its run, without repeating the section title.
+  defp reading_passages(section) do
+    (section["passages"] || [])
+    |> Enum.map_reduce(nil, fn passage, previous ->
+      heading = passage["heading"]
+      context = {passage["node_id"], heading}
+
+      show? =
+        is_binary(heading) and String.trim(heading) != "" and
+          heading != section["title"] and context != previous
+
+      {Map.put(passage, :reading_heading, if(show?, do: heading)), context}
+    end)
+    |> elem(0)
+  end
+
   def markdown(draft) do
     if draft.content["mode"] == "source_passages",
       do: source_markdown(draft),
@@ -118,34 +170,32 @@ defmodule GridMediaManager.Articles do
 
   defp source_markdown(draft) do
     sections =
-      Enum.map_join(draft.content["sections"], "\n\n", fn section ->
+      Enum.map_join(reading_sections(draft), "\n\n", fn section ->
         passages =
-          Enum.map_join(section["passages"], "\n\n", fn passage ->
-            omission = if passage["omitted_before"], do: "[…]\n\n", else: ""
-            quote = passage["text"] |> String.split("\n") |> Enum.map_join("\n", &("> " <> &1))
-
-            highlighted =
-              if passage["highlight_ids"] != [], do: " · contains a grid highlight", else: ""
-
-            omission <>
-              quote <>
-              "\n\n[Original passage · Node #{passage["node_id"]}](#{node_url(draft, passage["node_id"])})#{highlighted}"
+          Enum.map_join(section.reading_passages, "\n\n", fn passage ->
+            if passage.reading_heading,
+              do: "### #{passage.reading_heading}\n\n#{passage["text"]}",
+              else: passage["text"]
           end)
 
-        links = Enum.map_join(section["node_ids"], " → ", &"[Node #{&1}](#{node_url(draft, &1)})")
-        "## #{section["title"]}\n\n#{passages}\n\nFollow this path: #{links}"
+        links =
+          Enum.map_join(section.reading_links, " · ", &"[#{&1.label}](#{node_url(draft, &1.id)})")
+
+        "## #{section["title"]}\n\n#{passages}\n\n#{links}"
       end)
 
-    "# #{draft.content["title"]}\n\nSelected passages from [#{draft.source_title}](#{draft.source_url}), guided by the grid’s highlights and branches.\n\n#{sections}\n\n---\n\nPassage wording is preserved from the grid. […] marks omitted text before an excerpt.\n"
+    "# #{draft.content["title"]}\n\nSelected passages from [#{draft.source_title}](#{draft.source_url}), guided by the grid’s highlights and branches.\n\n#{sections}\n\n---\n\nOriginal passages have been selected and arranged for this article.\n"
   end
 
   defp legacy_markdown(draft) do
     content = draft.content
 
     sections =
-      Enum.map_join(content["sections"], "\n\n", fn section ->
-        links = Enum.map_join(section["node_ids"], " → ", &"[Node #{&1}](#{node_url(draft, &1)})")
-        "## #{section["title"]}\n\n#{section["body"]}\n\nExplore this direction: #{links}"
+      Enum.map_join(reading_sections(draft), "\n\n", fn section ->
+        links =
+          Enum.map_join(section.reading_links, " · ", &"[#{&1.label}](#{node_url(draft, &1.id)})")
+
+        "## #{section["title"]}\n\n#{section["body"]}\n\n#{links}"
       end)
 
     """

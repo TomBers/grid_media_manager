@@ -55,7 +55,7 @@ defmodule GridMediaManager.Articles.SourceTest do
     assert {:error, :invalid_selection} = Source.assemble(repeated, graph)
   end
 
-  test "exports source wording and per-passage citations without a new conclusion" do
+  test "exports original wording with one section link and no editorial markers" do
     graph = graph()
     {:ok, content} = Source.assemble(plan(["2:1", "2:3"]), graph)
 
@@ -66,9 +66,14 @@ defmodule GridMediaManager.Articles.SourceTest do
         source_url: "https://rationalgrid.ai/g/example"
       })
 
-    assert markdown =~ "> A **marked idea** with a qualification."
-    assert markdown =~ "[Original passage · Node 2](https://rationalgrid.ai/g/example?node=2)"
-    assert markdown =~ "[…]"
+    assert markdown =~ "A **marked idea** with a qualification."
+
+    assert markdown =~
+             "[Explore this thread in the grid](https://rationalgrid.ai/g/example?node=2)"
+
+    assert length(Regex.scan(~r/\?node=2/, markdown)) == 1
+    refute markdown =~ "[…]"
+    refute markdown =~ "contains a grid highlight"
     refute markdown =~ "Where the paths meet"
     refute markdown =~ "An editorial clue"
   end

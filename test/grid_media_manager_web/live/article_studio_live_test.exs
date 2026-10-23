@@ -25,6 +25,15 @@ defmodule GridMediaManagerWeb.ArticleStudioLiveTest do
     assert has_element?(view, "#sections-1 a[href='https://rationalgrid.ai/g/test-grid?node=2']")
     assert has_element?(view, "#download-article[href='/articles/#{draft.id}/download']")
     assert has_element?(view, "#article-markdown")
+    assert has_element?(view, "#copy-for-substack")
+    assert has_element?(view, "#copy-article-title[data-copy-text='An essay']")
+
+    assert has_element?(
+             view,
+             "#download-article-html[href='/articles/#{draft.id}/download?format=html']"
+           )
+
+    assert has_element?(view, "#article-copy-content")
     assert has_element?(view, "#drafts-#{draft.id}")
     refute has_element?(view, "#article-empty")
     assert has_element?(view, "#legacy-article-notice")
@@ -41,7 +50,8 @@ defmodule GridMediaManagerWeb.ArticleStudioLiveTest do
             %{
               "id" => "1",
               "class" => "answer",
-              "content" => "# Source heading\n\nAn original **highlighted** paragraph."
+              "content" =>
+                "# Source heading\n\nAn original **highlighted** paragraph.\n\n## A source subheading\n\nThe next original paragraph."
             }
           ]
         },
@@ -52,7 +62,7 @@ defmodule GridMediaManagerWeb.ArticleStudioLiveTest do
 
     {:ok, content} =
       GridMediaManager.Articles.Source.assemble(
-        %{"sections" => [%{"node_ids" => ["1"], "passage_ids" => ["1:1"]}]},
+        %{"sections" => [%{"node_ids" => ["1"], "passage_ids" => ["1:1", "1:2"]}]},
         graph
       )
 
@@ -78,8 +88,13 @@ defmodule GridMediaManagerWeb.ArticleStudioLiveTest do
 
     assert has_element?(view, "#highlights-12", "Included in this selection")
     assert has_element?(view, "#highlights-12", "Useful direction")
+    assert has_element?(view, "#sections-1 [data-passage-id='1:2'] h4", "A source subheading")
+    refute has_element?(view, "#sections-1 [data-passage-id='1:1'] h4")
     refute has_element?(view, "#legacy-article-notice")
-    assert Articles.markdown(draft) =~ "> An original **highlighted** paragraph."
+    assert Articles.markdown(draft) =~ "An original **highlighted** paragraph."
+    refute has_element?(view, "#article-sections [data-passage-id] a")
+    refute has_element?(view, "#article-sections", "Contains a grid highlight")
+    refute has_element?(view, "#article-sections", "[…]")
   end
 
   test "exports the saved essay with deep links as a Markdown attachment", %{conn: conn} do
@@ -91,12 +106,31 @@ defmodule GridMediaManagerWeb.ArticleStudioLiveTest do
              ~s(attachment; filename="test-grid-article.md")
            ]
 
-    assert Articles.markdown(draft) =~ "[Node 2](https://rationalgrid.ai/g/test-grid?node=2)"
+    assert Articles.markdown(draft) =~
+             "[Explore this thread in the grid](https://rationalgrid.ai/g/test-grid?node=2)"
   end
 
   test "missing articles redirect and missing downloads return 404", %{conn: conn} do
     assert {:error, {:live_redirect, %{to: "/articles"}}} = live(conn, "/articles/not-an-id")
     assert conn |> get("/articles/not-an-id/download") |> response(404)
+    assert conn |> get("/articles/not-an-id/document") |> response(404)
+    assert conn |> get("/articles/not-an-id/download?format=html") |> response(404)
+  end
+
+  test "serves a standalone document and downloadable HTML", %{conn: conn} do
+    draft = draft()
+    preview = get(conn, "/articles/#{draft.id}/document")
+    document = preview |> html_response(200) |> LazyHTML.from_document()
+    assert LazyHTML.query(document, "article h1") |> LazyHTML.text() == "An essay"
+    assert LazyHTML.query(document, "article h2") |> Enum.count() == 2
+    assert LazyHTML.query(document, "button, nav, aside, script") |> Enum.count() == 0
+
+    download = get(conn, "/articles/#{draft.id}/download?format=html")
+    assert response(download, 200) == GridMediaManager.Articles.HTML.document(draft)
+
+    assert get_resp_header(download, "content-disposition") == [
+             ~s(attachment; filename="test-grid-article.html")
+           ]
   end
 
   defp draft do

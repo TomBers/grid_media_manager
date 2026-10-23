@@ -61,3 +61,28 @@ body {
   background: var(--color-base-100);
   color: var(--color-base-content);
 }
+
+.article-prose :is(h1, h2, h3, h4) {
+  margin: 1.75em 0 .75em;
+  font-size: 1.25em;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--color-base-content);
+  text-wrap: pretty;
+}
+
+.article-prose p { margin-bottom: 1em; }
+.article-prose strong { font-weight: 700; }
+.article-prose em { font-style: italic; }
+.article-prose ul { list-style: disc; }
+.article-prose ol { list-style: decimal; }
+.article-prose :is(ul, ol) { padding-left: 1.5em; margin: 1em 0 1.5em; }
+.article-prose li { padding-left: .25em; margin-bottom: .65em; }
+.article-prose a { text-decoration: underline; text-underline-offset: 3px; }
+.article-prose blockquote {
+  border-left: 3px solid #c97645;
+  padding: .2em 0 .2em 1.3em;
+  margin: 1.6em 0;
+  font-style: italic;
+}
+.article-prose blockquote p:last-child { margin-bottom: 0; }

@@ -94,7 +94,7 @@ defmodule GridMediaManagerWeb.ArticleStudioLive do
       end)
 
     sections =
-      draft.content["sections"]
+      Articles.reading_sections(draft)
       |> Enum.with_index(1)
       |> Enum.map(fn {section, index} ->
         Map.merge(section, %{
@@ -111,6 +111,7 @@ defmodule GridMediaManagerWeb.ArticleStudioLive do
       draft: draft,
       page_title: draft.content["title"],
       markdown: Articles.markdown(draft),
+      article_html: GridMediaManager.Articles.HTML.body(draft),
       words: Articles.word_count(draft),
       direction_count: length(sections),
       source_passages?: source_passages?,
@@ -293,6 +294,72 @@ defmodule GridMediaManagerWeb.ArticleStudioLive do
         </div>
 
         <div :if={@draft} id="article-workspace">
+          <section
+            id="substack-export"
+            class="mb-6 rounded-2xl border border-orange-500/25 bg-orange-500/5 p-5 sm:p-6"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-5">
+              <div>
+                <h2 class="text-lg font-semibold">Ready for Substack</h2>
+                <p class="mt-1 max-w-xl text-sm leading-6 text-base-content/65">
+                  Copy the title into the title field, then copy the formatted article and paste into the post body with ⌘V or Ctrl+V.
+                </p>
+                <p class="mt-1 text-xs text-base-content/50">
+                  Headings, emphasis, lists, quotes, and source links are included. Use normal paste to keep formatting.
+                </p>
+              </div>
+              <button
+                id="copy-article-title"
+                phx-hook="CopyToClipboard"
+                phx-update="ignore"
+                data-copy-text={@draft.content["title"]}
+                class="rounded-lg border border-base-content/15 bg-base-100 px-4 py-2 text-sm font-semibold transition hover:bg-base-200"
+              >
+                Copy title
+              </button>
+            </div>
+            <div
+              id="copy-article-rich"
+              phx-hook="CopyArticleHTML"
+              phx-update="ignore"
+              data-source="article-copy-content"
+              class="mt-4"
+            >
+              <button
+                id="copy-for-substack"
+                type="button"
+                class="rounded-xl bg-orange-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-orange-700 disabled:opacity-60"
+              >
+                Copy for Substack
+              </button>
+              <p
+                id="article-copy-status"
+                role="status"
+                aria-live="polite"
+                class="mt-2 text-sm text-base-content/65"
+              >
+              </p>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-4 text-sm font-semibold">
+              <a
+                id="open-article-document"
+                href={~p"/articles/#{@draft.id}/document"}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="hover:text-orange-600"
+              >
+                Open formatted document <.icon name="hero-arrow-up-right" class="size-3.5" />
+              </a>
+              <a
+                id="download-article-html"
+                href={~p"/articles/#{@draft.id}/download?format=html"}
+                class="hover:text-orange-600"
+              >
+                Download HTML
+              </a>
+            </div>
+            <template id="article-copy-content">{Phoenix.HTML.raw(@article_html)}</template>
+          </section>
           <div
             :if={not @source_passages?}
             id="legacy-article-notice"
@@ -305,7 +372,7 @@ defmodule GridMediaManagerWeb.ArticleStudioLive do
             id="article-source-method"
             class="mb-6 rounded-xl border border-orange-500/20 bg-orange-500/5 p-4 text-sm"
           >
-            Original passages, selected and ordered from the grid. Headings come from source nodes; […] marks omitted text before an excerpt.
+            Original passages, selected and ordered from the grid. Full source routes and highlights are available in the map.
             <span class="mt-1 block text-base-content/60">
               {@used_highlight_count} of {@highlight_count} grid highlights appear in this selection.
             </span>
@@ -325,22 +392,6 @@ defmodule GridMediaManagerWeb.ArticleStudioLive do
                 class="text-sm font-semibold hover:text-orange-600"
               >
                 Open grid <.icon name="hero-arrow-up-right" class="size-3.5" />
-              </a>
-              <button
-                id="copy-article"
-                phx-hook="CopyToClipboard"
-                phx-update="ignore"
-                data-copy-source="#article-markdown"
-                class="rounded-lg border border-base-content/15 px-3 py-2 text-sm font-semibold transition hover:bg-base-200"
-              >
-                Copy Markdown
-              </button>
-              <a
-                id="download-article"
-                href={~p"/articles/#{@draft.id}/download"}
-                class="rounded-lg bg-base-content px-3 py-2 text-sm font-semibold text-base-100 transition hover:bg-orange-600"
-              >
-                Download .md
               </a>
             </div>
           </div>
@@ -381,35 +432,11 @@ defmodule GridMediaManagerWeb.ArticleStudioLive do
                   <h3 class="mb-5 font-serif text-3xl leading-tight">{section["title"]}</h3>
                   <%= if @source_passages? do %>
                     <div
-                      :for={passage <- section["passages"]}
+                      :for={passage <- section.reading_passages}
                       data-passage-id={passage["id"]}
-                      class="mb-7"
+                      class="mb-5"
                     >
-                      <p
-                        :if={passage["omitted_before"]}
-                        aria-label="Earlier source text omitted"
-                        class="mb-3 text-base-content/40"
-                      >
-                        […]
-                      </p>
-                      <.source_passage text={passage["text"]} />
-                      <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-base-content/50">
-                        <a
-                          href={Articles.node_url(@draft, passage["node_id"])}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="hover:text-orange-600"
-                        >
-                          Original passage · Node {passage["node_id"]}
-                          <.icon name="hero-arrow-up-right" class="size-3" />
-                        </a>
-                        <span
-                          :if={passage["highlight_ids"] != []}
-                          class="rounded-full bg-amber-400/15 px-2 py-1 text-amber-800 dark:text-amber-200"
-                        >
-                          Contains a grid highlight
-                        </span>
-                      </div>
+                      <.source_passage passage={passage} />
                     </div>
                   <% else %>
                     <p
@@ -419,17 +446,18 @@ defmodule GridMediaManagerWeb.ArticleStudioLive do
                       {paragraph}
                     </p>
                   <% end %>
-                  <div class="mt-6 flex flex-wrap items-center gap-2 text-xs text-base-content/55">
-                    <span>Follow this path</span>
+                  <div
+                    :if={section.reading_links != []}
+                    class="mt-6 flex flex-wrap items-center gap-2 text-sm text-base-content/55"
+                  >
                     <a
-                      :for={node <- section.nodes}
-                      href={Articles.node_url(@draft, node["id"])}
+                      :for={link <- section.reading_links}
+                      href={Articles.node_url(@draft, link.id)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      title={node_label(node)}
-                      class="rounded-full border border-base-content/15 px-2.5 py-1 transition hover:border-orange-500 hover:text-orange-600"
+                      class="underline decoration-base-content/20 underline-offset-4 transition hover:text-orange-600"
                     >
-                      Node {node["id"]} <.icon name="hero-arrow-up-right" class="size-3" />
+                      {link.label} <.icon name="hero-arrow-up-right" class="size-3" />
                     </a>
                   </div>
                 </section>
@@ -444,7 +472,27 @@ defmodule GridMediaManagerWeb.ArticleStudioLive do
                 </p>
               </section>
               <details id="article-export" class="mt-8 rounded-xl border border-base-content/10 p-4">
-                <summary class="cursor-pointer text-sm font-semibold">Markdown export</summary>
+                <summary class="cursor-pointer text-sm font-semibold">
+                  Other formats · Markdown
+                </summary>
+                <div class="mt-3 flex gap-4 text-sm font-semibold">
+                  <button
+                    id="copy-article"
+                    phx-hook="CopyToClipboard"
+                    phx-update="ignore"
+                    data-copy-source="#article-markdown"
+                    class="hover:text-orange-600"
+                  >
+                    Copy Markdown
+                  </button>
+                  <a
+                    id="download-article"
+                    href={~p"/articles/#{@draft.id}/download"}
+                    class="hover:text-orange-600"
+                  >
+                    Download .md
+                  </a>
+                </div>
                 <.input
                   type="textarea"
                   id="article-markdown"
@@ -592,27 +640,14 @@ defmodule GridMediaManagerWeb.ArticleStudioLive do
     """
   end
 
-  attr :text, :string, required: true
+  attr :passage, :map, required: true
 
   defp source_passage(assigns) do
-    assigns = assign(assigns, :blocks, GridMediaManager.Promotion.Markdown.blocks(assigns.text))
+    assigns = assign(assigns, :html, GridMediaManager.Articles.HTML.passage(assigns.passage, 4))
 
     ~H"""
-    <div class="font-serif text-lg leading-8 text-base-content/90">
-      <%= for block <- @blocks do %>
-        <%= case block.type do %>
-          <% :list_item -> %>
-            <p class="mb-2 pl-4">{block.marker} {block.text}</p>
-          <% :blockquote -> %>
-            <blockquote class="mb-3 border-l-2 border-base-content/20 pl-4 italic">
-              {block.text}
-            </blockquote>
-          <% :heading -> %>
-            <h4 class="mb-3 font-semibold">{block.text}</h4>
-          <% _ -> %>
-            <p class="mb-3">{block.text}</p>
-        <% end %>
-      <% end %>
+    <div class="article-prose font-serif text-lg leading-8 text-base-content/90">
+      {Phoenix.HTML.raw(@html)}
     </div>
     """
   end
