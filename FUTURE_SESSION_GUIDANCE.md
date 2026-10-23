@@ -220,13 +220,18 @@ TikTok / Instagram / YouTube: thumbnail-ready cover
 
 `SlideSequence.build/3` owns content selection and normalisation. `StoryPackage.build/3` owns cover/content/CTA assembly. Formats must consume this sequence rather than independently creating covers, text cards, or closing frames.
 
-The CTA slide metadata identifies and orders the frame. Its visual source of truth is always:
+The CTA slide metadata identifies and orders the frame. Video uses the participation-focused story
+card; image carousels use the compact carousel card:
 
 ```text
-priv/static/images/rationalgrid-follow-up.png
+priv/static/images/rationalgrid-cta-story-participate.png
+priv/static/images/rationalgrid-cta-carousel.png
 ```
 
-The approved CTA is 1080 × 1350. Portrait output uses it edge-to-edge. A 1080 × 1920 video frame centers it without stretching on `#081323`. Never add another generated, server-rendered, or platform-specific CTA path.
+The story CTA explicitly asks viewers to “Challenge this idea”; video captions must reinforce that
+participation prompt by asking which point they would challenge or what would change their mind.
+Both approved CTA assets are rendered edge-to-edge at their native target dimensions. Never add
+another generated, server-rendered, or platform-specific CTA path.
 
 ### 5. Render and persist browser artifacts
 

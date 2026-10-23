@@ -36,7 +36,7 @@ defmodule GridMediaManagerWeb.Layouts do
   def app(assigns) do
     ~H"""
     <header class="sticky top-0 z-40 border-b border-base-content/10 bg-base-100/85 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
-      <div class="mx-auto flex max-w-7xl items-center justify-between gap-4">
+      <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
         <.link navigate={~p"/"} class="group flex items-center gap-3">
           <span class="grid size-10 place-items-center rounded-2xl bg-base-content text-sm font-black tracking-tight text-base-100 shadow-lg shadow-base-content/10 transition group-hover:-translate-y-0.5">
             RG
@@ -52,6 +52,13 @@ defmodule GridMediaManagerWeb.Layouts do
         </.link>
 
         <nav class="flex items-center gap-3">
+          <.link
+            id="article-studio-link"
+            navigate={~p"/articles"}
+            class="rounded-full px-3 py-2 text-sm font-medium text-base-content/65 transition hover:bg-base-200 hover:text-base-content"
+          >
+            Articles
+          </.link>
           <.link
             id="content-results-link"
             navigate={~p"/results"}

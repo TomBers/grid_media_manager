@@ -28,6 +28,9 @@ defmodule GridMediaManagerWeb.Router do
     live "/automation/:id/render", BatchRenderLive, :show
     live "/media-library", MediaLibraryLive, :index
     live "/results", PerformanceLive, :index
+    live "/articles", ArticleStudioLive, :new
+    live "/articles/:id", ArticleStudioLive, :show
+    get "/articles/:id/download", ArticleExportController, :download
     get "/media-library/assets/:id/frames/:index", PromotionAssetController, :uploaded_artifact
     get "/media-assets/:id/artifacts/:index", PromotionAssetController, :artifact
     get "/media-assets/:id/artifact.mp4", PromotionAssetController, :video_artifact

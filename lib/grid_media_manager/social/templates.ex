@@ -218,7 +218,7 @@ defmodule GridMediaManager.Social.Templates do
           "#{opening}\n\nWatch the reasoning unfold. Which part would you challenge?\n\nExplore this idea at rationalgrid.ai.\n#{link}\n\n#{hashtags(campaign)}"
 
         "youtube" ->
-          "#{opening}\n\nWhat would change your mind? Explore this idea at rationalgrid.ai.\n\nFor reference (Shorts description links are not clickable):\n#{link}\n\n#Shorts #RationalGrid"
+          "#{opening}\n\nWhich part would you challenge—and what would change your mind? Explore this idea at rationalgrid.ai.\n\nFor reference (Shorts description links are not clickable):\n#{link}\n\n#Shorts #RationalGrid"
 
         "substack" ->
           "#{title}\n\nA navigable map of explanations, questions, and related ideas.\n\n#{cta_line(link)}"

@@ -365,7 +365,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert asset.text =~ "Perfect comfort can become a cage."
     assert asset.text =~ "Long answer"
     assert Enum.map(asset.metadata["slides"], & &1["kind"]) == ["cover", "node_text", "cta"]
-    assert List.last(asset.metadata["slides"])["title"] == "See what you think."
+    assert List.last(asset.metadata["slides"])["title"] == "Challenge this idea."
 
     assert Enum.map(asset.metadata["sources"], & &1["type"]) == [
              "question",
@@ -401,11 +401,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert video.metadata["slide_count"] >= 4
     refute Enum.any?(assets, &(&1.kind == "curated_carousel"))
 
-    assert List.last(video.metadata["slides"])["title"] == "See what you think."
+    assert List.last(video.metadata["slides"])["title"] == "Challenge this idea."
 
     assert has_element?(
              view,
-             "#curated-carousel-slides-#{video.id}[data-cta-image-src='/images/rationalgrid-cta-story.png']"
+             "#curated-carousel-slides-#{video.id}[data-cta-image-src='/images/rationalgrid-cta-story-participate.png']"
            )
   end
 

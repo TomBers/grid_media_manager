@@ -671,7 +671,7 @@ export const CanvasSlideRenderer = {
       await loadCanvasFont()
       const ctaImage = await loadImage(
         this.root.dataset.ctaImageSrc || (video
-          ? "/images/rationalgrid-cta-story.png"
+          ? "/images/rationalgrid-cta-story-participate.png"
           : "/images/rationalgrid-cta-carousel.png")
       )
       const coverImage = this.root.dataset.coverImageUrl

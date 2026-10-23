@@ -2095,7 +2095,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         data-cover-image-url={@cover_image_url}
         data-cta-image-src={
           if(browser_canvas_video?(@asset),
-            do: ~p"/images/rationalgrid-cta-story.png",
+            do: ~p"/images/rationalgrid-cta-story-participate.png",
             else: ~p"/images/rationalgrid-cta-carousel.png"
           )
         }
