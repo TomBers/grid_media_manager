@@ -22,7 +22,7 @@ cp .env.example .env
 bin/dev
 ```
 
-The app normally runs at `http://localhost:4001`. Run the complete verification suite with:
+The app normally runs at `http://localhost:4002`. Run the complete verification suite with:
 
 ```sh
 mix precommit

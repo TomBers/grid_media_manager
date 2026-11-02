@@ -77,7 +77,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp mount_campaign(campaign, params, socket) do
-    candidates = Workflow.candidates(campaign)
+    candidates =
+      if socket.assigns.live_action == :render_assets,
+        do: [],
+        else: Workflow.candidates(campaign)
+
     restored_assets = restored_output_assets(campaign, params)
     restored_asset_ids = MapSet.new(restored_assets, & &1.id)
     default_step = if restored_assets == [], do: "curate", else: "review"

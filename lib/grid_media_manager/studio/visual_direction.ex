@@ -13,9 +13,9 @@ defmodule GridMediaManager.Studio.VisualDirection do
   def style_for_plan(nil, saved_style), do: ShareCard.normalize_style(saved_style)
 
   def style_for_plan(plan, saved_style) do
-    plan
-    |> visual_details()
-    |> Map.get("visual_style", saved_style)
+    details = visual_details(plan)
+
+    (details["visual_style_override"] || Map.get(details, "visual_style", saved_style))
     |> ShareCard.normalize_style()
   end
 

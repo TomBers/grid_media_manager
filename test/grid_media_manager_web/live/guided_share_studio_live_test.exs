@@ -13,6 +13,46 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert {:error, {:redirect, %{to: "/"}}} = live(conn, "/campaigns/999999/studio")
   end
 
+  test "render-only route opens stored assets without rebuilding source candidates", %{conn: conn} do
+    campaign =
+      %Campaigns.Campaign{}
+      |> Campaigns.Campaign.changeset(%{
+        slug: "large-render-source",
+        title: "A stored editorial package",
+        fetched_at: DateTime.utc_now() |> DateTime.truncate(:second),
+        raw_payload: %{
+          "graph" => %{
+            "nodes" => [%{"id" => "1", "content" => String.duplicate("word ", 20_000)}]
+          }
+        }
+      })
+      |> Repo.insert!()
+
+    asset =
+      %Campaigns.MediaAsset{}
+      |> Campaigns.MediaAsset.changeset(%{
+        campaign_id: campaign.id,
+        title: "A ready-to-render question?",
+        text: "A complete thought.",
+        kind: "long_form_post",
+        mime_type: "image/png",
+        url: "/stored-editorial-package.png",
+        metadata: %{
+          "slides" => [
+            %{"kind" => "cover", "title" => "A ready-to-render question?", "body" => ""}
+          ]
+        }
+      })
+      |> Repo.insert!()
+
+    {:ok, view, _html} =
+      live(conn, ~p"/campaigns/#{campaign.id}/render-assets?assets=#{asset.id}&step=review")
+
+    assert has_element?(view, "#batch-asset-renderer")
+    assert has_element?(view, "#guided-output-#{asset.id}")
+    refute has_element?(view, "#content-candidates")
+  end
+
   test "surfaces the recommended conversation starter without selecting it", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-curation")
 

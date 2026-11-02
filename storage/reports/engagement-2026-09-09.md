@@ -6,7 +6,7 @@ The eight videos are H.264 at 1080 × 1920, 30.7–32.1 seconds long. All select
 
 Posting windows are tests informed by the account’s small historical sample and [Buffer’s 2026 research](https://buffer.com/resources/best-time-to-post-social-media/), assuming a UK audience. The table shows British Summer Time (UTC+1 on these dates). TikTok and Shorts include weekends; the other channels use weekdays.
 
-The Results page at http://localhost:4001/results persists matched Buffer metrics. Website visits and conversions require analytics on RationalGrid; new links carry channel, campaign and asset tags.
+The Results page at http://localhost:4002/results persists matched Buffer metrics. Website visits and conversions require analytics on RationalGrid; new links carry channel, campaign and asset tags.
 
 Validation: `mix precommit` — 186 tests passed. Browser page loads, automatic frame saving, all eight MP4 exports, all 48 remote post IDs/captions/times and final queue capacities verified.
 
