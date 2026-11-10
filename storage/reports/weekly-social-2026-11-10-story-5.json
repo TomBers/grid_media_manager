@@ -1,0 +1,26 @@
+{
+  "confidence": 0.77,
+  "cover_brief": "A close-up, editorial portrait of a person half in shadow, half in soft light, looking directly at camera. Composition allows title text in negative space to the left. Aim for thoughtful, human scale and slight grain for seriousness.",
+  "cover_mode": "photo",
+  "cover_search_query": "portrait half-lit person thoughtful expression studio window light soft grain negative space left editorial",
+  "format_rationale": "The grid presents a compact philosophical problem with tangible legal implications and open reform questions; long_form lets us preserve the synthesis, the legal tension, and a concrete follow-up question for readers seeking depth.",
+  "hook": "Is it fair to blame what someone couldn't choose?",
+  "rationale": "Start with the original human question to anchor the audience. Use the synthesis to explain the core claim that moral luck creates tension between fairness ideals and social reality. Then show how legal practice concretely exposes the problem with resultant luck. Finish with a reform-oriented question that invites readers to explore evidence and competing answers on RationalGrid.ai.",
+  "recommended_format": "long_form",
+  "selected_keys": [
+    "key_node:1",
+    "question:4dXxg6a27takhmoT",
+    "key_node:5",
+    "key_node:4",
+    "question:Lpem3uqYZu-4pa2j"
+  ],
+  "text_visual_key": "question:4dXxg6a27takhmoT",
+  "text_visual_role": "cover",
+  "video_script": [
+    "Moral luck means we often judge people for traits, situations, or outcomes they didn't control.",
+    "That tension becomes concrete in law: identical intent can receive different penalties because of uncontrollable results.",
+    "If institutions must tolerate some arbitrariness, how can we redesign accountability to reduce harms from moral luck?"
+  ],
+  "visual_rationale": "A half-lit portrait conveys the split between intent and outcome, mirroring moral ambiguity and inviting empathy. The image supports the cover question and promises an evidence-based, nuanced exploration on RationalGrid.ai.",
+  "visual_style": "newsprint"
+}

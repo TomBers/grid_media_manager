@@ -1,0 +1,26 @@
+{
+  "confidence": 0.58,
+  "cover_brief": "A backlit crowd at dusk, hands raised — conveys collective ownership and emotional scale without showing any specific artist.",
+  "cover_mode": "photo",
+  "cover_search_query": "festival crowd backlit dusk hands raised shallow depth of field warm tones cinematic editorial",
+  "format_rationale": "The grid offers a compact argument about how songs become shared objects; a short story video best communicates the central idea, its industrial and structural tensions, and an open-ended question about the digital era.",
+  "hook": "Can a song belong more to a generation than its creator?",
+  "rationale": "Start with the core human question. Explain the structural feature that lets listeners project shared meaning, then show how industry shaping and digital fragmentation complicate generational ownership. End on the unresolved question about whether algorithmic, personalised media prevents new shared anthems.",
+  "recommended_format": "story_video",
+  "selected_keys": [
+    "question:rnIzXRTFfWqdYDtX",
+    "key_node:4",
+    "key_node:3",
+    "key_node:5",
+    "question:vbc5XDpqJT5Tnjh0"
+  ],
+  "text_visual_key": "key_node:4",
+  "text_visual_role": "quotation",
+  "video_script": [
+    "Some songs are written with structural ambiguity so many listeners can map their own experiences onto the lyrics.",
+    "But industry practices and mass media shaping—plus today's fragmented, algorithmic listening—can manufacture or disperse any claimed generational ownership.",
+    "That leaves an open question: can personalised streams still produce a single shared anthem for a generation?"
+  ],
+  "visual_rationale": "Choose a moment that highlights the idea that a song's architecture invites collective projection; a concise paraphrase reads well as a standalone graphic and promises deeper analysis on RationalGrid.ai.",
+  "visual_style": "editorial_dark"
+}

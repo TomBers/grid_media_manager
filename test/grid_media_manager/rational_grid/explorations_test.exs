@@ -216,4 +216,38 @@ defmodule GridMediaManager.RationalGrid.ExplorationsTest do
     assert {:ok, %{"status" => "completed"}} =
              MCP.call("get_operation", %{"request_id" => "request-1"})
   end
+
+  test "MCP rate limiting backs off without discarding the persisted request" do
+    {:ok, e} =
+      Explorations.propose(
+        %{
+          question: "What makes work meaningful?",
+          rationale: "Test a practical philosophical tension."
+        },
+        %{}
+      )
+
+    {:ok, started} = Explorations.start(e.id)
+
+    stub(fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+
+      Req.Test.json(conn, %{
+        jsonrpc: "2.0",
+        id: request["id"],
+        result: %{
+          isError: true,
+          content: [
+            %{type: "text", text: "RationalGrid is rate limited. Please try again later."}
+          ]
+        }
+      })
+    end)
+
+    assert {:ok, %{status: "queued", attempts: 1} = delayed} = Explorations.process_next()
+    assert delayed.arguments == started.arguments
+    assert delayed.request_id == started.request_id
+    assert DateTime.compare(delayed.next_run_at, DateTime.utc_now()) == :gt
+  end
 end

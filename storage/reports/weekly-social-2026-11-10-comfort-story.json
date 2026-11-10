@@ -1,0 +1,28 @@
+{
+  "choice": {
+    "confidence": 0.78,
+    "cover_brief": "Portrait of a single person sitting on a couch at dusk, soft window or screen glow, muted palette, contemplative pose, ample negative space on left for title text.",
+    "cover_mode": "photo",
+    "cover_search_query": "person on couch at dusk, soft TV or phone glow, muted tones, contemplative pose, negative space for text, editorial crop",
+    "format_rationale": "The source offers a nuanced argument and a concrete contemporary example; long_form allows unpacking the distinction between comfort, autonomy, and algorithmic effects and to present the next empirical and policy question.",
+    "hook": "Does comfort quietly shrink our freedom?",
+    "rationale": "Start with the human question that frames the grid, follow with a synthetic claim about tension between material security and cognitive agency, illustrate through the concrete case of algorithmic subscription systems, and end with the recommended next research and policy question. These moments together provide a complete arc: claim, mechanism, and a practical open question readers can explore further on RationalGrid.ai.",
+    "recommended_format": "long_form",
+    "selected_keys": [
+      "key_node:1",
+      "key_node:5",
+      "key_node:4",
+      "question:aJHn95Os_V-KSv_C"
+    ],
+    "text_visual_key": "key_node:4",
+    "text_visual_role": "evidence",
+    "video_script": [
+      "Material comfort can trade off with cognitive autonomy, creating calm but narrowing choice.",
+      "Algorithmic curation and subscription ecosystems form a \"velvet cage\", steering tastes and passive conformity.",
+      "Which concrete cognitive or institutional interventions restore friction and deliberate choice without losing modern convenience?"
+    ],
+    "visual_rationale": "The algorithmic curation moment names a vivid, modern mechanism—the 'velvet cage' of subscription entertainment—that makes the abstract claim concrete and immediate. A single contemplative portrait with muted screen glow evokes the quiet, personalised influence described while leaving space for the title and CTA.",
+    "visual_style": "newsprint"
+  },
+  "campaign_id": 139
+}

@@ -187,7 +187,7 @@ defmodule GridMediaManager.RationalGrid.Explorations do
   defp finish(e) do
     with id when is_binary(id) <- get_in(e.result, ["grid", "id"]),
          {:ok, grid} <- MCP.read_all(id) do
-      save(e, %{status: "review", payload: ImportAdapter.payload(grid), attempts: 0})
+      save(e, %{status: "review", payload: ImportAdapter.payload(grid, e.result), attempts: 0})
     else
       {:error, reason} -> fail_or_retry(e, reason)
       _ -> fail_or_retry(e, :invalid_grid_response)

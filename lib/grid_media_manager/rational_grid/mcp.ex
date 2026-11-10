@@ -119,6 +119,11 @@ defmodule GridMediaManager.RationalGrid.MCP do
       challenges != [] ->
         {:error, :unauthorized}
 
+      Enum.any?(result["content"] || [], fn item ->
+        item["type"] == "text" and String.contains?(item["text"] || "", "rate limited")
+      end) ->
+        {:error, :rate_limited}
+
       true ->
         {:error, :tool_failed}
     end
