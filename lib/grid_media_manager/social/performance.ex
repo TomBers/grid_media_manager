@@ -91,6 +91,14 @@ defmodule GridMediaManager.Social.Performance do
       %{
         id: metric.id,
         campaign_id: metric.post_draft.campaign_id,
+        source_grid_id:
+          metric.post_draft.campaign.raw_payload["metadata"]["id"] ||
+            metric.post_draft.campaign.slug,
+        platform: platform,
+        post_draft_id: metric.post_draft_id,
+        post_age_hours: DateTime.diff(now, metric.sent_at, :hour),
+        metric_age_hours:
+          DateTime.diff(now, metric.metrics_updated_at || metric.fetched_at, :hour),
         title: metric.post_draft.campaign.title,
         hook: metric.post_draft.body |> String.split("\n") |> List.first(),
         sent_at: metric.sent_at,
@@ -114,24 +122,41 @@ defmodule GridMediaManager.Social.Performance do
 
   def latest_sync, do: Repo.one(from m in PostMetric, select: max(m.fetched_at))
 
-  def editorial_feedback do
+  def editorial_feedback(opts \\ []) do
     Map.new(Platforms.ids(), fn platform ->
-      rows = results(platform)
+      rows = results(platform, opts)
 
       {platform,
        %{
          sample_size: length(rows),
          note:
            "Directional, cumulative metrics for studio posts aged 72h–90d; not causal evidence. Missing metrics are unavailable.",
-         examples:
-           rows
-           |> Enum.filter(&(actions(&1) > 0))
-           |> Enum.take(3)
-           |> Enum.map(
-             &Map.take(&1, [:title, :hook, :exposure, :clicks, :saves, :shares, :comments])
-           )
+         examples: Enum.map(Enum.take(rows, 3), &evidence_row/1),
+         weaker_examples: rows |> Enum.reverse() |> Enum.take(3) |> Enum.map(&evidence_row/1)
        }}
     end)
+  end
+
+  defp evidence_row(row) do
+    Map.take(row, [
+      :id,
+      :campaign_id,
+      :source_grid_id,
+      :platform,
+      :post_draft_id,
+      :title,
+      :hook,
+      :sent_at,
+      :post_age_hours,
+      :fetched_at,
+      :metrics_updated_at,
+      :metric_age_hours,
+      :exposure,
+      :clicks,
+      :saves,
+      :shares,
+      :comments
+    ])
   end
 
   defp value(metric, type) do

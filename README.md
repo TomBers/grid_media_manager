@@ -86,3 +86,46 @@ Autopilot refreshes metrics when the last successful matched-post sync is over s
 New planned videos carry three concise `video_script` beats. Publishing checks the selected sequence for 4–6 frames, at most 25 visible words per non-CTA frame, and at most 45 seconds. Text reading time is preserved; a concise opening has a three-second minimum. Dense manually selected source excerpts remain editable and receive a pacing warning rather than being silently truncated. The original source is unchanged.
 
 `Automation.queue_fill_plan/2` previews available slots; `Automation.fill_queues/2` submits them. It respects the ten-post limit per channel, existing queue dates, explicit draft approval or current Editor approval, media readiness, copy limits and pacing. Re-running skips drafts already scheduled or published. Slots now use two daily windows, including weekends: UK local time and US Eastern local time. X/Facebook use 09:00 in each market; LinkedIn 10:00; Instagram UK 12:00 / US 18:00; TikTok 18:00; YouTube 16:00. These are test windows, not established account optima or geographic delivery targeting. A plan can set `selection_details["audience_market"]` to `"uk"` or `"us"` to keep its content in the matching window; unlabelled plans can use either. One existing post occupies the nearest window on its UTC date; two or more block that date. Existing posts are never moved. Queue filling starts no earlier than the next UTC day, avoiding additions to posts already sent today (which the queue snapshot does not include). Daytime slots follow the current UK and US daylight-saving rules (2007 onwards), including their different transition weeks. The rules are explicit in `Social.PostingSchedule`; review them if legislation changes, or adopt an IANA database when adding other regions.
+
+## Performance-informed explorations
+
+Open `/explorations` (the **Explore** navigation link) and connect RationalGrid. The
+studio registers an OAuth public client against `https://rationalgrid.ai`, uses
+S256 PKCE, validates state and issuer, and requests `grids:create`, `grids:read`,
+and `grids:append`. This standalone app has one shared studio connection, protected
+by the existing studio access control; it does not provide separate user accounts.
+Tokens are encrypted at rest with the endpoint secret key, and rotating refreshes
+are serialized with a database lock. Keep `SECRET_KEY_BASE` stable across deployments.
+Changing it requires reconnecting RationalGrid.
+
+Ask the editorial desk for a proposal, or enter a question and rationale. The
+proposal stores a snapshot of the performance evidence: source grid and draft IDs,
+platform, sample size, post age, metric freshness, and both strong and weak examples.
+The editorial model uses the existing `OPENAI_API_KEY` and `OPENAI_EDITORIAL_MODEL`
+configuration. Missing performance data is treated as an editorial hypothesis.
+Recommendations can also append a question to an existing private grid; the worker
+checks the node and visibility against a fresh authenticated read before editing.
+
+Choose **Generate private grid** to enqueue the bounded RationalGrid exploration.
+The database stores the UUID and exact arguments before the first write. A supervised
+worker polls every five seconds, follows operation progress, and reads every grid
+page through MCP. It never uses the public promotion API for private content.
+Completed grids appear for review; **Create campaign from this grid** imports the
+canonical payload and links the campaign back to its proposal and evidence.
+Subsequent studio posts remain traceable through that campaign's drafts and metrics.
+No grid is published and no social post is scheduled by exploration generation.
+
+Temporary transport failures back off, up to five attempts; **Resume request**
+reuses the same UUID and arguments. Failed generation is terminal and preserves
+its partial grid link. Reconnect or reauthorize when access expires or is revoked,
+then explicitly resume the request. Disconnect revokes the remote refresh token
+and erases local credentials; if remote revocation fails the UI reports how to
+finish it in RationalGrid. Worker claims expire after five minutes if a process
+crashes, so unfinished jobs survive restarts. MCP reads have a one-minute pagination
+budget; incomplete reads are never imported.
+
+For local server development, configure
+`config :grid_media_manager, :rational_grid_mcp, base_url: "https://your-server"`.
+The default is the production RationalGrid origin. Apply migrations before starting
+the new worker (`mix ecto.migrate`). Integration tests use `Req.Test`, with the worker
+disabled in test; run the complete suite using `mix precommit`.

@@ -22,6 +22,11 @@ defmodule GridMediaManagerWeb.Router do
   scope "/", GridMediaManagerWeb do
     pipe_through :browser
 
+    post "/rationalgrid/connect", RationalGridOAuthController, :connect
+    get "/rationalgrid/callback", RationalGridOAuthController, :callback, log: false
+    delete "/rationalgrid/disconnect", RationalGridOAuthController, :disconnect
+    live "/explorations", ExplorationLive, :index
+    live "/explorations/:id", ExplorationLive, :show
     live "/", GridImportLive, :new
     live "/automation/new", AutopilotLive, :new
     live "/automation/:id", AutonomousPlannerLive, :show

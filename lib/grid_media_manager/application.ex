@@ -35,6 +35,8 @@ defmodule GridMediaManager.Application do
     children = [
       GridMediaManagerWeb.Telemetry,
       GridMediaManager.Repo,
+      {GridMediaManager.RationalGrid.ExplorationWorker,
+       enabled: Application.get_env(:grid_media_manager, :exploration_worker_enabled, true)},
       {DNSCluster,
        query: Application.get_env(:grid_media_manager, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: GridMediaManager.PubSub},
