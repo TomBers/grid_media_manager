@@ -190,6 +190,35 @@ defmodule GridMediaManager.Automation do
     end
   end
 
+  @doc "Plans an exact imported campaign without searching or substituting another grid."
+  def plan_campaign(batch_id, campaign_id, position, opts \\ []) do
+    batch = get_batch(batch_id)
+    campaign = Campaigns.get_campaign!(campaign_id)
+    existing = Repo.get_by(EditorialPlan, editorial_batch_id: batch_id, position: position)
+
+    if existing && existing.status == "planned" do
+      {:ok, existing}
+    else
+      input = %{
+        topic: campaign.title,
+        source: %{slug: campaign.slug, title: campaign.title},
+        source_choice: %{
+          "confidence" => 1.0,
+          "rationale" => "The source was generated for this saved weekly story."
+        }
+      }
+
+      with {:ok, attrs} <-
+             plan_topic(
+               input,
+               Keyword.get(opts, :selector, LLMSelector),
+               Keyword.get(opts, :cover_search, true)
+             ) do
+        {:ok, persist_plan(plan_attrs({:ok, attrs}, campaign.title, position), batch)}
+      end
+    end
+  end
+
   def selected_keys_for_campaign(plan_id, %Campaign{id: campaign_id}) do
     case get_plan(plan_id) do
       %EditorialPlan{campaign_id: ^campaign_id, status: "planned", selected_keys: keys} -> keys
@@ -1050,6 +1079,17 @@ defmodule GridMediaManager.Automation do
       end
     else
       :regenerate
+    end
+  end
+
+  @doc false
+  def remember_plan_assets(plan_id, assets) do
+    plan = get_plan(plan_id)
+
+    if length(assets) == 3 and Enum.all?(assets, &(&1.campaign_id == plan.campaign_id)) do
+      {:ok, persist_generated_assets(plan, assets)}
+    else
+      {:error, :invalid_plan_assets}
     end
   end
 

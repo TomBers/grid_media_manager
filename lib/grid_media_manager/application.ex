@@ -35,6 +35,9 @@ defmodule GridMediaManager.Application do
     children = [
       GridMediaManagerWeb.Telemetry,
       GridMediaManager.Repo,
+      {Task.Supervisor, name: GridMediaManager.Weekly.Tasks},
+      {GridMediaManager.Weekly.Worker,
+       enabled: Application.get_env(:grid_media_manager, :weekly_worker_enabled, true)},
       {GridMediaManager.RationalGrid.ExplorationWorker,
        enabled: Application.get_env(:grid_media_manager, :exploration_worker_enabled, true)},
       {DNSCluster,

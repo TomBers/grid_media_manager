@@ -53,6 +53,13 @@ defmodule GridMediaManagerWeb.Layouts do
 
         <nav class="flex items-center gap-3">
           <.link
+            id="weekly-desk-link"
+            navigate={~p"/weekly"}
+            class="rounded-full px-3 py-2 text-sm font-medium text-base-content/65 transition hover:bg-base-200 hover:text-base-content"
+          >
+            Weekly desk
+          </.link>
+          <.link
             id="explorations-link"
             navigate={~p"/explorations"}
             class="rounded-full px-3 py-2 text-sm font-medium text-base-content/65 transition hover:bg-base-200 hover:text-base-content"

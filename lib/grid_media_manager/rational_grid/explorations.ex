@@ -112,16 +112,35 @@ defmodule GridMediaManager.RationalGrid.Explorations do
     # must survive a later import or worker failure. A crashed claim becomes due again.
     claim =
       Repo.transaction(fn ->
+        Repo.query!("SELECT pg_advisory_xact_lock(9412302)")
+        active = Repo.aggregate(from(e in Exploration, where: e.status == "generating"), :count)
+        limit = Application.get_env(:grid_media_manager, :exploration_concurrency, 1)
+
         e =
           Repo.one(
             from e in Exploration,
-              where: e.status in ["queued", "generating"] and e.next_run_at <= ^now(),
+              where: e.status == "generating" and e.next_run_at <= ^now(),
               order_by: e.next_run_at,
               limit: 1,
               lock: "FOR UPDATE SKIP LOCKED"
           )
 
-        if e, do: save(e, %{next_run_at: DateTime.add(now(), 300)}), else: nil
+        e =
+          if is_nil(e) and active < limit do
+            Repo.one(
+              from e in Exploration,
+                where: e.status == "queued" and e.next_run_at <= ^now(),
+                order_by: e.next_run_at,
+                limit: 1,
+                lock: "FOR UPDATE SKIP LOCKED"
+            )
+          else
+            e
+          end
+
+        if e,
+          do: save(e, %{status: "generating", next_run_at: DateTime.add(now(), 300)}),
+          else: nil
       end)
 
     case claim do
@@ -220,7 +239,7 @@ defmodule GridMediaManager.RationalGrid.Explorations do
         e.campaign_id ->
           Campaigns.get_campaign!(e.campaign_id)
 
-        e.status == "review" ->
+        e.status in ["review", "partial_review"] ->
           case Campaigns.import_payload(e.payload, e.payload["metadata"]["id"]) do
             {:ok, campaign} ->
               save(e, %{campaign_id: campaign.id, status: "imported"})
@@ -234,6 +253,40 @@ defmodule GridMediaManager.RationalGrid.Explorations do
           Repo.rollback(:not_ready)
       end
     end)
+  end
+
+  def review_partial(id) do
+    e = get!(id)
+
+    with true <- e.status == "failed",
+         grid_id when is_binary(grid_id) <- get_in(e.result, ["grid", "id"]),
+         {:ok, grid} <- MCP.read_all(grid_id),
+         true <-
+           Enum.any?(
+             grid["nodes"],
+             &(&1["class"] == "answer" and String.length(&1["content"] || "") > 200)
+           ) do
+      nodes = Enum.reject(grid["nodes"], &(String.trim(&1["content"] || "") == ""))
+      ids = MapSet.new(nodes, & &1["id"])
+
+      edges =
+        Enum.filter(
+          grid["edges"],
+          &(MapSet.member?(ids, &1["from"]) and MapSet.member?(ids, &1["to"]))
+        )
+
+      payload = ImportAdapter.payload(%{grid | "nodes" => nodes, "edges" => edges})
+      payload = put_in(payload, ["metadata", "partial_generation"], true)
+
+      {:ok,
+       save(e, %{
+         status: "partial_review",
+         payload: payload,
+         error: "Using available answers from an incomplete exploration."
+       })}
+    else
+      _ -> {:error, :partial_grid_not_ready}
+    end
   end
 
   def outcomes(e) do

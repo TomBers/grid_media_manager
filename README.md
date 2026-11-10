@@ -129,3 +129,43 @@ For local server development, configure
 The default is the production RationalGrid origin. Apply migrations before starting
 the new worker (`mix ecto.migrate`). Integration tests use `Req.Test`, with the worker
 disabled in test; run the complete suite using `mix precommit`.
+
+## Saved weekly workflow
+
+Open **Weekly desk** (`/weekly`) and choose the editorial direction and a date range
+of up to seven days. **Prepare the weekly run** first refreshes account evidence and
+checks actual queue vacancies. Full queues finish without generating new grids.
+Otherwise the run creates at most ten distinct sources, serialises explorations,
+plans the exact imported campaigns, and generates all six captions, an idea card,
+a cover brief and three video beats in one structured model call per story.
+
+Progress lives in `weekly_runs`, `weekly_stories` and `weekly_deliveries`, not temporary
+scripts. The supervised worker uses database leases and a two-minute step limit.
+Saved model output is applied without regenerating it after an interrupted step.
+Production defects get one bounded correction attempt for that story; optional stylistic
+preferences do not trigger repeated full-batch rewrites.
+
+Choose **Render remaining media** once: the browser saves each package and advances
+through the remaining stories automatically. Keep that browser open during rendering;
+network generation continues without it. Saved frames are reused. Only after exploration
+and media finish does the run ask for public grids. It verifies anonymous access rather
+than relying on the linked owner's access. Failed generation is preserved; **Use saved
+answers (partial grid)** explicitly accepts an incomplete source without restarting it.
+
+Review or edit the actual package, then **Approve reviewed posts and fill Buffer queues**.
+UTC test windows, draft IDs, body hashes and a media fingerprint are saved before sending.
+Live vacancies and public access are checked again. An uncertain Buffer response enters
+reconciliation: matching text and scheduled time can recover the remote ID, but an absent
+or ambiguous match never triggers a blind second submission. **Resume saved run** checks
+again; it does not resend an uncertain write. Completion requires matching every remote
+post ID, text and scheduled time in the live queues.
+
+The workflow protects existing queued posts and dates outside the selected range. Timing
+is based on channel-specific cumulative observations, including sample sizes, post ages,
+metric freshness, and weaker examples. It is an experiment, not a causal timing model.
+The existing Results view remains the place to assess subsequent performance; equal-age
+historical metric snapshots are a separate future improvement.
+
+Apply migrations with `mix ecto.migrate` before starting the worker. Tests disable it with
+`:weekly_worker_enabled`. No new posts are prepared or scheduled merely by opening the
+Weekly desk. MCP server proposals are in `docs/rationalgrid-mcp-improvements.md`.

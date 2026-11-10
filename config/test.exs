@@ -37,3 +37,5 @@ config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
 config :grid_media_manager, :exploration_worker_enabled, false
+
+config :grid_media_manager, :weekly_worker_enabled, false

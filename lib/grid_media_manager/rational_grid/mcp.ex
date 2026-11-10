@@ -14,6 +14,10 @@ defmodule GridMediaManager.RationalGrid.MCP do
 
   def call(tool, arguments) when tool in @read_tools, do: authorized_call(tool, arguments)
 
+  def read_public_grid(grid_id) do
+    rpc("tools/call", %{name: "read_grid", arguments: %{grid_id: grid_id, limit: 1}}, nil)
+  end
+
   def read_all(grid_id),
     do: read_page(grid_id, 0, [], [], MapSet.new(), System.monotonic_time(:second) + 60)
 
@@ -66,10 +70,11 @@ defmodule GridMediaManager.RationalGrid.MCP do
     id = Ecto.UUID.generate()
 
     headers = [
-      {"authorization", "Bearer " <> token},
       {"accept", "application/json, text/event-stream"},
       {"mcp-protocol-version", "2025-03-26"}
     ]
+
+    headers = if token, do: [{"authorization", "Bearer " <> token} | headers], else: headers
 
     case HTTP.request(:post, "/mcp",
            headers: headers,
@@ -123,6 +128,15 @@ defmodule GridMediaManager.RationalGrid.MCP do
         item["type"] == "text" and String.contains?(item["text"] || "", "rate limited")
       end) ->
         {:error, :rate_limited}
+
+      Enum.any?(result["content"] || [], fn item ->
+        item["type"] == "text" and
+            String.contains?(item["text"] || "", [
+              "RationalGrid is unavailable or returned an invalid response",
+              "RationalGrid could not complete the request. Please try again later."
+            ])
+      end) ->
+        {:error, :transport_unavailable}
 
       true ->
         {:error, :tool_failed}

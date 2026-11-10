@@ -25,6 +25,9 @@ defmodule GridMediaManagerWeb.Router do
     post "/rationalgrid/connect", RationalGridOAuthController, :connect
     get "/rationalgrid/callback", RationalGridOAuthController, :callback, log: false
     delete "/rationalgrid/disconnect", RationalGridOAuthController, :disconnect
+    live "/weekly", WeeklyLive, :index
+    live "/weekly/:id", WeeklyLive, :show
+    live "/weekly/:id/render", WeeklyLive, :render
     live "/explorations", ExplorationLive, :index
     live "/explorations/:id", ExplorationLive, :show
     live "/", GridImportLive, :new

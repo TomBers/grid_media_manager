@@ -75,7 +75,9 @@ defmodule GridMediaManager.RationalGrid.AccountsTest do
       Phoenix.Token.decrypt(
         GridMediaManagerWeb.Endpoint,
         "rg-credentials",
-        Accounts.connection().credentials, max_age: :infinity)
+        Accounts.connection().credentials,
+        max_age: :infinity
+      )
 
     assert tokens["refresh_token"] == "refresh-2"
   end

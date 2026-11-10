@@ -245,9 +245,45 @@ defmodule GridMediaManager.RationalGrid.ExplorationsTest do
       })
     end)
 
-    assert {:ok, %{status: "queued", attempts: 1} = delayed} = Explorations.process_next()
+    assert {:ok, %{status: "generating", attempts: 1} = delayed} = Explorations.process_next()
     assert delayed.arguments == started.arguments
     assert delayed.request_id == started.request_id
     assert DateTime.compare(delayed.next_run_at, DateTime.utc_now()) == :gt
+  end
+
+  test "transient MCP tool errors retry the same saved operation automatically" do
+    {:ok, e} =
+      Explorations.propose(
+        %{
+          question: "What makes work meaningful?",
+          rationale: "Test a practical philosophical tension."
+        },
+        %{}
+      )
+
+    {:ok, started} = Explorations.start(e.id)
+
+    stub(fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+
+      Req.Test.json(conn, %{
+        jsonrpc: "2.0",
+        id: request["id"],
+        result: %{
+          isError: true,
+          content: [
+            %{
+              type: "text",
+              text: "RationalGrid could not complete the request. Please try again later."
+            }
+          ]
+        }
+      })
+    end)
+
+    assert {:ok, %{status: "generating", attempts: 1} = delayed} = Explorations.process_next()
+    assert delayed.arguments == started.arguments
+    assert delayed.request_id == started.request_id
   end
 end
