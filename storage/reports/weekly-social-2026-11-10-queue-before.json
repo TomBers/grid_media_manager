@@ -1,0 +1,48 @@
+{
+  "fetched_at": "2026-11-10T12:38:51Z",
+  "platforms": {
+    "facebook": {
+      "posts": [],
+      "vacancies": 10,
+      "channel_id": "6a57be5b80cc80cdcabd022c",
+      "scheduled_count": 0,
+      "post_count": 0
+    },
+    "instagram": {
+      "posts": [],
+      "vacancies": 10,
+      "channel_id": "6a561ff780cc80cdcab0c37c",
+      "scheduled_count": 0,
+      "post_count": 0
+    },
+    "linkedin": {
+      "posts": [],
+      "vacancies": 10,
+      "channel_id": "6a57b40980cc80cdcabca638",
+      "scheduled_count": 0,
+      "post_count": 0
+    },
+    "tiktok": {
+      "posts": [],
+      "vacancies": 10,
+      "channel_id": "6a57554a80cc80cdcaba43df",
+      "scheduled_count": 0,
+      "post_count": 0
+    },
+    "x": {
+      "posts": [],
+      "vacancies": 10,
+      "channel_id": "6a57b44880cc80cdcabca77e",
+      "scheduled_count": 0,
+      "post_count": 0
+    },
+    "youtube": {
+      "posts": [],
+      "vacancies": 10,
+      "channel_id": "6a56201180cc80cdcab0c3df",
+      "scheduled_count": 0,
+      "post_count": 0
+    }
+  },
+  "queue_limit": 10
+}

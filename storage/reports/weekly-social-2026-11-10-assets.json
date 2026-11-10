@@ -1,0 +1,726 @@
+{
+  "status": "awaiting_artifacts",
+  "batch_id": 32,
+  "plans": [
+    {
+      "status": "awaiting_artifacts",
+      "errors": [],
+      "topic": "Can a comfortable life make us less free?",
+      "plan_id": 135,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/139/studio?step=review&assets=718&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 718
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/139/studio?step=review&assets=719&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 719
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "render_path": "/campaigns/139/studio?step=review&assets=721&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 721
+        }
+      ]
+    },
+    {
+      "status": "awaiting_artifacts",
+      "errors": [],
+      "topic": "Can a song belong to a generation more than to its creator?",
+      "plan_id": 136,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/140/studio?step=review&assets=720&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 720
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/140/studio?step=review&assets=722&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 722
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "render_path": "/campaigns/140/studio?step=review&assets=723&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 723
+        }
+      ]
+    },
+    {
+      "status": "awaiting_artifacts",
+      "errors": [],
+      "topic": "If you are right by luck, do you really know?",
+      "plan_id": 137,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/141/studio?step=review&assets=725&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 725
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/141/studio?step=review&assets=728&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 728
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "render_path": "/campaigns/141/studio?step=review&assets=729&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 729
+        }
+      ]
+    },
+    {
+      "status": "awaiting_artifacts",
+      "errors": [],
+      "topic": "Can a job be well paid and still be pointless?",
+      "plan_id": 138,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/142/studio?step=review&assets=724&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 724
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/142/studio?step=review&assets=726&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 726
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "render_path": "/campaigns/142/studio?step=review&assets=727&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 727
+        }
+      ]
+    },
+    {
+      "status": "awaiting_artifacts",
+      "errors": [],
+      "topic": "Is it fair to judge someone for what they could not control?",
+      "plan_id": 139,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/143/studio?step=review&assets=730&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 730
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/143/studio?step=review&assets=731&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 731
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "render_path": "/campaigns/143/studio?step=review&assets=732&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 732
+        }
+      ]
+    },
+    {
+      "status": "awaiting_artifacts",
+      "errors": [],
+      "topic": "Can you understand another person's pain without having felt it?",
+      "plan_id": 141,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/144/studio?step=review&assets=697&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 697
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/144/studio?step=review&assets=733&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 733
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "render_path": "/campaigns/144/studio?step=review&assets=734&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 734
+        }
+      ]
+    },
+    {
+      "status": "awaiting_artifacts",
+      "errors": [],
+      "topic": "When does loyalty become complicity?",
+      "plan_id": 140,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/145/studio?step=review&assets=735&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 735
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/145/studio?step=review&assets=736&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 736
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "render_path": "/campaigns/145/studio?step=review&assets=737&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 737
+        }
+      ]
+    },
+    {
+      "status": "awaiting_artifacts",
+      "errors": [],
+      "topic": "Do we owe future generations a life as comfortable as our own?",
+      "plan_id": 143,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/146/studio?step=review&assets=738&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 738
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/146/studio?step=review&assets=739&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 739
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "render_path": "/campaigns/146/studio?step=review&assets=740&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 740
+        }
+      ]
+    },
+    {
+      "status": "awaiting_artifacts",
+      "errors": [],
+      "topic": "Can a small good deed matter when it changes nothing?",
+      "plan_id": 142,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/147/studio?step=review&assets=741&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 741
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/147/studio?step=review&assets=742&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 742
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "render_path": "/campaigns/147/studio?step=review&assets=743&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 743
+        }
+      ]
+    },
+    {
+      "status": "awaiting_artifacts",
+      "errors": [],
+      "topic": "Can you change who you are without betraying yourself?",
+      "plan_id": 144,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/148/studio?step=review&assets=744&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 744
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3
+            ],
+            "render_path": "/campaigns/148/studio?step=review&assets=745&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 745
+        },
+        {
+          "error": null,
+          "output": {
+            "missing_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "render_path": "/campaigns/148/studio?step=review&assets=746&asset=all",
+            "required_indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "awaiting_artifacts",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 746
+        }
+      ]
+    }
+  ]
+}
