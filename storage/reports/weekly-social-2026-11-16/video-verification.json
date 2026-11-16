@@ -1,0 +1,52 @@
+[
+  {
+    "story": 1,
+    "duration": "31.766667",
+    "valid": true
+  },
+  {
+    "story": 2,
+    "duration": "31.740000",
+    "valid": true
+  },
+  {
+    "story": 3,
+    "duration": "31.766667",
+    "valid": true
+  },
+  {
+    "story": 4,
+    "duration": "33.080000",
+    "valid": true
+  },
+  {
+    "story": 5,
+    "duration": "31.433333",
+    "valid": true
+  },
+  {
+    "story": 6,
+    "duration": "33.433333",
+    "valid": true
+  },
+  {
+    "story": 7,
+    "duration": "31.740000",
+    "valid": true
+  },
+  {
+    "story": 8,
+    "duration": "32.766667",
+    "valid": true
+  },
+  {
+    "story": 9,
+    "duration": "31.080000",
+    "valid": true
+  },
+  {
+    "story": 10,
+    "duration": "34.766667",
+    "valid": true
+  }
+]

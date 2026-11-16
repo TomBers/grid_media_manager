@@ -79,7 +79,7 @@ defmodule GridMediaManager.RationalGrid.Explorations do
       if e.status == "proposed" do
         args =
           if e.tool == "explore_question",
-            do: %{"question" => e.question},
+            do: %{"question" => e.question, "strategy" => "guided"},
             else: Map.put(e.arguments, "content", e.question)
 
         save(e, %{

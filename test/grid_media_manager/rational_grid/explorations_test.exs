@@ -42,7 +42,8 @@ defmodule GridMediaManager.RationalGrid.ExplorationsTest do
 
     stub(fn conn ->
       rpc(conn, fn
-        "explore_question", _ ->
+        "explore_question", args ->
+          assert args["strategy"] == "guided"
           send(self(), :created)
           %{"request_id" => e.request_id, "status" => "generating", "grid" => grid()}
 

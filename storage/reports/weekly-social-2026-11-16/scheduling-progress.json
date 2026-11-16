@@ -1,0 +1,606 @@
+{
+  "status": "completed",
+  "run_id": 2,
+  "deliveries": [
+    {
+      "error": null,
+      "id": 21,
+      "status": "verified",
+      "platform": "facebook",
+      "post_draft_id": 2570,
+      "external_post_id": "6afae3df87a8bd00b04aefb4",
+      "story_id": 1,
+      "scheduled_for": "2026-11-17T09:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 41,
+      "status": "verified",
+      "platform": "instagram",
+      "post_draft_id": 2575,
+      "external_post_id": "6afae3e237f9e5273be0a610",
+      "story_id": 1,
+      "scheduled_for": "2026-11-17T13:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 11,
+      "status": "verified",
+      "platform": "linkedin",
+      "post_draft_id": 2569,
+      "external_post_id": "6afae3e50b49b20d0d0b04b5",
+      "story_id": 1,
+      "scheduled_for": "2026-11-17T16:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 22,
+      "status": "verified",
+      "platform": "facebook",
+      "post_draft_id": 2578,
+      "external_post_id": "6afae3e8d2a6b9d4fcaf089b",
+      "story_id": 2,
+      "scheduled_for": "2026-11-17T16:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 12,
+      "status": "verified",
+      "platform": "linkedin",
+      "post_draft_id": 2577,
+      "external_post_id": "6afae3ead2a6b9d4fcaf0a78",
+      "story_id": 2,
+      "scheduled_for": "2026-11-17T17:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 31,
+      "status": "verified",
+      "platform": "tiktok",
+      "post_draft_id": 2574,
+      "external_post_id": "6afae3ee0b49b20d0d0b07b9",
+      "story_id": 1,
+      "scheduled_for": "2026-11-17T18:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 32,
+      "status": "verified",
+      "platform": "tiktok",
+      "post_draft_id": 2582,
+      "external_post_id": "6afae3f287a8bd00b04afe8b",
+      "story_id": 2,
+      "scheduled_for": "2026-11-17T21:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 42,
+      "status": "verified",
+      "platform": "instagram",
+      "post_draft_id": 2583,
+      "external_post_id": "6afae3f537f9e5273be0ac78",
+      "story_id": 2,
+      "scheduled_for": "2026-11-17T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 1,
+      "status": "verified",
+      "platform": "x",
+      "post_draft_id": 2571,
+      "external_post_id": "6afae3f80c2af02527d7c425",
+      "story_id": 1,
+      "scheduled_for": "2026-11-17T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 51,
+      "status": "verified",
+      "platform": "youtube",
+      "post_draft_id": 2576,
+      "external_post_id": "6afae3fc37f9e5273be0add7",
+      "story_id": 1,
+      "scheduled_for": "2026-11-17T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 2,
+      "status": "verified",
+      "platform": "x",
+      "post_draft_id": 2579,
+      "external_post_id": "6afae3ff87a8bd00b04b02d9",
+      "story_id": 2,
+      "scheduled_for": "2026-11-17T23:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 52,
+      "status": "verified",
+      "platform": "youtube",
+      "post_draft_id": 2584,
+      "external_post_id": "6afae40287a8bd00b04b0762",
+      "story_id": 2,
+      "scheduled_for": "2026-11-17T23:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 23,
+      "status": "verified",
+      "platform": "facebook",
+      "post_draft_id": 2586,
+      "external_post_id": "6afae40537f9e5273be0b1ea",
+      "story_id": 3,
+      "scheduled_for": "2026-11-18T09:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 43,
+      "status": "verified",
+      "platform": "instagram",
+      "post_draft_id": 2591,
+      "external_post_id": "6afae40991ba8aa74bcbbe7f",
+      "story_id": 3,
+      "scheduled_for": "2026-11-18T13:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 13,
+      "status": "verified",
+      "platform": "linkedin",
+      "post_draft_id": 2585,
+      "external_post_id": "6afae40bd2a6b9d4fcaf1d31",
+      "story_id": 3,
+      "scheduled_for": "2026-11-18T16:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 24,
+      "status": "verified",
+      "platform": "facebook",
+      "post_draft_id": 2594,
+      "external_post_id": "6afae40e0c2af02527d7caa5",
+      "story_id": 4,
+      "scheduled_for": "2026-11-18T16:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 14,
+      "status": "verified",
+      "platform": "linkedin",
+      "post_draft_id": 2593,
+      "external_post_id": "6afae41191ba8aa74bcbc700",
+      "story_id": 4,
+      "scheduled_for": "2026-11-18T17:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 33,
+      "status": "verified",
+      "platform": "tiktok",
+      "post_draft_id": 2590,
+      "external_post_id": "6afae41537f9e5273be0baab",
+      "story_id": 3,
+      "scheduled_for": "2026-11-18T18:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 34,
+      "status": "verified",
+      "platform": "tiktok",
+      "post_draft_id": 2598,
+      "external_post_id": "6afae41937f9e5273be0bc3a",
+      "story_id": 4,
+      "scheduled_for": "2026-11-18T21:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 44,
+      "status": "verified",
+      "platform": "instagram",
+      "post_draft_id": 2599,
+      "external_post_id": "6afae41c87a8bd00b04b123a",
+      "story_id": 4,
+      "scheduled_for": "2026-11-18T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 3,
+      "status": "verified",
+      "platform": "x",
+      "post_draft_id": 2587,
+      "external_post_id": "6afae41f91ba8aa74bcbcafe",
+      "story_id": 3,
+      "scheduled_for": "2026-11-18T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 53,
+      "status": "verified",
+      "platform": "youtube",
+      "post_draft_id": 2592,
+      "external_post_id": "6afae42337f9e5273be0be41",
+      "story_id": 3,
+      "scheduled_for": "2026-11-18T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 4,
+      "status": "verified",
+      "platform": "x",
+      "post_draft_id": 2595,
+      "external_post_id": "6afae426d2a6b9d4fcaf2505",
+      "story_id": 4,
+      "scheduled_for": "2026-11-18T23:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 54,
+      "status": "verified",
+      "platform": "youtube",
+      "post_draft_id": 2600,
+      "external_post_id": "6afae42a91ba8aa74bcbccb7",
+      "story_id": 4,
+      "scheduled_for": "2026-11-18T23:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 25,
+      "status": "verified",
+      "platform": "facebook",
+      "post_draft_id": 2602,
+      "external_post_id": "6afae42dd2a6b9d4fcaf2606",
+      "story_id": 5,
+      "scheduled_for": "2026-11-19T09:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 45,
+      "status": "verified",
+      "platform": "instagram",
+      "post_draft_id": 2607,
+      "external_post_id": "6afae4300c2af02527d7d3c1",
+      "story_id": 5,
+      "scheduled_for": "2026-11-19T13:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 15,
+      "status": "verified",
+      "platform": "linkedin",
+      "post_draft_id": 2601,
+      "external_post_id": "6afae433d2a6b9d4fcaf278a",
+      "story_id": 5,
+      "scheduled_for": "2026-11-19T16:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 26,
+      "status": "verified",
+      "platform": "facebook",
+      "post_draft_id": 2610,
+      "external_post_id": "6afae43687a8bd00b04b17d2",
+      "story_id": 6,
+      "scheduled_for": "2026-11-19T16:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 16,
+      "status": "verified",
+      "platform": "linkedin",
+      "post_draft_id": 2609,
+      "external_post_id": "6afae4390c2af02527d7d611",
+      "story_id": 6,
+      "scheduled_for": "2026-11-19T17:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 35,
+      "status": "verified",
+      "platform": "tiktok",
+      "post_draft_id": 2606,
+      "external_post_id": "6afae43c37f9e5273be0c2fa",
+      "story_id": 5,
+      "scheduled_for": "2026-11-19T18:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 36,
+      "status": "verified",
+      "platform": "tiktok",
+      "post_draft_id": 2614,
+      "external_post_id": "6afae44087a8bd00b04b19a3",
+      "story_id": 6,
+      "scheduled_for": "2026-11-19T21:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 46,
+      "status": "verified",
+      "platform": "instagram",
+      "post_draft_id": 2615,
+      "external_post_id": "6afae444d2a6b9d4fcaf2a4d",
+      "story_id": 6,
+      "scheduled_for": "2026-11-19T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 5,
+      "status": "verified",
+      "platform": "x",
+      "post_draft_id": 2603,
+      "external_post_id": "6afae447d2a6b9d4fcaf2b54",
+      "story_id": 5,
+      "scheduled_for": "2026-11-19T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 55,
+      "status": "verified",
+      "platform": "youtube",
+      "post_draft_id": 2608,
+      "external_post_id": "6afae44a37f9e5273be0c8ac",
+      "story_id": 5,
+      "scheduled_for": "2026-11-19T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 6,
+      "status": "verified",
+      "platform": "x",
+      "post_draft_id": 2611,
+      "external_post_id": "6afae44d87a8bd00b04b1d37",
+      "story_id": 6,
+      "scheduled_for": "2026-11-19T23:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 56,
+      "status": "verified",
+      "platform": "youtube",
+      "post_draft_id": 2616,
+      "external_post_id": "6afae4510b49b20d0d0b27c9",
+      "story_id": 6,
+      "scheduled_for": "2026-11-19T23:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 27,
+      "status": "verified",
+      "platform": "facebook",
+      "post_draft_id": 2618,
+      "external_post_id": "6afae4540b49b20d0d0b28db",
+      "story_id": 7,
+      "scheduled_for": "2026-11-20T09:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 47,
+      "status": "verified",
+      "platform": "instagram",
+      "post_draft_id": 2623,
+      "external_post_id": "6afae4570c2af02527d7de91",
+      "story_id": 7,
+      "scheduled_for": "2026-11-20T13:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 17,
+      "status": "verified",
+      "platform": "linkedin",
+      "post_draft_id": 2617,
+      "external_post_id": "6afae45a91ba8aa74bcbda3c",
+      "story_id": 7,
+      "scheduled_for": "2026-11-20T16:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 28,
+      "status": "verified",
+      "platform": "facebook",
+      "post_draft_id": 2626,
+      "external_post_id": "6afae45d91ba8aa74bcbdb27",
+      "story_id": 8,
+      "scheduled_for": "2026-11-20T16:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 18,
+      "status": "verified",
+      "platform": "linkedin",
+      "post_draft_id": 2625,
+      "external_post_id": "6afae46087a8bd00b04b2257",
+      "story_id": 8,
+      "scheduled_for": "2026-11-20T17:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 37,
+      "status": "verified",
+      "platform": "tiktok",
+      "post_draft_id": 2622,
+      "external_post_id": "6afae4640c2af02527d7e1a1",
+      "story_id": 7,
+      "scheduled_for": "2026-11-20T18:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 38,
+      "status": "verified",
+      "platform": "tiktok",
+      "post_draft_id": 2630,
+      "external_post_id": "6afae467d2a6b9d4fcaf3405",
+      "story_id": 8,
+      "scheduled_for": "2026-11-20T21:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 48,
+      "status": "verified",
+      "platform": "instagram",
+      "post_draft_id": 2631,
+      "external_post_id": "6afae46b0c2af02527d7e369",
+      "story_id": 8,
+      "scheduled_for": "2026-11-20T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 7,
+      "status": "verified",
+      "platform": "x",
+      "post_draft_id": 2619,
+      "external_post_id": "6afae46ed2a6b9d4fcaf36cd",
+      "story_id": 7,
+      "scheduled_for": "2026-11-20T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 57,
+      "status": "verified",
+      "platform": "youtube",
+      "post_draft_id": 2624,
+      "external_post_id": "6afae47291ba8aa74bcbe433",
+      "story_id": 7,
+      "scheduled_for": "2026-11-20T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 8,
+      "status": "verified",
+      "platform": "x",
+      "post_draft_id": 2627,
+      "external_post_id": "6afae47587a8bd00b04b2793",
+      "story_id": 8,
+      "scheduled_for": "2026-11-20T23:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 58,
+      "status": "verified",
+      "platform": "youtube",
+      "post_draft_id": 2632,
+      "external_post_id": "6afae47891ba8aa74bcbe683",
+      "story_id": 8,
+      "scheduled_for": "2026-11-20T23:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 29,
+      "status": "verified",
+      "platform": "facebook",
+      "post_draft_id": 2634,
+      "external_post_id": "6afae47bd2a6b9d4fcaf3aff",
+      "story_id": 9,
+      "scheduled_for": "2026-11-21T09:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 49,
+      "status": "verified",
+      "platform": "instagram",
+      "post_draft_id": 2639,
+      "external_post_id": "6afae47f87a8bd00b04b2e73",
+      "story_id": 9,
+      "scheduled_for": "2026-11-21T13:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 19,
+      "status": "verified",
+      "platform": "linkedin",
+      "post_draft_id": 2633,
+      "external_post_id": "6afae4810c2af02527d7ecac",
+      "story_id": 9,
+      "scheduled_for": "2026-11-21T16:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 30,
+      "status": "verified",
+      "platform": "facebook",
+      "post_draft_id": 2642,
+      "external_post_id": "6afae48491ba8aa74bcbe9cd",
+      "story_id": 10,
+      "scheduled_for": "2026-11-21T16:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 20,
+      "status": "verified",
+      "platform": "linkedin",
+      "post_draft_id": 2641,
+      "external_post_id": "6afae48737f9e5273be0ddc0",
+      "story_id": 10,
+      "scheduled_for": "2026-11-21T17:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 39,
+      "status": "verified",
+      "platform": "tiktok",
+      "post_draft_id": 2638,
+      "external_post_id": "6afae48b87a8bd00b04b34ba",
+      "story_id": 9,
+      "scheduled_for": "2026-11-21T18:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 40,
+      "status": "verified",
+      "platform": "tiktok",
+      "post_draft_id": 2646,
+      "external_post_id": "6afae48f37f9e5273be0e7ac",
+      "story_id": 10,
+      "scheduled_for": "2026-11-21T21:30:00Z"
+    },
+    {
+      "error": null,
+      "id": 50,
+      "status": "verified",
+      "platform": "instagram",
+      "post_draft_id": 2647,
+      "external_post_id": "6afae49387a8bd00b04b3a6c",
+      "story_id": 10,
+      "scheduled_for": "2026-11-21T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 9,
+      "status": "verified",
+      "platform": "x",
+      "post_draft_id": 2635,
+      "external_post_id": "6afae4960c2af02527d7f841",
+      "story_id": 9,
+      "scheduled_for": "2026-11-21T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 59,
+      "status": "verified",
+      "platform": "youtube",
+      "post_draft_id": 2640,
+      "external_post_id": "6afae499d2a6b9d4fcaf4cd1",
+      "story_id": 9,
+      "scheduled_for": "2026-11-21T22:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 10,
+      "status": "verified",
+      "platform": "x",
+      "post_draft_id": 2643,
+      "external_post_id": "6afae49cd2a6b9d4fcaf4dfd",
+      "story_id": 10,
+      "scheduled_for": "2026-11-21T23:00:00Z"
+    },
+    {
+      "error": null,
+      "id": 60,
+      "status": "verified",
+      "platform": "youtube",
+      "post_draft_id": 2648,
+      "external_post_id": "6afae4a037f9e5273be0ee64",
+      "story_id": 10,
+      "scheduled_for": "2026-11-21T23:00:00Z"
+    }
+  ]
+}
