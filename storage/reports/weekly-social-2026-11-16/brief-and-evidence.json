@@ -1,0 +1,1068 @@
+{
+  "end_date": "2026-11-22",
+  "evidence": {
+    "facebook": {
+      "examples": [
+        {
+          "campaign_id": 103,
+          "clicks": 0,
+          "comments": 0,
+          "exposure": 6,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Would you notice corruption if it rewarded you?",
+          "id": 652,
+          "metric_age_hours": 453,
+          "metrics_updated_at": "2026-10-28T13:42:59Z",
+          "platform": "facebook",
+          "post_age_hours": 936,
+          "post_draft_id": 1846,
+          "saves": null,
+          "sent_at": "2026-10-08T10:03:50Z",
+          "shares": 0,
+          "source_grid_id": "philosophical-themes-in-the-last-king-of-scotland-09be9b",
+          "title": "Philosophical themes in The Last King of Scotland (Kevin Macdonald 2006)"
+        },
+        {
+          "campaign_id": 113,
+          "clicks": 0,
+          "comments": 0,
+          "exposure": 5,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Can science fix its replication crisis?",
+          "id": 1361,
+          "metric_age_hours": 85,
+          "metrics_updated_at": "2026-11-12T21:45:42Z",
+          "platform": "facebook",
+          "post_age_hours": 473,
+          "post_draft_id": 2116,
+          "saves": null,
+          "sent_at": "2026-10-27T17:31:44Z",
+          "shares": 0,
+          "source_grid_id": "the-replication-crisis-in-social-science-0dfda4",
+          "title": "The replication crisis in social science"
+        },
+        {
+          "campaign_id": 122,
+          "clicks": 0,
+          "comments": 0,
+          "exposure": 5,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Why many pointless‑seeming jobs still prop up the system?",
+          "id": 1366,
+          "metric_age_hours": 131,
+          "metrics_updated_at": "2026-11-10T23:45:24Z",
+          "platform": "facebook",
+          "post_age_hours": 593,
+          "post_draft_id": 2068,
+          "saves": null,
+          "sent_at": "2026-10-22T17:31:06Z",
+          "shares": 0,
+          "source_grid_id": "how-does-bullshit-jobs-a-theory-by-david-graeber-i-5e433b",
+          "title": "How does Bullshit Jobs A Theory by David Graeber intersect with economics, psychology, and culture"
+        }
+      ],
+      "note": "Directional, cumulative metrics for studio posts aged 72h–90d; not causal evidence. Missing metrics are unavailable.",
+      "sample_size": 80,
+      "time_bins": [
+        {
+          "actions": 0,
+          "median_exposure": 1.0,
+          "median_metric_age_hours": 556.5,
+          "median_post_age_hours": 1058.0,
+          "sample_size": 16,
+          "utc_start_hour": 6
+        },
+        {
+          "actions": 0,
+          "median_exposure": 2,
+          "median_metric_age_hours": 568,
+          "median_post_age_hours": 1080,
+          "sample_size": 15,
+          "utc_start_hour": 9
+        },
+        {
+          "actions": 0,
+          "median_exposure": 0.0,
+          "median_metric_age_hours": 119.5,
+          "median_post_age_hours": 501.5,
+          "sample_size": 10,
+          "utc_start_hour": 12
+        },
+        {
+          "actions": 0,
+          "median_exposure": 1.0,
+          "median_metric_age_hours": 1131.5,
+          "median_post_age_hours": 1709.0,
+          "sample_size": 34,
+          "utc_start_hour": 15
+        },
+        {
+          "actions": 0,
+          "median_exposure": 0,
+          "median_metric_age_hours": 16,
+          "median_post_age_hours": 251,
+          "sample_size": 5,
+          "utc_start_hour": 21
+        }
+      ],
+      "weaker_examples": [
+        {
+          "campaign_id": 25,
+          "clicks": 0,
+          "comments": 0,
+          "exposure": 0,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Whats the Meaning of death",
+          "id": 15,
+          "metric_age_hours": 1511,
+          "metrics_updated_at": "2026-09-14T11:35:32Z",
+          "platform": "facebook",
+          "post_age_hours": 1985,
+          "post_draft_id": 1127,
+          "saves": null,
+          "sent_at": "2026-08-25T17:30:48Z",
+          "shares": 0,
+          "source_grid_id": "whats-the-meaning-of-death-ef99ee",
+          "title": "Whats the Meaning of death"
+        },
+        {
+          "campaign_id": 41,
+          "clicks": 0,
+          "comments": 0,
+          "exposure": 0,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Tell me about mona simion's optimism that AIs are epistemic agents?",
+          "id": 13,
+          "metric_age_hours": 1465,
+          "metrics_updated_at": "2026-09-16T09:35:47Z",
+          "platform": "facebook",
+          "post_age_hours": 1937,
+          "post_draft_id": 1143,
+          "saves": null,
+          "sent_at": "2026-08-27T17:30:45Z",
+          "shares": 0,
+          "source_grid_id": "tell-me-about-mona-simions-optimism-that-ais-are-1365da",
+          "title": "Can AI systems be genuine epistemic agents?"
+        },
+        {
+          "campaign_id": 47,
+          "clicks": 0,
+          "comments": 0,
+          "exposure": 0,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "what does mary know",
+          "id": 12,
+          "metric_age_hours": 1419,
+          "metrics_updated_at": "2026-09-18T07:36:02Z",
+          "platform": "facebook",
+          "post_age_hours": 1913,
+          "post_draft_id": 1151,
+          "saves": null,
+          "sent_at": "2026-08-28T17:30:46Z",
+          "shares": 0,
+          "source_grid_id": "what-does-mary-know-efebd0",
+          "title": "What does Mary learn when she sees colour?"
+        }
+      ]
+    },
+    "instagram": {
+      "examples": [
+        {
+          "campaign_id": 125,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 78,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Does specialisation drive a global race to the bottom?",
+          "id": 1441,
+          "metric_age_hours": 14,
+          "metrics_updated_at": "2026-11-15T19:48:10Z",
+          "platform": "instagram",
+          "post_age_hours": 523,
+          "post_draft_id": 2089,
+          "saves": 1,
+          "sent_at": "2026-10-25T15:22:59Z",
+          "shares": 0,
+          "source_grid_id": "the-division-of-labour-and-race-to-the-bottom-of-e-ae93f6",
+          "title": "The division of labour and race to the bottom of economic activities bothers me"
+        },
+        {
+          "campaign_id": 28,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 60,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Did nukes turn battlefields into balance sheets?",
+          "id": 1426,
+          "metric_age_hours": 14,
+          "metrics_updated_at": "2026-11-15T19:48:10Z",
+          "platform": "instagram",
+          "post_age_hours": 214,
+          "post_draft_id": 2361,
+          "saves": 1,
+          "sent_at": "2026-11-07T12:32:03Z",
+          "shares": 0,
+          "source_grid_id": "how-did-the-nuclear-bomb-change-the-economics-of-w-bb5a8c",
+          "title": "How did the nuclear bomb change the economics of war?"
+        },
+        {
+          "campaign_id": 103,
+          "clicks": null,
+          "comments": 1,
+          "exposure": 14,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Would you notice corruption if it rewarded you?",
+          "id": 706,
+          "metric_age_hours": 44,
+          "metrics_updated_at": "2026-11-14T14:23:27Z",
+          "platform": "instagram",
+          "post_age_hours": 929,
+          "post_draft_id": 1860,
+          "saves": 0,
+          "sent_at": "2026-10-08T17:07:13Z",
+          "shares": 0,
+          "source_grid_id": "philosophical-themes-in-the-last-king-of-scotland-09be9b",
+          "title": "Philosophical themes in The Last King of Scotland (Kevin Macdonald 2006)"
+        }
+      ],
+      "note": "Directional, cumulative metrics for studio posts aged 72h–90d; not causal evidence. Missing metrics are unavailable.",
+      "sample_size": 74,
+      "time_bins": [
+        {
+          "actions": 0,
+          "median_exposure": 6.5,
+          "median_metric_age_hours": 164.0,
+          "median_post_age_hours": 1130.0,
+          "sample_size": 12,
+          "utc_start_hour": 6
+        },
+        {
+          "actions": 0,
+          "median_exposure": 5,
+          "median_metric_age_hours": 20,
+          "median_post_age_hours": 743,
+          "sample_size": 5,
+          "utc_start_hour": 9
+        },
+        {
+          "actions": 1,
+          "median_exposure": 9.5,
+          "median_metric_age_hours": 14.0,
+          "median_post_age_hours": 274.0,
+          "sample_size": 6,
+          "utc_start_hour": 12
+        },
+        {
+          "actions": 2,
+          "median_exposure": 8.0,
+          "median_metric_age_hours": 272.0,
+          "median_post_age_hours": 1289.0,
+          "sample_size": 40,
+          "utc_start_hour": 15
+        },
+        {
+          "actions": 0,
+          "median_exposure": 12,
+          "median_metric_age_hours": 14,
+          "median_post_age_hours": 275,
+          "sample_size": 11,
+          "utc_start_hour": 21
+        }
+      ],
+      "weaker_examples": [
+        {
+          "campaign_id": 2,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 1,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Does an expert’s claim still need testing?",
+          "id": 204,
+          "metric_age_hours": 381,
+          "metrics_updated_at": "2026-10-31T13:21:47Z",
+          "platform": "instagram",
+          "post_age_hours": 1486,
+          "post_draft_id": 1689,
+          "saves": 0,
+          "sent_at": "2026-09-15T12:09:47Z",
+          "shares": 0,
+          "source_grid_id": "karl-poppers-source-of-knowledge-and-ignorance-10d92f",
+          "title": "Karl Poppers source of knowledge and ignorance"
+        },
+        {
+          "campaign_id": 91,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 1,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Can you trust an expert and still think for yourself?",
+          "id": 431,
+          "metric_age_hours": 260,
+          "metrics_updated_at": "2026-11-05T14:21:54Z",
+          "platform": "instagram",
+          "post_age_hours": 1298,
+          "post_draft_id": 1817,
+          "saves": 0,
+          "sent_at": "2026-09-23T08:03:04Z",
+          "shares": 0,
+          "source_grid_id": "how-can-you-trust-experts-without-surrendering-you-2aa336",
+          "title": "How can you trust experts without surrendering your judgment?"
+        },
+        {
+          "campaign_id": 139,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 1,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Can comfort make us less free? Everyday conveniences can free us from survival worries and give space to reflect. But features like autoplay also remove the small stopping moments where we might choose differently. ",
+          "id": 1907,
+          "metric_age_hours": 14,
+          "metrics_updated_at": "2026-11-15T19:48:10Z",
+          "platform": "instagram",
+          "post_age_hours": 115,
+          "post_draft_id": 2498,
+          "saves": 0,
+          "sent_at": "2026-11-11T15:32:34Z",
+          "shares": 0,
+          "source_grid_id": "can-a-comfortable-life-make-us-less-free-dfb566",
+          "title": "Can a comfortable life make us less free?"
+        }
+      ]
+    },
+    "linkedin": {
+      "examples": [
+        {
+          "campaign_id": 2,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 38,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Manifest Truth, Popperian Realism, and the Aristotelian Legacy If truth is not obvious, why did humanity spend millennia believing it was?",
+          "id": 65,
+          "metric_age_hours": 786,
+          "metrics_updated_at": "2026-10-14T16:00:32Z",
+          "platform": "linkedin",
+          "post_age_hours": 1890,
+          "post_draft_id": 1158,
+          "saves": null,
+          "sent_at": "2026-08-29T16:30:44Z",
+          "shares": 2,
+          "source_grid_id": "karl-poppers-source-of-knowledge-and-ignorance-10d92f",
+          "title": "Karl Poppers source of knowledge and ignorance"
+        },
+        {
+          "campaign_id": 93,
+          "clicks": null,
+          "comments": 1,
+          "exposure": 30,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Who counts when politicians promise to serve everyone?",
+          "id": 467,
+          "metric_age_hours": 113,
+          "metrics_updated_at": "2026-11-11T17:14:39Z",
+          "platform": "linkedin",
+          "post_age_hours": 1122,
+          "post_draft_id": 1755,
+          "saves": null,
+          "sent_at": "2026-09-30T16:31:16Z",
+          "shares": 1,
+          "source_grid_id": "why-do-politicians-not-act-for-the-benefit-of-all-3e260e",
+          "title": "why do politicians not act for the benefit of all"
+        },
+        {
+          "campaign_id": 22,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 29,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Deep Dives into Truth, Time, and the Law What happens when the truth of the past collides with the morality of the present?",
+          "id": 240,
+          "metric_age_hours": 450,
+          "metrics_updated_at": "2026-10-28T16:08:40Z",
+          "platform": "linkedin",
+          "post_age_hours": 1602,
+          "post_draft_id": 1595,
+          "saves": null,
+          "sent_at": "2026-09-10T16:31:05Z",
+          "shares": 1,
+          "source_grid_id": "ruth-ellis-the-last-woman-to-be-hanged-in-britain-0a9045",
+          "title": "Ruth Ellis, the last woman to be hanged in Britain, has had a posthumous, conditional pardon: her sentence being commuted to life in prison"
+        }
+      ],
+      "note": "Directional, cumulative metrics for studio posts aged 72h–90d; not causal evidence. Missing metrics are unavailable.",
+      "sample_size": 78,
+      "time_bins": [
+        {
+          "actions": 0,
+          "median_exposure": 7,
+          "median_metric_age_hours": 17,
+          "median_post_age_hours": 745,
+          "sample_size": 5,
+          "utc_start_hour": 9
+        },
+        {
+          "actions": 0,
+          "median_exposure": 7,
+          "median_metric_age_hours": 17,
+          "median_post_age_hours": 740,
+          "sample_size": 13,
+          "utc_start_hour": 12
+        },
+        {
+          "actions": 8,
+          "median_exposure": 10,
+          "median_metric_age_hours": 233,
+          "median_post_age_hours": 1243,
+          "sample_size": 55,
+          "utc_start_hour": 15
+        },
+        {
+          "actions": 0,
+          "median_exposure": 3,
+          "median_metric_age_hours": 7,
+          "median_post_age_hours": 251,
+          "sample_size": 5,
+          "utc_start_hour": 21
+        }
+      ],
+      "weaker_examples": [
+        {
+          "campaign_id": 82,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 0,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Can words exist only inside one mind?",
+          "id": 1504,
+          "metric_age_hours": 17,
+          "metrics_updated_at": "2026-11-15T17:16:51Z",
+          "platform": "linkedin",
+          "post_age_hours": 275,
+          "post_draft_id": 2275,
+          "saves": null,
+          "sent_at": "2026-11-04T23:02:48Z",
+          "shares": 0,
+          "source_grid_id": "what-is-wittgensteins-private-language-argument-319ac1",
+          "title": "What is Wittgenstein’s private language argument"
+        },
+        {
+          "campaign_id": 132,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 1,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Can other people rob you of your freedom?",
+          "id": 1503,
+          "metric_age_hours": 7,
+          "metrics_updated_at": "2026-11-16T03:37:48Z",
+          "platform": "linkedin",
+          "post_age_hours": 262,
+          "post_draft_id": 2195,
+          "saves": null,
+          "sent_at": "2026-11-05T12:31:11Z",
+          "shares": 0,
+          "source_grid_id": "hell-is-other-people-sartre-dccaba",
+          "title": "\"Hell is Other People\" - Sartre"
+        },
+        {
+          "campaign_id": 125,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 2,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Does specialisation drive a global race to the bottom?",
+          "id": 1514,
+          "metric_age_hours": 7,
+          "metrics_updated_at": "2026-11-16T03:37:48Z",
+          "platform": "linkedin",
+          "post_age_hours": 522,
+          "post_draft_id": 2077,
+          "saves": null,
+          "sent_at": "2026-10-25T16:31:09Z",
+          "shares": 0,
+          "source_grid_id": "the-division-of-labour-and-race-to-the-bottom-of-e-ae93f6",
+          "title": "The division of labour and race to the bottom of economic activities bothers me"
+        }
+      ]
+    },
+    "resume_phase": "exploring",
+    "tiktok": {
+      "examples": [
+        {
+          "campaign_id": 107,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 195,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Can a border settle where someone belongs?",
+          "id": 807,
+          "metric_age_hours": 81,
+          "metrics_updated_at": "2026-11-13T01:05:02Z",
+          "platform": "tiktok",
+          "post_age_hours": 904,
+          "post_draft_id": 1880,
+          "saves": null,
+          "sent_at": "2026-10-09T18:04:45Z",
+          "shares": 0,
+          "source_grid_id": "should-northern-ireland-remain-in-the-united-kingd-278c61",
+          "title": "Should Northern Ireland remain in the United Kingdom or should they leave and join the Republic of Ireland?"
+        },
+        {
+          "campaign_id": 117,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 7,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Does an AI understand coffee if it cannot taste it?",
+          "id": 1157,
+          "metric_age_hours": 18,
+          "metrics_updated_at": "2026-11-15T16:01:16Z",
+          "platform": "tiktok",
+          "post_age_hours": 708,
+          "post_draft_id": 1957,
+          "saves": null,
+          "sent_at": "2026-10-17T22:02:41Z",
+          "shares": 0,
+          "source_grid_id": "are-llms-perception-based-modal-or-non-perception-d2a021",
+          "title": "Are LLMs perception-based modal or non-perception-based amodal conceptual systems?"
+        },
+        {
+          "campaign_id": 126,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 1,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Could working less boost productivity and make society fairer?",
+          "id": 1590,
+          "metric_age_hours": 18,
+          "metrics_updated_at": "2026-11-15T16:01:16Z",
+          "platform": "tiktok",
+          "post_age_hours": 495,
+          "post_draft_id": 2096,
+          "saves": null,
+          "sent_at": "2026-10-26T19:14:45Z",
+          "shares": 0,
+          "source_grid_id": "in-praise-of-idleness-bertrand-russell-308e9a",
+          "title": "In Praise of Idleness — Bertrand Russell"
+        }
+      ],
+      "note": "Directional, cumulative metrics for studio posts aged 72h–90d; not causal evidence. Missing metrics are unavailable.",
+      "sample_size": 79,
+      "time_bins": [
+        {
+          "actions": 0,
+          "median_exposure": 0,
+          "median_metric_age_hours": 18,
+          "median_post_age_hours": 262,
+          "sample_size": 5,
+          "utc_start_hour": 12
+        },
+        {
+          "actions": 0,
+          "median_exposure": 0,
+          "median_metric_age_hours": 18,
+          "median_post_age_hours": 737,
+          "sample_size": 5,
+          "utc_start_hour": 15
+        },
+        {
+          "actions": 0,
+          "median_exposure": 0,
+          "median_metric_age_hours": 331,
+          "median_post_age_hours": 1262,
+          "sample_size": 57,
+          "utc_start_hour": 18
+        },
+        {
+          "actions": 0,
+          "median_exposure": 0.0,
+          "median_metric_age_hours": 18.0,
+          "median_post_age_hours": 287.0,
+          "sample_size": 12,
+          "utc_start_hour": 21
+        }
+      ],
+      "weaker_examples": [
+        {
+          "campaign_id": 25,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 0,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Whats the Meaning of Death",
+          "id": 98,
+          "metric_age_hours": 1007,
+          "metrics_updated_at": "2026-10-05T10:58:03Z",
+          "platform": "tiktok",
+          "post_age_hours": 1983,
+          "post_draft_id": 1131,
+          "saves": null,
+          "sent_at": "2026-08-25T19:14:47Z",
+          "shares": 0,
+          "source_grid_id": "whats-the-meaning-of-death-ef99ee",
+          "title": "Whats the Meaning of death"
+        },
+        {
+          "campaign_id": 40,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 0,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "What If Memories Could Be Rewritten and Sold—how Would That Change Personal Identity?",
+          "id": 97,
+          "metric_age_hours": 1007,
+          "metrics_updated_at": "2026-10-05T10:58:02Z",
+          "platform": "tiktok",
+          "post_age_hours": 1959,
+          "post_draft_id": 1139,
+          "saves": null,
+          "sent_at": "2026-08-26T19:14:45Z",
+          "shares": 0,
+          "source_grid_id": "what-if-memories-could-be-rewritten-and-sold-how-w-defb8e",
+          "title": "What if memories could be rewritten and sold—how would that change personal identity?"
+        },
+        {
+          "campaign_id": 41,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 0,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Can Ai Systems Be Genuine Epistemic Agents?",
+          "id": 96,
+          "metric_age_hours": 1007,
+          "metrics_updated_at": "2026-10-05T10:58:03Z",
+          "platform": "tiktok",
+          "post_age_hours": 1935,
+          "post_draft_id": 1147,
+          "saves": null,
+          "sent_at": "2026-08-27T19:14:47Z",
+          "shares": 0,
+          "source_grid_id": "tell-me-about-mona-simions-optimism-that-ais-are-1365da",
+          "title": "Can AI systems be genuine epistemic agents?"
+        }
+      ]
+    },
+    "x": {
+      "examples": [
+        {
+          "campaign_id": 82,
+          "clicks": 2,
+          "comments": 0,
+          "exposure": 38,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Can words exist only inside one mind?",
+          "id": 1659,
+          "metric_age_hours": 3,
+          "metrics_updated_at": "2026-11-16T07:46:11Z",
+          "platform": "x",
+          "post_age_hours": 275,
+          "post_draft_id": 2277,
+          "saves": null,
+          "sent_at": "2026-11-04T23:02:25Z",
+          "shares": 1,
+          "source_grid_id": "what-is-wittgensteins-private-language-argument-319ac1",
+          "title": "What is Wittgenstein’s private language argument"
+        },
+        {
+          "campaign_id": 73,
+          "clicks": 3,
+          "comments": 0,
+          "exposure": 15,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Can eating meat be morally justified?",
+          "id": 1661,
+          "metric_age_hours": 3,
+          "metrics_updated_at": "2026-11-16T07:46:11Z",
+          "platform": "x",
+          "post_age_hours": 299,
+          "post_draft_id": 2168,
+          "saves": null,
+          "sent_at": "2026-11-03T23:01:25Z",
+          "shares": 0,
+          "source_grid_id": "is-eating-meat-ethically-defensible-and-what-are-3adef2",
+          "title": "Is eating meat ethically defensible, and what are the strongest arguments on each side?"
+        },
+        {
+          "campaign_id": 87,
+          "clicks": 1,
+          "comments": 1,
+          "exposure": 85,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Would you choose the same rules from the other side?",
+          "id": 304,
+          "metric_age_hours": 946,
+          "metrics_updated_at": "2026-10-08T00:39:21Z",
+          "platform": "x",
+          "post_age_hours": 1417,
+          "post_draft_id": 1714,
+          "saves": null,
+          "sent_at": "2026-09-18T09:30:38Z",
+          "shares": 0,
+          "source_grid_id": "philosophical-themes-in-a-separation-asghar-farha-1caa1c",
+          "title": "Philosophical themes in A Separation (Asghar Farhadi 2011)"
+        }
+      ],
+      "note": "Directional, cumulative metrics for studio posts aged 72h–90d; not causal evidence. Missing metrics are unavailable.",
+      "sample_size": 79,
+      "time_bins": [
+        {
+          "actions": 0,
+          "median_exposure": 15.5,
+          "median_metric_age_hours": 589.5,
+          "median_post_age_hours": 1058.0,
+          "sample_size": 16,
+          "utc_start_hour": 6
+        },
+        {
+          "actions": 2,
+          "median_exposure": 12.0,
+          "median_metric_age_hours": 693.0,
+          "median_post_age_hours": 1153.0,
+          "sample_size": 12,
+          "utc_start_hour": 9
+        },
+        {
+          "actions": 0,
+          "median_exposure": 9.0,
+          "median_metric_age_hours": 118.0,
+          "median_post_age_hours": 501.5,
+          "sample_size": 10,
+          "utc_start_hour": 12
+        },
+        {
+          "actions": 5,
+          "median_exposure": 22.5,
+          "median_metric_age_hours": 1233.5,
+          "median_post_age_hours": 1707.0,
+          "sample_size": 34,
+          "utc_start_hour": 18
+        },
+        {
+          "actions": 6,
+          "median_exposure": 8,
+          "median_metric_age_hours": 3,
+          "median_post_age_hours": 227,
+          "sample_size": 7,
+          "utc_start_hour": 21
+        }
+      ],
+      "weaker_examples": [
+        {
+          "campaign_id": 142,
+          "clicks": 0,
+          "comments": 0,
+          "exposure": 3,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "High pay signals market price, not social value. Are well‑paid compliance roles defensive insurance—or just bureaucratic bloat? Which is it? #workplace",
+          "id": 2153,
+          "metric_age_hours": 3,
+          "metrics_updated_at": "2026-11-16T07:46:11Z",
+          "platform": "x",
+          "post_age_hours": 83,
+          "post_draft_id": 2509,
+          "saves": null,
+          "sent_at": "2026-11-12T23:02:04Z",
+          "shares": 0,
+          "source_grid_id": "can-a-job-be-well-paid-and-still-be-pointless-f545b7",
+          "title": "Can a job be well paid and still be pointless?"
+        },
+        {
+          "campaign_id": 42,
+          "clicks": 0,
+          "comments": 0,
+          "exposure": 5,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "If free will is an illusion, who deserves blame?",
+          "id": 1670,
+          "metric_age_hours": 72,
+          "metrics_updated_at": "2026-11-13T10:45:41Z",
+          "platform": "x",
+          "post_age_hours": 543,
+          "post_draft_id": 2013,
+          "saves": null,
+          "sent_at": "2026-10-24T19:05:04Z",
+          "shares": 0,
+          "source_grid_id": "free-will-might-be-an-illusion-based-on-recent-neu-75df12",
+          "title": "Does recent neuroscience show that free will is an illusion?"
+        },
+        {
+          "campaign_id": 28,
+          "clicks": 0,
+          "comments": 0,
+          "exposure": 5,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Did nukes turn battlefields into balance sheets?",
+          "id": 1654,
+          "metric_age_hours": 3,
+          "metrics_updated_at": "2026-11-16T07:46:11Z",
+          "platform": "x",
+          "post_age_hours": 214,
+          "post_draft_id": 2357,
+          "saves": null,
+          "sent_at": "2026-11-07T12:31:20Z",
+          "shares": 0,
+          "source_grid_id": "how-did-the-nuclear-bomb-change-the-economics-of-w-bb5a8c",
+          "title": "How did the nuclear bomb change the economics of war?"
+        }
+      ]
+    },
+    "youtube": {
+      "examples": [
+        {
+          "campaign_id": 95,
+          "clicks": null,
+          "comments": 4,
+          "exposure": 941,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Is Joy Division a band or a producer's masterpiece?",
+          "id": 1732,
+          "metric_age_hours": 19,
+          "metrics_updated_at": "2026-11-15T15:17:35Z",
+          "platform": "youtube",
+          "post_age_hours": 227,
+          "post_draft_id": 2354,
+          "saves": null,
+          "sent_at": "2026-11-06T23:02:31Z",
+          "shares": null,
+          "source_grid_id": "why-is-the-band-joy-division-so-revered-731d04",
+          "title": "Why is the band Joy Division so revered?"
+        },
+        {
+          "campaign_id": 95,
+          "clicks": null,
+          "comments": 1,
+          "exposure": 105,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Who makes a band's sound: musicians or producer?",
+          "id": 603,
+          "metric_age_hours": 143,
+          "metrics_updated_at": "2026-11-10T10:56:28Z",
+          "platform": "youtube",
+          "post_age_hours": 1195,
+          "post_draft_id": 1802,
+          "saves": null,
+          "sent_at": "2026-09-27T15:02:55Z",
+          "shares": null,
+          "source_grid_id": "why-is-the-band-joy-division-so-revered-731d04",
+          "title": "Why is the band Joy Division so revered?"
+        },
+        {
+          "campaign_id": 102,
+          "clicks": null,
+          "comments": 1,
+          "exposure": 48,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Is the problem AI—or publishing without judgment?",
+          "id": 920,
+          "metric_age_hours": 143,
+          "metrics_updated_at": "2026-11-10T10:56:28Z",
+          "platform": "youtube",
+          "post_age_hours": 1073,
+          "post_draft_id": 1837,
+          "saves": null,
+          "sent_at": "2026-10-02T17:01:56Z",
+          "shares": null,
+          "source_grid_id": "is-content-produced-by-ai-just-slop-b1008d",
+          "title": "Is content produced by AI just slop?"
+        }
+      ],
+      "note": "Directional, cumulative metrics for studio posts aged 72h–90d; not causal evidence. Missing metrics are unavailable.",
+      "sample_size": 84,
+      "time_bins": [
+        {
+          "actions": 0,
+          "median_exposure": 35,
+          "median_metric_age_hours": 19,
+          "median_post_age_hours": 262,
+          "sample_size": 5,
+          "utc_start_hour": 12
+        },
+        {
+          "actions": 2,
+          "median_exposure": 25,
+          "median_metric_age_hours": 143,
+          "median_post_age_hours": 1121,
+          "sample_size": 35,
+          "utc_start_hour": 15
+        },
+        {
+          "actions": 0,
+          "median_exposure": 16,
+          "median_metric_age_hours": 251,
+          "median_post_age_hours": 1671,
+          "sample_size": 37,
+          "utc_start_hour": 18
+        },
+        {
+          "actions": 4,
+          "median_exposure": 38,
+          "median_metric_age_hours": 19,
+          "median_post_age_hours": 227,
+          "sample_size": 7,
+          "utc_start_hour": 21
+        }
+      ],
+      "weaker_examples": [
+        {
+          "campaign_id": 85,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 2,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "Is freedom more than being unpredictable?",
+          "id": 344,
+          "metric_age_hours": 66,
+          "metrics_updated_at": "2026-11-13T16:19:22Z",
+          "platform": "youtube",
+          "post_age_hours": 1505,
+          "post_draft_id": 1698,
+          "saves": null,
+          "sent_at": "2026-09-14T17:03:32Z",
+          "shares": null,
+          "source_grid_id": "popper-of-clouds-and-clocks-freedom-and-determi-fce3ba",
+          "title": "Popper: Of Clouds and Clocks - Freedom and Determinism"
+        },
+        {
+          "campaign_id": 50,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 3,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "If humans and machines keep adapting to each other, who really controls what goes viral?",
+          "id": 154,
+          "metric_age_hours": 668,
+          "metrics_updated_at": "2026-10-19T13:59:39Z",
+          "platform": "youtube",
+          "post_age_hours": 2104,
+          "post_draft_id": 942,
+          "saves": null,
+          "sent_at": "2026-08-20T18:30:32Z",
+          "shares": null,
+          "source_grid_id": "how-do-recommendation-algorithms-shape-what-people-be4b14",
+          "title": "How do recommendation algorithms shape what people see online?"
+        },
+        {
+          "campaign_id": 74,
+          "clicks": null,
+          "comments": 0,
+          "exposure": 3,
+          "fetched_at": "2026-11-16T10:47:45Z",
+          "hook": "“what Does the Evolution of Album Cover Design in the Streaming Era Reveal About Changing Listener Behaviours, Platform Interfaces, and the Role of Visual Identity in Contemporary Music Culture”",
+          "id": 141,
+          "metric_age_hours": 342,
+          "metrics_updated_at": "2026-11-02T03:55:00Z",
+          "platform": "youtube",
+          "post_age_hours": 1791,
+          "post_draft_id": 1627,
+          "saves": null,
+          "sent_at": "2026-09-02T19:05:06Z",
+          "shares": null,
+          "source_grid_id": "what-does-the-evolution-of-album-cover-design-in-4ab09c",
+          "title": "“What does the evolution of album cover design in the streaming era reveal about changing listener behaviours, platform interfaces, and the role of visual identity in contemporary music culture”"
+        }
+      ]
+    }
+  },
+  "run_id": 2,
+  "start_date": "2026-11-17",
+  "status": "completed",
+  "stories": [
+    {
+      "exploration_id": 11,
+      "id": 1,
+      "position": 1,
+      "question": "In Plato's Republic, does the philosopher‑king's rule preserve justice or betray individual freedom when 'the good' is known by a few?",
+      "rationale": "Plato (Republic) constructs an elite political order justified by knowledge of the Good, creating a tension between collective justice and individual autonomy. Readers dispute whether the philosopher‑king's authority is paternalistic or legitimately necessary for a just polis. Use weak performance signals (see X post id 304; source_grid_id: philosophical-themes-in-a-separation-asghar-farha-1caa1c) as directional evidence that politically framed tensions engage audiences (not proof). Metric/grid IDs: X id 304; source_grid_id: philosophical-themes-in-a-separation-asghar-farha-1caa1c."
+    },
+    {
+      "exploration_id": 12,
+      "id": 2,
+      "position": 2,
+      "question": "In Kant's Groundwork, can strict duty and universalisable maxims coexist with neighbourly compassion when moral law seems to forbid exceptions?",
+      "rationale": "Kant (Groundwork of the Metaphysics of Morals) insists on duty derived from universal reason; critics highlight a tension where inflexible maxims appear to outlaw acts of compassion that require exceptions. Competing interpretations treat Kant as permitting particularised duties via practical reason or as mandating rigid obedience. Weak evidence: LinkedIn post id 65 showed interest in Popper/Kantian truth debates (sample signal only). Metric/grid IDs: LinkedIn id 65; source_grid_id: karl-poppers-source-of-knowledge-and-ignorance-10d92f."
+    },
+    {
+      "exploration_id": 13,
+      "id": 3,
+      "position": 3,
+      "question": "Does Mill's On Liberty protect individuality at the cost of tolerating social harms when free expression entrenches inequality?",
+      "rationale": "John Stuart Mill (On Liberty) champions liberty as essential to individuality and progress, yet tolerant policies can perpetuate harms and power imbalances—raising an internal conflict between liberty and protective regulation. This is a familiar editorial hook with modest engagement in platform data (see Facebook id 1366; source_grid_id: how-does-bullshit-jobs-a-theory-by-david-graeber-i-5e433b). Metric/grid IDs: Facebook id 1366; source_grid_id: how-does-bullshit-jobs-a-theory-by-david-graeber-i-5e433b."
+    },
+    {
+      "exploration_id": 14,
+      "id": 4,
+      "position": 4,
+      "question": "In Thus Spoke Zarathustra, can Nietzsche teach self-overcoming without turning his followers into another herd?",
+      "rationale": "Nietzsche (Thus Spoke Zarathustra) praises self‑overcoming and the Übermensch while critics argue this ideal can undermine communal bonds and lead to domination. Scholarly readings disagree whether Nietzsche is emancipatory or proto‑elitist. Weak signal: TikTok exposure to Nietzsche/Russell style pieces suggests bite‑sized philosophical prompts can land (TikTok id 1590; source_grid_id: in-praise-of-idleness-bertrand-russell-308e9a). Metric/grid IDs: TikTok id 1590; source_grid_id: in-praise-of-idleness-bertrand-russell-308e9a.\n\nEditorial source check: Use the tension between Zarathustra’s teaching and his demand that disciples find their own way, especially On the Bestowing Virtue. Avoid treating self-overcoming as a licence to dominate other people. Primary text: https://www.gutenberg.org/ebooks/1998"
+    },
+    {
+      "exploration_id": 15,
+      "id": 5,
+      "position": 5,
+      "question": "In Crime and Punishment, why does Raskolnikov’s theory of extraordinary people collapse when he tries to live by it?",
+      "rationale": "Fyodor Dostoevsky (Crime and Punishment) stages Raskolnikov's theory‑action divide: are his crimes judged by abstract moral law or explained away by poverty, alienation and psychological torment? The novel supports divergent readings about blame and social causation. Weak platform evidence: YouTube posts on moral/meaningful music and culture drew large exposures, indicating narrative ethical questions can engage (YouTube id 1732; source_grid_id: why-is-the-band-joy-division-so-revered-731d04). Metric/grid IDs: YouTube id 1732; source_grid_id: why-is-the-band-joy-division-so-revered-731d04.\n\nEditorial source check: Ground the exploration in Raskolnikov’s article, his conversation with Porfiry, his crime and its psychological aftermath. Preserve the novel’s tension between an intellectual justification and lived responsibility; poverty is context, not an automatic excuse. Primary text: https://www.gutenberg.org/ebooks/2554"
+    },
+    {
+      "exploration_id": 16,
+      "id": 6,
+      "position": 6,
+      "question": "In The Second Sex, how can Beauvoir call for freedom when society shapes the person who chooses?",
+      "rationale": "Simone de Beauvoir (The Second Sex) blends existentialist autonomy with a feminist account of material and social dependence; interpreters debate whether her account secures authentic freedom or shows it as structurally compromised. Weak evidence: Instagram posts on social dependence and specialisation show topical appetite (Instagram id 1441; source_grid_id: the-division-of-labour-and-race-to-the-bottom-of-e-ae93f6). Metric/grid IDs: Instagram id 1441; source_grid_id: the-division-of-labour-and-race-to-the-bottom-of-e-ae93f6.\n\nEditorial source check: Focus on situated freedom, becoming rather than an innate destiny, and material conditions. Do not portray Beauvoir as saying social constraints erase agency or that freedom is simply willpower. Reference: The Second Sex, Introduction and Conclusion."
+    },
+    {
+      "exploration_id": 17,
+      "id": 7,
+      "position": 7,
+      "question": "In Eichmann in Jerusalem, why does Arendt’s account of thoughtlessness leave personal guilt intact?",
+      "rationale": "Hannah Arendt (Eichmann in Jerusalem) coined 'the banality of evil' to diagnose ordinary thoughtlessness in bureaucratic atrocity; scholars dispute whether this mitigates individual guilt or heightens responsibility to think critically. Weak platform cue: LinkedIn interest in 'who counts' and political responsibility indicates civic moral puzzles resonate (LinkedIn id 467; source_grid_id: why-do-politicians-not-act-for-the-benefit-of-all-3e260e). Metric/grid IDs: LinkedIn id 467; source_grid_id: why-do-politicians-not-act-for-the-benefit-of-all-3e260e.\n\nEditorial source check: Distinguish Arendt’s interpretation of thoughtlessness from exoneration or a claim that atrocities are trivial. Her portrayal of Eichmann remains contested; do not present it as an uncontested historical diagnosis. Primary reporting: https://www.newyorker.com/magazine/1963/02/16/eichmann-in-jerusalem-i"
+    },
+    {
+      "exploration_id": 18,
+      "id": 8,
+      "position": 8,
+      "question": "In Marx’s Capital, why can a machine that saves labour make people work harder or longer?",
+      "rationale": "Karl Marx (Capital) offers a systemic critique of capitalism and alienation; interpreters differ on whether his emphasis on collective emancipation can accommodate plural individual flourishing or tends toward instrumental collectivism. Weak signal: X posts about free will and societal constraints show engagement with systemic freedom themes (X id 1670; source_grid_id: free-will-might-be-an-illusion-based-on-recent-neu-75df12). Metric/grid IDs: X id 1670; source_grid_id: free-will-might-be-an-illusion-based-on-recent-neu-75df12.\n\nEditorial source check: Use Capital Volume I, Chapter 15: productive capacity can reduce necessary labour, while capitalist incentives can extend or intensify work. Distinguish a possible use of technology from a claim that every invention always worsens life. Primary text: https://www.marxists.org/archive/marx/works/1867-c1/ch15.htm"
+    },
+    {
+      "exploration_id": null,
+      "id": 9,
+      "position": 9,
+      "question": "In Mrs Dalloway, does Clarissa’s party overcome loneliness or hide it behind perfect manners?",
+      "rationale": "Virginia Woolf (Mrs Dalloway) uses interior narration to generate moments of cross‑character empathy while also emphasising deep solitude; this editorial experiment tests whether audiences prefer questions framed around literary interiority as emotional versus political. Weak evidence: Instagram and Facebook posts about comfort, freedom and interior life had low but present exposures (Instagram id 1907; Facebook weaker example id 15). Metric/grid IDs: Instagram id 1907; Facebook id 15; note: labelled explicitly as 'Editorial experiment' to trial format/engagement.\n\nEditorial source check: Editorial experiment: a recognisable novel and concrete social scene, rather than an abstract political binary. Ground the discussion in Clarissa’s hosting, private recollection and encounters. Treat possible readings as interpretations. Avoid romanticising suicide or reproducing method details. Primary text: Virginia Woolf, Mrs Dalloway."
+    },
+    {
+      "exploration_id": null,
+      "id": 10,
+      "position": 10,
+      "question": "In Being and Nothingness, why is Sartre’s waiter in bad faith if he really is a waiter?",
+      "rationale": "Jean‑Paul Sartre (Being and Nothingness) equates existence with radical freedom and responsibility; debates centre on whether this freedom is liberating or condemning because it leaves individuals alone to create value under social pressure. Weak platform cue: LinkedIn post on 'Hell is Other People — Sartre' drew modest attention (LinkedIn id 1503; source_grid_id: hell-is-other-people-sartre-dccaba). Metric/grid IDs: LinkedIn id 1503; source_grid_id: hell-is-other-people-sartre-dccaba.\n\nEditorial source check: Use Sartre’s café waiter to explore the tension between having a real social role and treating that role as a complete fixed identity. Preserve facticity and real constraints; freedom is not an ability to do anything. Primary text: Being and Nothingness, Part One, Chapter Two, Bad Faith."
+    }
+  ],
+  "theme": "Focus on famous books and named thinkers, rather than general ideas. Every question must name a specific recognisable book or thinker and expose an interesting internal tension, apparent contradiction, or serious argument in that work. Aim for a varied, accessible selection across philosophy and classic literature: freedom versus responsibility, compassion versus duty, revolt versus meaning, authenticity versus social dependence, and similar concrete human conflicts. Do not cover AI. Avoid repeating previous grids. Use recent performance as weak evidence and include one clearly labelled editorial experiment. Ground each question in the actual text or thinker; preserve competing interpretations, do not invent quotations or biographical claims, and identify the work in the resulting posts. Produce ten distinct stories suitable for six social platforms. Write in British English.\n\nEditorial accuracy: Kant includes duties of beneficence; do not claim compassion is forbidden. Distinguish emotional sympathy from acting on principle. Mill opposes social tyranny and distinguishes opinion from incitement; liberty is not absolute. Arendt’s portrayal of thoughtlessness is contested and never an excuse for genocide or individual guilt. Beauvoir’s situated freedom needs material and collective conditions, not willpower alone. Keep philosophical interpretations qualified rather than treating the grid as proof.\n\nRecognisable subjects: every cover hook must name the thinker or book within 12 words; the first video beat must also name the thinker or book. Start every platform caption with a specific reference to that work, character, or thinker. Use concrete scenes and arguments, not generic inspirational advice. Avoid direct quotations; paraphrase carefully.",
+  "windows": {
+    "facebook": [
+      "09:00",
+      "16:30"
+    ],
+    "instagram": [
+      "13:00",
+      "22:00"
+    ],
+    "linkedin": [
+      "16:00",
+      "17:30"
+    ],
+    "tiktok": [
+      "18:00",
+      "21:30"
+    ],
+    "x": [
+      "22:00",
+      "23:00"
+    ],
+    "youtube": [
+      "22:00",
+      "23:00"
+    ]
+  }
+}

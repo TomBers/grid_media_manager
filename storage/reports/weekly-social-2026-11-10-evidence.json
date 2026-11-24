@@ -1,0 +1,1195 @@
+{
+  "report": {
+    "facebook": {
+      "n": 76,
+      "top_actions": [
+        {
+          "id": 652,
+          "title": "Philosophical themes in The Last King of Scotland (Kevin Macdonald 2006)",
+          "comments": 0,
+          "sent_at": "2026-10-08T10:03:50Z",
+          "campaign_id": 103,
+          "source_grid_id": "philosophical-themes-in-the-last-king-of-scotland-09be9b",
+          "post_age_hours": 794,
+          "metric_age_hours": 310,
+          "hook": "Would you notice corruption if it rewarded you?",
+          "exposure": 6,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 1361,
+          "title": "The replication crisis in social science",
+          "comments": 0,
+          "sent_at": "2026-10-27T17:31:44Z",
+          "campaign_id": 113,
+          "source_grid_id": "the-replication-crisis-in-social-science-0dfda4",
+          "post_age_hours": 330,
+          "metric_age_hours": 11,
+          "hook": "Can science fix its replication crisis?",
+          "exposure": 5,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 1366,
+          "title": "How does Bullshit Jobs A Theory by David Graeber intersect with economics, psychology, and culture",
+          "comments": 0,
+          "sent_at": "2026-10-22T17:31:06Z",
+          "campaign_id": 122,
+          "source_grid_id": "how-does-bullshit-jobs-a-theory-by-david-graeber-i-5e433b",
+          "post_age_hours": 450,
+          "metric_age_hours": 11,
+          "hook": "Why many pointless‑seeming jobs still prop up the system?",
+          "exposure": 5,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 1355,
+          "title": "Is eating meat ethically defensible, and what are the strongest arguments on each side?",
+          "comments": 0,
+          "sent_at": "2026-11-03T23:02:00Z",
+          "campaign_id": 73,
+          "source_grid_id": "is-eating-meat-ethically-defensible-and-what-are-3adef2",
+          "post_age_hours": 157,
+          "metric_age_hours": 11,
+          "hook": "Can eating meat be morally justified?",
+          "exposure": 4,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        }
+      ],
+      "top_exposure": [
+        {
+          "id": 652,
+          "title": "Philosophical themes in The Last King of Scotland (Kevin Macdonald 2006)",
+          "comments": 0,
+          "sent_at": "2026-10-08T10:03:50Z",
+          "campaign_id": 103,
+          "source_grid_id": "philosophical-themes-in-the-last-king-of-scotland-09be9b",
+          "post_age_hours": 794,
+          "metric_age_hours": 310,
+          "hook": "Would you notice corruption if it rewarded you?",
+          "exposure": 6,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 1361,
+          "title": "The replication crisis in social science",
+          "comments": 0,
+          "sent_at": "2026-10-27T17:31:44Z",
+          "campaign_id": 113,
+          "source_grid_id": "the-replication-crisis-in-social-science-0dfda4",
+          "post_age_hours": 330,
+          "metric_age_hours": 11,
+          "hook": "Can science fix its replication crisis?",
+          "exposure": 5,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 1366,
+          "title": "How does Bullshit Jobs A Theory by David Graeber intersect with economics, psychology, and culture",
+          "comments": 0,
+          "sent_at": "2026-10-22T17:31:06Z",
+          "campaign_id": 122,
+          "source_grid_id": "how-does-bullshit-jobs-a-theory-by-david-graeber-i-5e433b",
+          "post_age_hours": 450,
+          "metric_age_hours": 11,
+          "hook": "Why many pointless‑seeming jobs still prop up the system?",
+          "exposure": 5,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 1355,
+          "title": "Is eating meat ethically defensible, and what are the strongest arguments on each side?",
+          "comments": 0,
+          "sent_at": "2026-11-03T23:02:00Z",
+          "campaign_id": 73,
+          "source_grid_id": "is-eating-meat-ethically-defensible-and-what-are-3adef2",
+          "post_age_hours": 157,
+          "metric_age_hours": 11,
+          "hook": "Can eating meat be morally justified?",
+          "exposure": 4,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        }
+      ],
+      "weaker": [
+        {
+          "id": 15,
+          "title": "Whats the Meaning of death",
+          "comments": 0,
+          "sent_at": "2026-08-25T17:30:48Z",
+          "campaign_id": 25,
+          "source_grid_id": "whats-the-meaning-of-death-ef99ee",
+          "post_age_hours": 1842,
+          "metric_age_hours": 1368,
+          "hook": "Whats the Meaning of death",
+          "exposure": 0,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 13,
+          "title": "Can AI systems be genuine epistemic agents?",
+          "comments": 0,
+          "sent_at": "2026-08-27T17:30:45Z",
+          "campaign_id": 41,
+          "source_grid_id": "tell-me-about-mona-simions-optimism-that-ais-are-1365da",
+          "post_age_hours": 1794,
+          "metric_age_hours": 1322,
+          "hook": "Tell me about mona simion's optimism that AIs are epistemic agents?",
+          "exposure": 0,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        }
+      ],
+      "utc_time_groups": [
+        {
+          "n": 9,
+          "actions": 0,
+          "utc_hours": "12:00–15:00",
+          "exposure_median": 0,
+          "exposure_total": 7,
+          "median_post_age_days": 22
+        },
+        {
+          "n": 32,
+          "actions": 0,
+          "utc_hours": "15:00–18:00",
+          "exposure_median": 1.0,
+          "exposure_total": 38,
+          "median_post_age_days": 65.5
+        },
+        {
+          "n": 6,
+          "actions": 0,
+          "utc_hours": "21:00–24:00",
+          "exposure_median": 0.5,
+          "exposure_total": 7,
+          "median_post_age_days": 5.5
+        },
+        {
+          "n": 16,
+          "actions": 0,
+          "utc_hours": "6:00–9:00",
+          "exposure_median": 1.0,
+          "exposure_total": 22,
+          "median_post_age_days": 38.0
+        },
+        {
+          "n": 13,
+          "actions": 0,
+          "utc_hours": "9:00–12:00",
+          "exposure_median": 2,
+          "exposure_total": 25,
+          "median_post_age_days": 43
+        }
+      ]
+    },
+    "instagram": {
+      "n": 71,
+      "top_actions": [
+        {
+          "id": 1441,
+          "title": "The division of labour and race to the bottom of economic activities bothers me",
+          "comments": 0,
+          "sent_at": "2026-10-25T15:22:59Z",
+          "campaign_id": 125,
+          "source_grid_id": "the-division-of-labour-and-race-to-the-bottom-of-e-ae93f6",
+          "post_age_hours": 380,
+          "metric_age_hours": 10,
+          "hook": "Does specialisation drive a global race to the bottom?",
+          "exposure": 78,
+          "clicks": null,
+          "saves": 1,
+          "shares": 0
+        },
+        {
+          "id": 706,
+          "title": "Philosophical themes in The Last King of Scotland (Kevin Macdonald 2006)",
+          "comments": 1,
+          "sent_at": "2026-10-08T17:07:13Z",
+          "campaign_id": 103,
+          "source_grid_id": "philosophical-themes-in-the-last-king-of-scotland-09be9b",
+          "post_age_hours": 787,
+          "metric_age_hours": 21,
+          "hook": "Would you notice corruption if it rewarded you?",
+          "exposure": 14,
+          "clicks": null,
+          "saves": 0,
+          "shares": 0
+        },
+        {
+          "id": 39,
+          "title": "how do social media and other medium platforms use of algorithms have an impact on the creation of echo chambers",
+          "comments": 0,
+          "sent_at": "2026-08-30T15:22:57Z",
+          "campaign_id": 67,
+          "source_grid_id": "how-do-social-media-and-other-medium-platforms-use-afc43b",
+          "post_age_hours": 1724,
+          "metric_age_hours": 646,
+          "hook": "How Do Social Media and Other Medium Platforms Use of Algorithms Have an Impact on the Creation of Echo Chambers",
+          "exposure": 87,
+          "clicks": null,
+          "saves": 0,
+          "shares": 0
+        },
+        {
+          "id": 45,
+          "title": "Let's explore Pritchard's swamping argument",
+          "comments": 0,
+          "sent_at": "2026-08-14T21:06:01Z",
+          "campaign_id": 32,
+          "source_grid_id": "lets-explore-pritchards-swamping-argument-ae2a13",
+          "post_age_hours": 2103,
+          "metric_age_hours": 1114,
+          "hook": "Let's Explore Pritchard's Swamping Argument",
+          "exposure": 78,
+          "clicks": null,
+          "saves": 0,
+          "shares": 0
+        }
+      ],
+      "top_exposure": [
+        {
+          "id": 39,
+          "title": "how do social media and other medium platforms use of algorithms have an impact on the creation of echo chambers",
+          "comments": 0,
+          "sent_at": "2026-08-30T15:22:57Z",
+          "campaign_id": 67,
+          "source_grid_id": "how-do-social-media-and-other-medium-platforms-use-afc43b",
+          "post_age_hours": 1724,
+          "metric_age_hours": 646,
+          "hook": "How Do Social Media and Other Medium Platforms Use of Algorithms Have an Impact on the Creation of Echo Chambers",
+          "exposure": 87,
+          "clicks": null,
+          "saves": 0,
+          "shares": 0
+        },
+        {
+          "id": 1441,
+          "title": "The division of labour and race to the bottom of economic activities bothers me",
+          "comments": 0,
+          "sent_at": "2026-10-25T15:22:59Z",
+          "campaign_id": 125,
+          "source_grid_id": "the-division-of-labour-and-race-to-the-bottom-of-e-ae93f6",
+          "post_age_hours": 380,
+          "metric_age_hours": 10,
+          "hook": "Does specialisation drive a global race to the bottom?",
+          "exposure": 78,
+          "clicks": null,
+          "saves": 1,
+          "shares": 0
+        },
+        {
+          "id": 45,
+          "title": "Let's explore Pritchard's swamping argument",
+          "comments": 0,
+          "sent_at": "2026-08-14T21:06:01Z",
+          "campaign_id": 32,
+          "source_grid_id": "lets-explore-pritchards-swamping-argument-ae2a13",
+          "post_age_hours": 2103,
+          "metric_age_hours": 1114,
+          "hook": "Let's Explore Pritchard's Swamping Argument",
+          "exposure": 78,
+          "clicks": null,
+          "saves": 0,
+          "shares": 0
+        },
+        {
+          "id": 1038,
+          "title": "The replication crisis in social science",
+          "comments": 0,
+          "sent_at": "2026-10-16T22:03:09Z",
+          "campaign_id": 113,
+          "source_grid_id": "the-replication-crisis-in-social-science-0dfda4",
+          "post_age_hours": 590,
+          "metric_age_hours": 10,
+          "hook": "Would you trust a finding that nobody could repeat?",
+          "exposure": 72,
+          "clicks": null,
+          "saves": 0,
+          "shares": 0
+        }
+      ],
+      "weaker": [
+        {
+          "id": 204,
+          "title": "Karl Poppers source of knowledge and ignorance",
+          "comments": 0,
+          "sent_at": "2026-09-15T12:09:47Z",
+          "campaign_id": 2,
+          "source_grid_id": "karl-poppers-source-of-knowledge-and-ignorance-10d92f",
+          "post_age_hours": 1344,
+          "metric_age_hours": 238,
+          "hook": "Does an expert’s claim still need testing?",
+          "exposure": 1,
+          "clicks": null,
+          "saves": 0,
+          "shares": 0
+        },
+        {
+          "id": 431,
+          "title": "How can you trust experts without surrendering your judgment?",
+          "comments": 0,
+          "sent_at": "2026-09-23T08:03:04Z",
+          "campaign_id": 91,
+          "source_grid_id": "how-can-you-trust-experts-without-surrendering-you-2aa336",
+          "post_age_hours": 1156,
+          "metric_age_hours": 117,
+          "hook": "Can you trust an expert and still think for yourself?",
+          "exposure": 1,
+          "clicks": null,
+          "saves": 0,
+          "shares": 0
+        }
+      ],
+      "utc_time_groups": [
+        {
+          "n": 5,
+          "actions": 0,
+          "utc_hours": "12:00–15:00",
+          "exposure_median": 9,
+          "exposure_total": 45,
+          "median_post_age_days": 5
+        },
+        {
+          "n": 38,
+          "actions": 2,
+          "utc_hours": "15:00–18:00",
+          "exposure_median": 8.0,
+          "exposure_total": 567,
+          "median_post_age_days": 50.0
+        },
+        {
+          "n": 1,
+          "actions": 0,
+          "utc_hours": "18:00–21:00",
+          "exposure_median": 46,
+          "exposure_total": 46,
+          "median_post_age_days": 88
+        },
+        {
+          "n": 10,
+          "actions": 0,
+          "utc_hours": "21:00–24:00",
+          "exposure_median": 12.0,
+          "exposure_total": 274,
+          "median_post_age_days": 22.5
+        },
+        {
+          "n": 12,
+          "actions": 0,
+          "utc_hours": "6:00–9:00",
+          "exposure_median": 6.5,
+          "exposure_total": 82,
+          "median_post_age_days": 41.0
+        },
+        {
+          "n": 5,
+          "actions": 0,
+          "utc_hours": "9:00–12:00",
+          "exposure_median": 5,
+          "exposure_total": 47,
+          "median_post_age_days": 25
+        }
+      ]
+    },
+    "linkedin": {
+      "n": 75,
+      "top_actions": [
+        {
+          "id": 65,
+          "title": "Karl Poppers source of knowledge and ignorance",
+          "comments": 0,
+          "sent_at": "2026-08-29T16:30:44Z",
+          "campaign_id": 2,
+          "source_grid_id": "karl-poppers-source-of-knowledge-and-ignorance-10d92f",
+          "post_age_hours": 1747,
+          "metric_age_hours": 644,
+          "hook": "Manifest Truth, Popperian Realism, and the Aristotelian Legacy If truth is not obvious, why did humanity spend millennia believing it was?",
+          "exposure": 38,
+          "clicks": null,
+          "saves": null,
+          "shares": 2
+        },
+        {
+          "id": 467,
+          "title": "why do politicians not act for the benefit of all",
+          "comments": 1,
+          "sent_at": "2026-09-30T16:31:16Z",
+          "campaign_id": 93,
+          "source_grid_id": "why-do-politicians-not-act-for-the-benefit-of-all-3e260e",
+          "post_age_hours": 979,
+          "metric_age_hours": 19,
+          "hook": "Who counts when politicians promise to serve everyone?",
+          "exposure": 30,
+          "clicks": null,
+          "saves": null,
+          "shares": 1
+        },
+        {
+          "id": 240,
+          "title": "Ruth Ellis, the last woman to be hanged in Britain, has had a posthumous, conditional pardon: her sentence being commuted to life in prison",
+          "comments": 0,
+          "sent_at": "2026-09-10T16:31:05Z",
+          "campaign_id": 22,
+          "source_grid_id": "ruth-ellis-the-last-woman-to-be-hanged-in-britain-0a9045",
+          "post_age_hours": 1459,
+          "metric_age_hours": 308,
+          "hook": "Deep Dives into Truth, Time, and the Law What happens when the truth of the past collides with the morality of the present?",
+          "exposure": 29,
+          "clicks": null,
+          "saves": null,
+          "shares": 1
+        },
+        {
+          "id": 235,
+          "title": "Philosophical themes in Run Lola Run (1998 film)",
+          "comments": 0,
+          "sent_at": "2026-09-17T15:02:46Z",
+          "campaign_id": 86,
+          "source_grid_id": "philosophical-themes-in-run-lola-run-1998-film-119ea1",
+          "post_age_hours": 1293,
+          "metric_age_hours": 163,
+          "hook": "Can one small choice reshape your whole life?",
+          "exposure": 27,
+          "clicks": null,
+          "saves": null,
+          "shares": 1
+        }
+      ],
+      "top_exposure": [
+        {
+          "id": 55,
+          "title": "What is Wittgenstein’s private language argument",
+          "comments": 0,
+          "sent_at": "2026-09-08T16:31:05Z",
+          "campaign_id": 82,
+          "source_grid_id": "what-is-wittgensteins-private-language-argument-319ac1",
+          "post_age_hours": 1507,
+          "metric_age_hours": 380,
+          "hook": "If a group of people can collectively agree on a word, why can’t an individual’s own biological memory serve as a reliable anchor?",
+          "exposure": 59,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 56,
+          "title": "Is it morally permissible for a teacher to use AI to prepare school lessons",
+          "comments": 0,
+          "sent_at": "2026-09-07T16:30:55Z",
+          "campaign_id": 81,
+          "source_grid_id": "is-it-morally-permissible-for-a-teacher-to-use-ai-da37c3",
+          "post_age_hours": 1531,
+          "metric_age_hours": 404,
+          "hook": "Is it morally permissible for a teacher to use AI to prepare school lessons",
+          "exposure": 40,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 65,
+          "title": "Karl Poppers source of knowledge and ignorance",
+          "comments": 0,
+          "sent_at": "2026-08-29T16:30:44Z",
+          "campaign_id": 2,
+          "source_grid_id": "karl-poppers-source-of-knowledge-and-ignorance-10d92f",
+          "post_age_hours": 1747,
+          "metric_age_hours": 644,
+          "hook": "Manifest Truth, Popperian Realism, and the Aristotelian Legacy If truth is not obvious, why did humanity spend millennia believing it was?",
+          "exposure": 38,
+          "clicks": null,
+          "saves": null,
+          "shares": 2
+        },
+        {
+          "id": 76,
+          "title": "A Hunger Artist by Franz Kafka",
+          "comments": 0,
+          "sent_at": "2026-08-13T10:05:26Z",
+          "campaign_id": 34,
+          "source_grid_id": "a-hunger-artist-by-franz-kafka-519c7f",
+          "post_age_hours": 2138,
+          "metric_age_hours": 1338,
+          "hook": "Illustrates the tragedy of creating deep, authentic art for a world that only wants cheap entertainment.",
+          "exposure": 38,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        }
+      ],
+      "weaker": [
+        {
+          "id": 1504,
+          "title": "What is Wittgenstein’s private language argument",
+          "comments": 0,
+          "sent_at": "2026-11-04T23:02:48Z",
+          "campaign_id": 82,
+          "source_grid_id": "what-is-wittgensteins-private-language-argument-319ac1",
+          "post_age_hours": 133,
+          "metric_age_hours": 19,
+          "hook": "Can words exist only inside one mind?",
+          "exposure": 0,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 1503,
+          "title": "\"Hell is Other People\" - Sartre",
+          "comments": 0,
+          "sent_at": "2026-11-05T12:31:11Z",
+          "campaign_id": 132,
+          "source_grid_id": "hell-is-other-people-sartre-dccaba",
+          "post_age_hours": 119,
+          "metric_age_hours": 3,
+          "hook": "Can other people rob you of your freedom?",
+          "exposure": 1,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        }
+      ],
+      "utc_time_groups": [
+        {
+          "n": 12,
+          "actions": 0,
+          "utc_hours": "12:00–15:00",
+          "exposure_median": 7.0,
+          "exposure_total": 108,
+          "median_post_age_days": 24.5
+        },
+        {
+          "n": 51,
+          "actions": 8,
+          "utc_hours": "15:00–18:00",
+          "exposure_median": 11,
+          "exposure_total": 700,
+          "median_post_age_days": 47
+        },
+        {
+          "n": 6,
+          "actions": 0,
+          "utc_hours": "21:00–24:00",
+          "exposure_median": 4.0,
+          "exposure_total": 30,
+          "median_post_age_days": 5.5
+        },
+        {
+          "n": 6,
+          "actions": 0,
+          "utc_hours": "9:00–12:00",
+          "exposure_median": 7.0,
+          "exposure_total": 73,
+          "median_post_age_days": 25.5
+        }
+      ]
+    },
+    "tiktok": {
+      "n": 76,
+      "top_actions": [
+        {
+          "id": 99,
+          "title": "Let's explore Pritchard's swamping argument",
+          "comments": 0,
+          "sent_at": "2026-08-14T21:08:49Z",
+          "campaign_id": 32,
+          "source_grid_id": "lets-explore-pritchards-swamping-argument-ae2a13",
+          "post_age_hours": 2103,
+          "metric_age_hours": 1048,
+          "hook": "Let's Explore Pritchard's Swamping Argument",
+          "exposure": 725,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 101,
+          "title": "Herbert Marcuse's One-Dimensional Man",
+          "comments": 0,
+          "sent_at": "2026-08-12T21:06:46Z",
+          "campaign_id": 33,
+          "source_grid_id": "herbert-marcuses-one-dimensional-man-c6adc0",
+          "post_age_hours": 2151,
+          "metric_age_hours": 1048,
+          "hook": "Herbert Marcuse's One-dimensional Man",
+          "exposure": 249,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 807,
+          "title": "Should Northern Ireland remain in the United Kingdom or should they leave and join the Republic of Ireland?",
+          "comments": 0,
+          "sent_at": "2026-10-09T18:04:45Z",
+          "campaign_id": 107,
+          "source_grid_id": "should-northern-ireland-remain-in-the-united-kingd-278c61",
+          "post_age_hours": 762,
+          "metric_age_hours": 20,
+          "hook": "Can a border settle where someone belongs?",
+          "exposure": 195,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 1157,
+          "title": "Are LLMs perception-based modal or non-perception-based amodal conceptual systems?",
+          "comments": 0,
+          "sent_at": "2026-10-17T22:02:41Z",
+          "campaign_id": 117,
+          "source_grid_id": "are-llms-perception-based-modal-or-non-perception-d2a021",
+          "post_age_hours": 566,
+          "metric_age_hours": 14,
+          "hook": "Does an AI understand coffee if it cannot taste it?",
+          "exposure": 7,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        }
+      ],
+      "top_exposure": [
+        {
+          "id": 99,
+          "title": "Let's explore Pritchard's swamping argument",
+          "comments": 0,
+          "sent_at": "2026-08-14T21:08:49Z",
+          "campaign_id": 32,
+          "source_grid_id": "lets-explore-pritchards-swamping-argument-ae2a13",
+          "post_age_hours": 2103,
+          "metric_age_hours": 1048,
+          "hook": "Let's Explore Pritchard's Swamping Argument",
+          "exposure": 725,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 101,
+          "title": "Herbert Marcuse's One-Dimensional Man",
+          "comments": 0,
+          "sent_at": "2026-08-12T21:06:46Z",
+          "campaign_id": 33,
+          "source_grid_id": "herbert-marcuses-one-dimensional-man-c6adc0",
+          "post_age_hours": 2151,
+          "metric_age_hours": 1048,
+          "hook": "Herbert Marcuse's One-dimensional Man",
+          "exposure": 249,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 807,
+          "title": "Should Northern Ireland remain in the United Kingdom or should they leave and join the Republic of Ireland?",
+          "comments": 0,
+          "sent_at": "2026-10-09T18:04:45Z",
+          "campaign_id": 107,
+          "source_grid_id": "should-northern-ireland-remain-in-the-united-kingd-278c61",
+          "post_age_hours": 762,
+          "metric_age_hours": 20,
+          "hook": "Can a border settle where someone belongs?",
+          "exposure": 195,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 1157,
+          "title": "Are LLMs perception-based modal or non-perception-based amodal conceptual systems?",
+          "comments": 0,
+          "sent_at": "2026-10-17T22:02:41Z",
+          "campaign_id": 117,
+          "source_grid_id": "are-llms-perception-based-modal-or-non-perception-d2a021",
+          "post_age_hours": 566,
+          "metric_age_hours": 14,
+          "hook": "Does an AI understand coffee if it cannot taste it?",
+          "exposure": 7,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        }
+      ],
+      "weaker": [
+        {
+          "id": 100,
+          "title": "A Hunger Artist by Franz Kafka",
+          "comments": 0,
+          "sent_at": "2026-08-13T20:08:54Z",
+          "campaign_id": 34,
+          "source_grid_id": "a-hunger-artist-by-franz-kafka-519c7f",
+          "post_age_hours": 2128,
+          "metric_age_hours": 2209,
+          "hook": "A Hunger Artist By Franz Kafka",
+          "exposure": 0,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 98,
+          "title": "Whats the Meaning of death",
+          "comments": 0,
+          "sent_at": "2026-08-25T19:14:47Z",
+          "campaign_id": 25,
+          "source_grid_id": "whats-the-meaning-of-death-ef99ee",
+          "post_age_hours": 1841,
+          "metric_age_hours": 865,
+          "hook": "Whats the Meaning of Death",
+          "exposure": 0,
+          "clicks": null,
+          "saves": null,
+          "shares": 0
+        }
+      ],
+      "utc_time_groups": [
+        {
+          "n": 4,
+          "actions": 0,
+          "utc_hours": "12:00–15:00",
+          "exposure_median": 0.0,
+          "exposure_total": 0,
+          "median_post_age_days": 4.5
+        },
+        {
+          "n": 5,
+          "actions": 0,
+          "utc_hours": "15:00–18:00",
+          "exposure_median": 0,
+          "exposure_total": 0,
+          "median_post_age_days": 24
+        },
+        {
+          "n": 56,
+          "actions": 0,
+          "utc_hours": "18:00–21:00",
+          "exposure_median": 0.0,
+          "exposure_total": 197,
+          "median_post_age_days": 47.5
+        },
+        {
+          "n": 11,
+          "actions": 0,
+          "utc_hours": "21:00–24:00",
+          "exposure_median": 0,
+          "exposure_total": 981,
+          "median_post_age_days": 23
+        }
+      ]
+    },
+    "x": {
+      "n": 75,
+      "top_actions": [
+        {
+          "id": 1659,
+          "title": "What is Wittgenstein’s private language argument",
+          "comments": 0,
+          "sent_at": "2026-11-04T23:02:25Z",
+          "campaign_id": 82,
+          "source_grid_id": "what-is-wittgensteins-private-language-argument-319ac1",
+          "post_age_hours": 133,
+          "metric_age_hours": 21,
+          "hook": "Can words exist only inside one mind?",
+          "exposure": 31,
+          "clicks": 2,
+          "saves": null,
+          "shares": 1
+        },
+        {
+          "id": 1661,
+          "title": "Is eating meat ethically defensible, and what are the strongest arguments on each side?",
+          "comments": 0,
+          "sent_at": "2026-11-03T23:01:25Z",
+          "campaign_id": 73,
+          "source_grid_id": "is-eating-meat-ethically-defensible-and-what-are-3adef2",
+          "post_age_hours": 157,
+          "metric_age_hours": 21,
+          "hook": "Can eating meat be morally justified?",
+          "exposure": 15,
+          "clicks": 3,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 304,
+          "title": "Philosophical themes in A Separation (Asghar Farhadi 2011)",
+          "comments": 1,
+          "sent_at": "2026-09-18T09:30:38Z",
+          "campaign_id": 87,
+          "source_grid_id": "philosophical-themes-in-a-separation-asghar-farha-1caa1c",
+          "post_age_hours": 1274,
+          "metric_age_hours": 803,
+          "hook": "Would you choose the same rules from the other side?",
+          "exposure": 85,
+          "clicks": 1,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 108,
+          "title": "Is it morally permissible for a teacher to use AI to prepare school lessons",
+          "comments": 0,
+          "sent_at": "2026-09-07T19:05:03Z",
+          "campaign_id": 81,
+          "source_grid_id": "is-it-morally-permissible-for-a-teacher-to-use-ai-da37c3",
+          "post_age_hours": 1529,
+          "metric_age_hours": 1056,
+          "hook": "Read the full argument and follow its connected questions.",
+          "exposure": 36,
+          "clicks": 0,
+          "saves": null,
+          "shares": 2
+        }
+      ],
+      "top_exposure": [
+        {
+          "id": 304,
+          "title": "Philosophical themes in A Separation (Asghar Farhadi 2011)",
+          "comments": 1,
+          "sent_at": "2026-09-18T09:30:38Z",
+          "campaign_id": 87,
+          "source_grid_id": "philosophical-themes-in-a-separation-asghar-farha-1caa1c",
+          "post_age_hours": 1274,
+          "metric_age_hours": 803,
+          "hook": "Would you choose the same rules from the other side?",
+          "exposure": 85,
+          "clicks": 1,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 310,
+          "title": "Ruth Ellis, the last woman to be hanged in Britain, has had a posthumous, conditional pardon: her sentence being commuted to life in prison",
+          "comments": 0,
+          "sent_at": "2026-09-10T19:05:04Z",
+          "campaign_id": 22,
+          "source_grid_id": "ruth-ellis-the-last-woman-to-be-hanged-in-britain-0a9045",
+          "post_age_hours": 1457,
+          "metric_age_hours": 987,
+          "hook": "Read the full argument and follow its connected questions.",
+          "exposure": 58,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 561,
+          "title": "How can you trust experts without surrendering your judgment?",
+          "comments": 0,
+          "sent_at": "2026-09-23T08:00:54Z",
+          "campaign_id": 91,
+          "source_grid_id": "how-can-you-trust-experts-without-surrendering-you-2aa336",
+          "post_age_hours": 1156,
+          "metric_age_hours": 688,
+          "hook": "Can you trust an expert and still think for yourself?",
+          "exposure": 45,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 118,
+          "title": "What does Mary learn when she sees colour?",
+          "comments": 0,
+          "sent_at": "2026-08-28T19:05:07Z",
+          "campaign_id": 47,
+          "source_grid_id": "what-does-mary-know-efebd0",
+          "post_age_hours": 1769,
+          "metric_age_hours": 1309,
+          "hook": "She learns \"what it is like\" to experience red, a concept popularized by Thomas Nagel in his foundational paper [What Is It Like to Be a Bat?",
+          "exposure": 43,
+          "clicks": 0,
+          "saves": null,
+          "shares": 1
+        }
+      ],
+      "weaker": [
+        {
+          "id": 1670,
+          "title": "Does recent neuroscience show that free will is an illusion?",
+          "comments": 0,
+          "sent_at": "2026-10-24T19:05:04Z",
+          "campaign_id": 42,
+          "source_grid_id": "free-will-might-be-an-illusion-based-on-recent-neu-75df12",
+          "post_age_hours": 401,
+          "metric_age_hours": 21,
+          "hook": "If free will is an illusion, who deserves blame?",
+          "exposure": 5,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        },
+        {
+          "id": 556,
+          "title": "why do politicians not act for the benefit of all",
+          "comments": 0,
+          "sent_at": "2026-09-30T09:30:32Z",
+          "campaign_id": 93,
+          "source_grid_id": "why-do-politicians-not-act-for-the-benefit-of-all-3e260e",
+          "post_age_hours": 986,
+          "metric_age_hours": 527,
+          "hook": "Who counts when politicians promise to serve everyone?",
+          "exposure": 6,
+          "clicks": 0,
+          "saves": null,
+          "shares": 0
+        }
+      ],
+      "utc_time_groups": [
+        {
+          "n": 9,
+          "actions": 0,
+          "utc_hours": "12:00–15:00",
+          "exposure_median": 9,
+          "exposure_total": 104,
+          "median_post_age_days": 22
+        },
+        {
+          "n": 32,
+          "actions": 5,
+          "utc_hours": "18:00–21:00",
+          "exposure_median": 23.5,
+          "exposure_total": 786,
+          "median_post_age_days": 65.5
+        },
+        {
+          "n": 6,
+          "actions": 8,
+          "utc_hours": "21:00–24:00",
+          "exposure_median": 14.5,
+          "exposure_total": 95,
+          "median_post_age_days": 5.5
+        },
+        {
+          "n": 16,
+          "actions": 0,
+          "utc_hours": "6:00–9:00",
+          "exposure_median": 15.5,
+          "exposure_total": 290,
+          "median_post_age_days": 38.0
+        },
+        {
+          "n": 12,
+          "actions": 2,
+          "utc_hours": "9:00–12:00",
+          "exposure_median": 12.0,
+          "exposure_total": 213,
+          "median_post_age_days": 42.0
+        }
+      ]
+    },
+    "youtube": {
+      "n": 81,
+      "top_actions": [
+        {
+          "id": 1732,
+          "title": "Why is the band Joy Division so revered?",
+          "comments": 2,
+          "sent_at": "2026-11-06T23:02:31Z",
+          "campaign_id": 95,
+          "source_grid_id": "why-is-the-band-joy-division-so-revered-731d04",
+          "post_age_hours": 85,
+          "metric_age_hours": 1,
+          "hook": "Is Joy Division a band or a producer's masterpiece?",
+          "exposure": 940,
+          "clicks": null,
+          "saves": null,
+          "shares": null
+        },
+        {
+          "id": 603,
+          "title": "Why is the band Joy Division so revered?",
+          "comments": 1,
+          "sent_at": "2026-09-27T15:02:55Z",
+          "campaign_id": 95,
+          "source_grid_id": "why-is-the-band-joy-division-so-revered-731d04",
+          "post_age_hours": 1053,
+          "metric_age_hours": 1,
+          "hook": "Who makes a band's sound: musicians or producer?",
+          "exposure": 105,
+          "clicks": null,
+          "saves": null,
+          "shares": null
+        },
+        {
+          "id": 920,
+          "title": "Is content produced by AI just slop?",
+          "comments": 1,
+          "sent_at": "2026-10-02T17:01:56Z",
+          "campaign_id": 102,
+          "source_grid_id": "is-content-produced-by-ai-just-slop-b1008d",
+          "post_age_hours": 931,
+          "metric_age_hours": 1,
+          "hook": "Is the problem AI—or publishing without judgment?",
+          "exposure": 48,
+          "clicks": null,
+          "saves": null,
+          "shares": null
+        },
+        {
+          "id": 918,
+          "title": "Philosophical themes in The Last King of Scotland (Kevin Macdonald 2006)",
+          "comments": 0,
+          "sent_at": "2026-10-04T17:01:43Z",
+          "campaign_id": 103,
+          "source_grid_id": "philosophical-themes-in-the-last-king-of-scotland-09be9b",
+          "post_age_hours": 883,
+          "metric_age_hours": 1,
+          "hook": "Would you notice corruption if it rewarded you?",
+          "exposure": 190,
+          "clicks": null,
+          "saves": null,
+          "shares": null
+        }
+      ],
+      "top_exposure": [
+        {
+          "id": 1732,
+          "title": "Why is the band Joy Division so revered?",
+          "comments": 2,
+          "sent_at": "2026-11-06T23:02:31Z",
+          "campaign_id": 95,
+          "source_grid_id": "why-is-the-band-joy-division-so-revered-731d04",
+          "post_age_hours": 85,
+          "metric_age_hours": 1,
+          "hook": "Is Joy Division a band or a producer's masterpiece?",
+          "exposure": 940,
+          "clicks": null,
+          "saves": null,
+          "shares": null
+        },
+        {
+          "id": 918,
+          "title": "Philosophical themes in The Last King of Scotland (Kevin Macdonald 2006)",
+          "comments": 0,
+          "sent_at": "2026-10-04T17:01:43Z",
+          "campaign_id": 103,
+          "source_grid_id": "philosophical-themes-in-the-last-king-of-scotland-09be9b",
+          "post_age_hours": 883,
+          "metric_age_hours": 1,
+          "hook": "Would you notice corruption if it rewarded you?",
+          "exposure": 190,
+          "clicks": null,
+          "saves": null,
+          "shares": null
+        },
+        {
+          "id": 603,
+          "title": "Why is the band Joy Division so revered?",
+          "comments": 1,
+          "sent_at": "2026-09-27T15:02:55Z",
+          "campaign_id": 95,
+          "source_grid_id": "why-is-the-band-joy-division-so-revered-731d04",
+          "post_age_hours": 1053,
+          "metric_age_hours": 1,
+          "hook": "Who makes a band's sound: musicians or producer?",
+          "exposure": 105,
+          "clicks": null,
+          "saves": null,
+          "shares": null
+        },
+        {
+          "id": 1279,
+          "title": "help me understand the basics of what the Federal reserve does and how it is today as it is",
+          "comments": 0,
+          "sent_at": "2026-10-18T20:01:20Z",
+          "campaign_id": 119,
+          "source_grid_id": "help-me-understand-the-basics-of-what-the-federal-b4c23b",
+          "post_age_hours": 544,
+          "metric_age_hours": 1,
+          "hook": "Who bears the cost of getting inflation under control?",
+          "exposure": 105,
+          "clicks": null,
+          "saves": null,
+          "shares": null
+        }
+      ],
+      "weaker": [
+        {
+          "id": 344,
+          "title": "Popper: Of Clouds and Clocks - Freedom and Determinism",
+          "comments": 0,
+          "sent_at": "2026-09-14T17:03:32Z",
+          "campaign_id": 85,
+          "source_grid_id": "popper-of-clouds-and-clocks-freedom-and-determi-fce3ba",
+          "post_age_hours": 1363,
+          "metric_age_hours": 656,
+          "hook": "Is freedom more than being unpredictable?",
+          "exposure": 1,
+          "clicks": null,
+          "saves": null,
+          "shares": null
+        },
+        {
+          "id": 154,
+          "title": "How do recommendation algorithms shape what people see online?",
+          "comments": 0,
+          "sent_at": "2026-08-20T18:30:32Z",
+          "campaign_id": 50,
+          "source_grid_id": "how-do-recommendation-algorithms-shape-what-people-be4b14",
+          "post_age_hours": 1961,
+          "metric_age_hours": 526,
+          "hook": "If humans and machines keep adapting to each other, who really controls what goes viral?",
+          "exposure": 3,
+          "clicks": null,
+          "saves": null,
+          "shares": null
+        }
+      ],
+      "utc_time_groups": [
+        {
+          "n": 4,
+          "actions": 0,
+          "utc_hours": "12:00–15:00",
+          "exposure_median": 25.0,
+          "exposure_total": 110,
+          "median_post_age_days": 4.5
+        },
+        {
+          "n": 33,
+          "actions": 2,
+          "utc_hours": "15:00–18:00",
+          "exposure_median": 30,
+          "exposure_total": 1234,
+          "median_post_age_days": 41
+        },
+        {
+          "n": 38,
+          "actions": 0,
+          "utc_hours": "18:00–21:00",
+          "exposure_median": 15.5,
+          "exposure_total": 937,
+          "median_post_age_days": 63.5
+        },
+        {
+          "n": 6,
+          "actions": 2,
+          "utc_hours": "21:00–24:00",
+          "exposure_median": 37.0,
+          "exposure_total": 1152,
+          "median_post_age_days": 5.5
+        }
+      ]
+    }
+  },
+  "fetched_at": "2026-11-10T12:16:57.737721Z"
+}

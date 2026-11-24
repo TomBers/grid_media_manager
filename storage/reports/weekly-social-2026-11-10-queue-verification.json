@@ -1,0 +1,48 @@
+{
+  "verified": true,
+  "platforms": {
+    "facebook": {
+      "vacancies": 0,
+      "scheduled_count": 10,
+      "times_match": true,
+      "all_ids_present": true,
+      "matched_count": 10
+    },
+    "instagram": {
+      "vacancies": 0,
+      "scheduled_count": 10,
+      "times_match": true,
+      "all_ids_present": true,
+      "matched_count": 10
+    },
+    "linkedin": {
+      "vacancies": 0,
+      "scheduled_count": 10,
+      "times_match": true,
+      "all_ids_present": true,
+      "matched_count": 10
+    },
+    "tiktok": {
+      "vacancies": 0,
+      "scheduled_count": 10,
+      "times_match": true,
+      "all_ids_present": true,
+      "matched_count": 10
+    },
+    "x": {
+      "vacancies": 0,
+      "scheduled_count": 10,
+      "times_match": true,
+      "all_ids_present": true,
+      "matched_count": 10
+    },
+    "youtube": {
+      "vacancies": 0,
+      "scheduled_count": 10,
+      "times_match": true,
+      "all_ids_present": true,
+      "matched_count": 10
+    }
+  },
+  "verified_at": "2026-11-10T12:40:10.708007Z"
+}

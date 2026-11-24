@@ -1,0 +1,122 @@
+[
+  {
+    "position": 1,
+    "status": "written",
+    "draft_ids": [
+      2492,
+      2498,
+      2491,
+      2496,
+      2493,
+      2499
+    ]
+  },
+  {
+    "position": 2,
+    "status": "written",
+    "draft_ids": [
+      2500,
+      2505,
+      2497,
+      2504,
+      2501,
+      2506
+    ]
+  },
+  {
+    "position": 3,
+    "status": "written",
+    "draft_ids": [
+      2514,
+      2521,
+      2513,
+      2520,
+      2517,
+      2522
+    ]
+  },
+  {
+    "position": 4,
+    "status": "written",
+    "draft_ids": [
+      2508,
+      2515,
+      2507,
+      2512,
+      2509,
+      2516
+    ]
+  },
+  {
+    "position": 5,
+    "status": "written",
+    "draft_ids": [
+      2524,
+      2529,
+      2523,
+      2528,
+      2525,
+      2530
+    ]
+  },
+  {
+    "position": 6,
+    "status": "written",
+    "draft_ids": [
+      2436,
+      2535,
+      2435,
+      2534,
+      2531,
+      2536
+    ]
+  },
+  {
+    "position": 7,
+    "status": "written",
+    "draft_ids": [
+      2538,
+      2543,
+      2537,
+      2542,
+      2539,
+      2544
+    ]
+  },
+  {
+    "position": 8,
+    "status": "written",
+    "draft_ids": [
+      2546,
+      2551,
+      2545,
+      2550,
+      2547,
+      2552
+    ]
+  },
+  {
+    "position": 9,
+    "status": "written",
+    "draft_ids": [
+      2554,
+      2559,
+      2553,
+      2558,
+      2555,
+      2560
+    ]
+  },
+  {
+    "position": 10,
+    "status": "written",
+    "draft_ids": [
+      2562,
+      2567,
+      2561,
+      2566,
+      2563,
+      2568
+    ]
+  }
+]

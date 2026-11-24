@@ -60,6 +60,15 @@ defmodule GridMediaManager.Social.PerformanceTest do
     assert Repo.aggregate(PostMetric, :count) == 1
     assert hd(Performance.results("x", now: now)).clicks == 3
     assert Performance.results("x", now: ~U[2026-09-02 12:00:00Z]) == []
+
+    feedback = Performance.editorial_feedback(now: now)["x"]
+    assert feedback.sample_size == 1
+    assert [example] = feedback.examples
+    assert example.source_grid_id == campaign.slug
+    assert example.platform == "x"
+    assert example.post_age_hours == 195
+    assert example.metric_age_hours == 0
+    assert feedback.weaker_examples == [example]
   end
 
   test "tracking retains query targets and fragments, stays stable and leaves external sources untouched" do

@@ -1,0 +1,21 @@
+{
+  "status": "approved",
+  "post_count": 60,
+  "notes": [
+    "Identity exploration ended after two substantial generated answers when published; copy uses those available answers only.",
+    "Automated editor supplied stylistic feedback; final copy and video beats were edited and reviewed directly. Final approval is recorded through the application’s draft approval workflow."
+  ],
+  "reviewed_at": "2026-11-10T12:38:24.918914Z",
+  "reviewer": "Codex",
+  "checks": [
+    "Source-grounded philosophical content and qualifications reviewed",
+    "No artificial-intelligence topics",
+    "Distinct platform copy with complete arguments for LinkedIn and Facebook",
+    "No prompt scaffolding or unsupported copyright ownership claims",
+    "Platform character limits",
+    "Video pacing and complete rendered frames",
+    "Correct media contract: video for Instagram/TikTok/YouTube; two images for X/LinkedIn/Facebook",
+    "All source grids anonymously accessible",
+    "Unique draft IDs and future times"
+  ]
+}

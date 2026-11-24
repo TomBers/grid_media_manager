@@ -359,6 +359,30 @@ defmodule GridMediaManager.Social.TemplatesTest do
     assert facebook =~ "3. This question"
   end
 
+  test "a hook does not discard oversized plain-text long-form content" do
+    paragraphs =
+      for n <- 1..20,
+          do:
+            "Paragraph #{n}: " <>
+              String.duplicate("Comfort can expand choice while dependence can constrain it. ", 6)
+
+    asset = %MediaAsset{
+      kind: "long_form_post",
+      node_id: "node-1",
+      text: Enum.join(paragraphs, "\n\n"),
+      metadata: %{"editorial_hook" => "Can comfort constrain freedom?"}
+    }
+
+    for platform <- Platforms.long_form_ids() do
+      body = Templates.body(campaign(), asset, platform, "long_form")
+      assert body =~ String.trim(Enum.at(paragraphs, 0))
+      assert body =~ String.trim(Enum.at(paragraphs, 1))
+      assert String.length(body) > 2000
+      assert Platforms.within_limit?(body, platform)
+      assert String.starts_with?(body, "Can comfort constrain freedom?")
+    end
+  end
+
   test "long-form posts never create blank drafts" do
     campaign = campaign()
     asset = %MediaAsset{id: 1, kind: "long_form_post", title: "Fallback answer title", text: ""}

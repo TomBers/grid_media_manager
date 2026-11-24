@@ -472,6 +472,13 @@ defmodule GridMediaManager.Social.Templates do
         |> complete_sections_within(available)
         |> fallback(logical_blocks_within(copy, available))
 
+      # A hook can fit even when the entire unheaded source section does not.
+      # Fall back to complete paragraphs rather than publishing just the hook.
+      shortened =
+        if is_binary(hook) and shortened == hook,
+          do: logical_blocks_within(copy, available),
+          else: shortened
+
       shortened_copy = shortened <> "\n\n" <> cta
 
       if Platforms.within_limit?(shortened_copy, platform), do: shortened_copy, else: cta

@@ -1,0 +1,382 @@
+[
+  {
+    "position": 1,
+    "media": [
+      {
+        "id": 747,
+        "kind": "long_form_post",
+        "frames": [
+          1,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 748,
+        "kind": "curated_carousel",
+        "frames": [
+          2,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 749,
+        "kind": "curated_carousel_video",
+        "frames": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pacing": "ok"
+      }
+    ],
+    "copy_issues": [],
+    "draft_count": 6,
+    "platform_limits": true
+  },
+  {
+    "position": 2,
+    "media": [
+      {
+        "id": 750,
+        "kind": "long_form_post",
+        "frames": [
+          1,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 751,
+        "kind": "curated_carousel",
+        "frames": [
+          2,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 752,
+        "kind": "curated_carousel_video",
+        "frames": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pacing": "ok"
+      }
+    ],
+    "copy_issues": [],
+    "draft_count": 6,
+    "platform_limits": true
+  },
+  {
+    "position": 3,
+    "media": [
+      {
+        "id": 753,
+        "kind": "long_form_post",
+        "frames": [
+          1,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 754,
+        "kind": "curated_carousel",
+        "frames": [
+          2,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 755,
+        "kind": "curated_carousel_video",
+        "frames": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pacing": "ok"
+      }
+    ],
+    "copy_issues": [],
+    "draft_count": 6,
+    "platform_limits": true
+  },
+  {
+    "position": 4,
+    "media": [
+      {
+        "id": 756,
+        "kind": "long_form_post",
+        "frames": [
+          1,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 757,
+        "kind": "curated_carousel",
+        "frames": [
+          2,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 758,
+        "kind": "curated_carousel_video",
+        "frames": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pacing": "ok"
+      }
+    ],
+    "copy_issues": [],
+    "draft_count": 6,
+    "platform_limits": true
+  },
+  {
+    "position": 5,
+    "media": [
+      {
+        "id": 759,
+        "kind": "long_form_post",
+        "frames": [
+          1,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 760,
+        "kind": "curated_carousel",
+        "frames": [
+          2,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 761,
+        "kind": "curated_carousel_video",
+        "frames": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pacing": "ok"
+      }
+    ],
+    "copy_issues": [],
+    "draft_count": 6,
+    "platform_limits": true
+  },
+  {
+    "position": 6,
+    "media": [
+      {
+        "id": 762,
+        "kind": "long_form_post",
+        "frames": [
+          1,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 763,
+        "kind": "curated_carousel",
+        "frames": [
+          2,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 764,
+        "kind": "curated_carousel_video",
+        "frames": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pacing": "ok"
+      }
+    ],
+    "copy_issues": [],
+    "draft_count": 6,
+    "platform_limits": true
+  },
+  {
+    "position": 7,
+    "media": [
+      {
+        "id": 765,
+        "kind": "long_form_post",
+        "frames": [
+          1,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 766,
+        "kind": "curated_carousel",
+        "frames": [
+          2,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 767,
+        "kind": "curated_carousel_video",
+        "frames": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pacing": "ok"
+      }
+    ],
+    "copy_issues": [],
+    "draft_count": 6,
+    "platform_limits": true
+  },
+  {
+    "position": 8,
+    "media": [
+      {
+        "id": 768,
+        "kind": "long_form_post",
+        "frames": [
+          1,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 769,
+        "kind": "curated_carousel",
+        "frames": [
+          2,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 770,
+        "kind": "curated_carousel_video",
+        "frames": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pacing": "ok"
+      }
+    ],
+    "copy_issues": [],
+    "draft_count": 6,
+    "platform_limits": true
+  },
+  {
+    "position": 9,
+    "media": [
+      {
+        "id": 771,
+        "kind": "long_form_post",
+        "frames": [
+          1,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 772,
+        "kind": "curated_carousel",
+        "frames": [
+          2,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 773,
+        "kind": "curated_carousel_video",
+        "frames": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pacing": "ok"
+      }
+    ],
+    "copy_issues": [],
+    "draft_count": 6,
+    "platform_limits": true
+  },
+  {
+    "position": 10,
+    "media": [
+      {
+        "id": 774,
+        "kind": "long_form_post",
+        "frames": [
+          1,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 775,
+        "kind": "curated_carousel",
+        "frames": [
+          2,
+          3
+        ],
+        "pacing": "ok"
+      },
+      {
+        "id": 776,
+        "kind": "curated_carousel_video",
+        "frames": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pacing": "ok"
+      }
+    ],
+    "copy_issues": [],
+    "draft_count": 6,
+    "platform_limits": true
+  }
+]

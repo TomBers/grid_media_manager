@@ -1,0 +1,26 @@
+{
+  "confidence": 0.78,
+  "cover_brief": "A contemplative editorial photo: a single office chair at an empty long conference table, soft window light, shallow depth of field, negative space at top-left for title text. Evoke corporate scale and quiet futility.",
+  "cover_mode": "photo",
+  "cover_search_query": "empty conference room, single office chair at long table, soft natural window light, shallow depth of field, muted greys",
+  "format_rationale": "The grid presents a compact but layered argument about institutional drivers, contested assumptions, and an empirical question. Long-form allows a coherent unpacking of principal-agent mechanisms, the critique of equating subjective alienation with objective waste, and a clear research-focused takeaway.",
+  "hook": "Can high pay mask a pointless job?",
+  "rationale": "Start with the reader's simple human question, then explain the institutional mechanism (principal-agent dynamics) that can produce well-paid but low-utility roles, qualify the claim by testing the key assumption (subjective alienation ≠ automatic economic waste), and finish by pointing to a concrete empirical research question. This sequence gives one satisfying insight and a clear curiosity gap for RationalGrid.ai.",
+  "recommended_format": "long_form",
+  "selected_keys": [
+    "key_node:1",
+    "key_node:4",
+    "key_node:3",
+    "key_node:5",
+    "question:Fhke4e-l6NeboUJr"
+  ],
+  "text_visual_key": "question:Fhke4e-l6NeboUJr",
+  "text_visual_role": "question",
+  "video_script": [
+    "Modern corporations can produce well‑paid administrative roles through principal–agent dynamics: managers create and staff positions that persist whether or not they add価",
+    "But treating workers' felt alienation as proof of economic waste is a leap—perceived pointlessness may not equal measurable inefficiency.",
+    "So how can researchers reliably measure corporate administrative overhead's net economic efficiency versus operational labour?"
+  ],
+  "visual_rationale": "The recommended image—an empty conference room with a single chair—visually captures the tension between pay and perceived purpose, inviting readers to consider institutional scale and individual experience. The selected question frame explicitly promises that the linked grid will supply a substantive research agenda and evidence, motivating a qualified visit.",
+  "visual_style": "newsprint"
+}

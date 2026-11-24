@@ -1,0 +1,56 @@
+[
+  {
+    "id": 2,
+    "status": "proposed",
+    "question": "Can a song belong to a generation more than to its creator?",
+    "rationale": "YouTube Joy Division metric 1732: 940 views, 2 comments, age 85h. Explore music and shared identity rather than repeating the band profile."
+  },
+  {
+    "id": 3,
+    "status": "proposed",
+    "question": "If you are right by luck, do you really know?",
+    "rationale": "TikTok Pritchard metric 99: 725 views. LinkedIn Popper metric 65: 2 shares. Explore a concrete lucky-guess case; reach alone is not engagement."
+  },
+  {
+    "id": 4,
+    "status": "proposed",
+    "question": "Can a job be well paid and still be pointless?",
+    "rationale": "Instagram labour metric 1441: 78 views and 1 save. Facebook Graeber metric 1366: 5 impressions, no actions. Test a practical tension about meaningful work."
+  },
+  {
+    "id": 5,
+    "status": "proposed",
+    "question": "Is it fair to judge someone for what they could not control?",
+    "rationale": "LinkedIn Run Lola Run metric 235: 27 impressions, 1 share. X A Separation metric 304: 85 impressions, 1 click, 1 comment. Explore everyday moral luck."
+  },
+  {
+    "id": 6,
+    "status": "proposed",
+    "question": "Can you understand another person's pain without having felt it?",
+    "rationale": "X Wittgenstein metric 1659: 31 impressions, 2 clicks, 1 share at age 133h. Same source on LinkedIn late evening had zero impressions. Explore empathy philosophically."
+  },
+  {
+    "id": 7,
+    "status": "proposed",
+    "question": "When does loyalty become complicity?",
+    "rationale": "YouTube Last King of Scotland metric 918: 190 views. Instagram metric 706: 14 views and 1 comment. Explore an everyday ethical dilemma without claims about real people."
+  },
+  {
+    "id": 8,
+    "status": "proposed",
+    "question": "Do we owe future generations a life as comfortable as our own?",
+    "rationale": "A deliberate editorial experiment extending comfort and freedom into intergenerational justice; no direct evidence establishes this exact question as a winner."
+  },
+  {
+    "id": 9,
+    "status": "proposed",
+    "question": "Can a small good deed matter when it changes nothing?",
+    "rationale": "X meat-ethics metric 1661: 15 impressions and 3 clicks at age 157h. Explore individual action and collective responsibility without repeating the eating-meat debate."
+  },
+  {
+    "id": 10,
+    "status": "proposed",
+    "question": "Can you change who you are without betraying yourself?",
+    "rationale": "Editorial experiment about identity and belonging. Human questions are an accessible entry point, but direct evidence for this angle is weak."
+  }
+]

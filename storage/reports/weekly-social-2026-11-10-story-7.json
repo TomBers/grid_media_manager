@@ -1,0 +1,25 @@
+{
+  "confidence": 0.72,
+  "cover_brief": "A person paused at an urban crossroads, backlit and isolated, suggesting a moral decision under pressure; room at top for title text.",
+  "cover_mode": "photo",
+  "cover_search_query": "solitary person standing at an urban crossroads, backlit late-afternoon light, shallow depth of field, muted colours, 공간",
+  "format_rationale": "The grid offers a focused conceptual argument with psychological and institutional dimensions that benefit from a readable long-form unpacking rather than a rushed short video.",
+  "hook": "When does loyalty cross into complicity?",
+  "rationale": "Start with the clear human question (key_node:1), explain how individuals mentally neutralise wrongdoing (key_node:4), then show how institutions diffuse responsibility (key_node:3). Close by surfacing the unresolved, high-leverage ethical question about whether moral agency survives under severe coercion (question:M8eXfgRbG7bWD0G-). This sequence gives readers one coherent insight and a direct curiosity gap that the full grid addresses.",
+  "recommended_format": "long_form",
+  "selected_keys": [
+    "key_node:1",
+    "key_node:4",
+    "key_node:3",
+    "question:M8eXfgRbG7bWD0G-"
+  ],
+  "text_visual_key": "question:M8eXfgRbG7bWD0G-",
+  "text_visual_role": "question",
+  "video_script": [
+    "Loyalty ties people to institutions; over time that loyalty can enable harm without feeling like wrongdoing.",
+    "Psychological disengagement and organisational compartmentalisation let individuals keep a loyal self‑image while sharing blame.",
+    "So: does moral agency survive severe institutional or economic coercion, or does coercion dissolve responsibility?"
+  ],
+  "visual_rationale": "Use a single, atmospheric photograph of a solitary figure at a crossroads to visualise moral choice and inward pressure—the image should provoke the central question without literalising institutions.",
+  "visual_style": "newsprint"
+}

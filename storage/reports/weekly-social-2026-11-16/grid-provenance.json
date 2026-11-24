@@ -1,0 +1,373 @@
+[
+  {
+    "question": "In Plato's Republic, does the philosopher‑king's rule preserve justice or betray individual freedom when 'the good' is known by a few?",
+    "review": {
+      "asset_ids": [
+        747,
+        748,
+        749
+      ],
+      "checks": "Reviewed against saved source grids; concrete book or thinker, qualified claims, complete captions, three paced video beats, and platform limits checked.",
+      "delivery_media_fingerprint": "82caf575f0a28ddef69b1abecd20875bb2cc6e09784d602704e5a28f5560c7d6",
+      "draft_ids": [
+        2571,
+        2569,
+        2570,
+        2574,
+        2575,
+        2576
+      ],
+      "editorial_review_method": "direct_source_review",
+      "editorial_reviewed_at": "2026-11-16T11:02:27.838836Z"
+    },
+    "plan_id": 145,
+    "exploration_id": 11,
+    "story": 1,
+    "grid": {
+      "id": "in-platos-republic-does-the-philosopherkings-r-daf344",
+      "tags": [],
+      "title": "In Plato's Republic, does the philosopher‑king's rule preserve justice or betray individual freedom when 'the good' is known by a few?",
+      "url": "https://rationalgrid.ai/g/in-platos-republic-does-the-philosopherkings-r-daf344",
+      "visibility": "private"
+    },
+    "public_verified": true,
+    "guided_status": "completed",
+    "guided_steps": 4,
+    "continuations": null
+  },
+  {
+    "question": "In Kant's Groundwork, can strict duty and universalisable maxims coexist with neighbourly compassion when moral law seems to forbid exceptions?",
+    "review": {
+      "asset_ids": [
+        750,
+        751,
+        752
+      ],
+      "checks": "Reviewed against saved source grids; concrete book or thinker, qualified claims, complete captions, three paced video beats, and platform limits checked.",
+      "delivery_media_fingerprint": "7272926100d4a4eced8c3f6da14b033fe699de017a6ecf2c65bdd27e074f6dee",
+      "draft_ids": [
+        2579,
+        2577,
+        2578,
+        2582,
+        2583,
+        2584
+      ],
+      "editorial_review_method": "direct_source_review",
+      "editorial_reviewed_at": "2026-11-16T11:02:27.882451Z"
+    },
+    "plan_id": 146,
+    "exploration_id": 12,
+    "story": 2,
+    "grid": {
+      "id": "in-kants-groundwork-can-strict-duty-and-universa-86d292",
+      "tags": [],
+      "title": "In Kant's Groundwork, can strict duty and universalisable maxims coexist with neighbourly compassion when moral law seems to forbid exceptio",
+      "url": "https://rationalgrid.ai/g/in-kants-groundwork-can-strict-duty-and-universa-86d292",
+      "visibility": "private"
+    },
+    "public_verified": true,
+    "guided_status": "completed",
+    "guided_steps": 4,
+    "continuations": null
+  },
+  {
+    "question": "Does Mill's On Liberty protect individuality at the cost of tolerating social harms when free expression entrenches inequality?",
+    "review": {
+      "asset_ids": [
+        753,
+        754,
+        755
+      ],
+      "checks": "Reviewed against saved source grids; concrete book or thinker, qualified claims, complete captions, three paced video beats, and platform limits checked.",
+      "delivery_media_fingerprint": "d607b2940bce2244d09fcc8fd622159210865ee6537b7304394e372040464cbd",
+      "draft_ids": [
+        2587,
+        2585,
+        2586,
+        2590,
+        2591,
+        2592
+      ],
+      "editorial_review_method": "direct_source_review",
+      "editorial_reviewed_at": "2026-11-16T11:02:27.905451Z"
+    },
+    "plan_id": 147,
+    "exploration_id": 13,
+    "story": 3,
+    "grid": {
+      "id": "does-mills-on-liberty-protect-individuality-at-th-ea6138",
+      "tags": [],
+      "title": "Does Mill's On Liberty protect individuality at the cost of tolerating social harms when free expression entrenches inequality?",
+      "url": "https://rationalgrid.ai/g/does-mills-on-liberty-protect-individuality-at-th-ea6138",
+      "visibility": "private"
+    },
+    "public_verified": true,
+    "guided_status": "completed",
+    "guided_steps": 4,
+    "continuations": null
+  },
+  {
+    "question": "In Thus Spoke Zarathustra, can Nietzsche teach self-overcoming without turning his followers into another herd?",
+    "review": {
+      "asset_ids": [
+        756,
+        757,
+        758
+      ],
+      "checks": "Reviewed against saved source grids; concrete book or thinker, qualified claims, complete captions, three paced video beats, and platform limits checked.",
+      "delivery_media_fingerprint": "cd037600c52ca69109dccedb4e855f37d916d2ef2651141f267d28ee9d983c92",
+      "draft_ids": [
+        2595,
+        2593,
+        2594,
+        2598,
+        2599,
+        2600
+      ],
+      "editorial_review_method": "direct_source_review",
+      "editorial_reviewed_at": "2026-11-16T11:02:27.928622Z"
+    },
+    "plan_id": 148,
+    "exploration_id": 14,
+    "story": 4,
+    "grid": {
+      "id": "in-thus-spoke-zarathustra-can-nietzsche-teach-sel-8005cd",
+      "tags": [],
+      "title": "In Thus Spoke Zarathustra, can Nietzsche teach self-overcoming without turning his followers into another herd?",
+      "url": "https://rationalgrid.ai/g/in-thus-spoke-zarathustra-can-nietzsche-teach-sel-8005cd",
+      "visibility": "private"
+    },
+    "public_verified": true,
+    "guided_status": "completed",
+    "guided_steps": 4,
+    "continuations": null
+  },
+  {
+    "question": "In Crime and Punishment, why does Raskolnikov’s theory of extraordinary people collapse when he tries to live by it?",
+    "review": {
+      "asset_ids": [
+        759,
+        760,
+        761
+      ],
+      "checks": "Reviewed against saved source grids; concrete book or thinker, qualified claims, complete captions, three paced video beats, and platform limits checked.",
+      "delivery_media_fingerprint": "775ece56f7c34a7b98d5d5df693309f1338d97b015fcc24bab6ad398f97a94c3",
+      "draft_ids": [
+        2603,
+        2601,
+        2602,
+        2606,
+        2607,
+        2608
+      ],
+      "editorial_review_method": "direct_source_review",
+      "editorial_reviewed_at": "2026-11-16T11:02:28.422054Z"
+    },
+    "plan_id": 149,
+    "exploration_id": 15,
+    "story": 5,
+    "grid": {
+      "id": "in-crime-and-punishment-why-does-raskolnikovs-th-218a14",
+      "tags": [],
+      "title": "In Crime and Punishment, why does Raskolnikov’s theory of extraordinary people collapse when he tries to live by it?",
+      "url": "https://rationalgrid.ai/g/in-crime-and-punishment-why-does-raskolnikovs-th-218a14",
+      "visibility": "private"
+    },
+    "public_verified": true,
+    "guided_status": "completed",
+    "guided_steps": 4,
+    "continuations": null
+  },
+  {
+    "question": "In The Second Sex, how can Beauvoir call for freedom when society shapes the person who chooses?",
+    "review": {
+      "asset_ids": [
+        762,
+        763,
+        764
+      ],
+      "checks": "Reviewed against saved source grids; concrete book or thinker, qualified claims, complete captions, three paced video beats, and platform limits checked.",
+      "delivery_media_fingerprint": "1434d83d65c5b9297300336a387bb8601cc1e4dcd7dc21e6a3a53b9bcb314d51",
+      "draft_ids": [
+        2611,
+        2609,
+        2610,
+        2614,
+        2615,
+        2616
+      ],
+      "editorial_review_method": "direct_source_review",
+      "editorial_reviewed_at": "2026-11-16T11:02:28.840231Z"
+    },
+    "plan_id": 150,
+    "exploration_id": 16,
+    "story": 6,
+    "grid": {
+      "id": "in-the-second-sex-how-can-beauvoir-call-for-freed-2187d9",
+      "tags": [],
+      "title": "In The Second Sex, how can Beauvoir call for freedom when society shapes the person who chooses?",
+      "url": "https://rationalgrid.ai/g/in-the-second-sex-how-can-beauvoir-call-for-freed-2187d9",
+      "visibility": "public"
+    },
+    "public_verified": true,
+    "guided_status": "failed",
+    "guided_steps": 2,
+    "continuations": {
+      "deepening": {
+        "status": "completed",
+        "request_id": "f0cf8e68-9946-4fad-98e1-e01a0c5b70f7",
+        "node_id": "4"
+      },
+      "synthesis": {
+        "status": "completed",
+        "request_id": "83fb7768-4661-4903-96ee-8f944b936b0d",
+        "node_id": "5"
+      }
+    }
+  },
+  {
+    "question": "In Eichmann in Jerusalem, why does Arendt’s account of thoughtlessness leave personal guilt intact?",
+    "review": {
+      "asset_ids": [
+        765,
+        766,
+        767
+      ],
+      "checks": "Reviewed against saved source grids; concrete book or thinker, qualified claims, complete captions, three paced video beats, and platform limits checked.",
+      "delivery_media_fingerprint": "1106477e03f0d9c3902102252163ecedf2a51c2d03fb2a27c1fceab8608fb02d",
+      "draft_ids": [
+        2619,
+        2617,
+        2618,
+        2622,
+        2623,
+        2624
+      ],
+      "editorial_review_method": "direct_source_review",
+      "editorial_reviewed_at": "2026-11-16T11:02:29.226959Z"
+    },
+    "plan_id": 151,
+    "exploration_id": 17,
+    "story": 7,
+    "grid": {
+      "id": "in-eichmann-in-jerusalem-why-does-arendts-accoun-8e30d5",
+      "tags": [],
+      "title": "In Eichmann in Jerusalem, why does Arendt’s account of thoughtlessness leave personal guilt intact?",
+      "url": "https://rationalgrid.ai/g/in-eichmann-in-jerusalem-why-does-arendts-accoun-8e30d5",
+      "visibility": "private"
+    },
+    "public_verified": true,
+    "guided_status": "completed",
+    "guided_steps": 4,
+    "continuations": null
+  },
+  {
+    "question": "In Marx’s Capital, why can a machine that saves labour make people work harder or longer?",
+    "review": {
+      "asset_ids": [
+        768,
+        769,
+        770
+      ],
+      "checks": "Reviewed against saved source grids; concrete book or thinker, qualified claims, complete captions, three paced video beats, and platform limits checked.",
+      "delivery_media_fingerprint": "ce00e2d1b9f8eeb4568c327c9cb7055765e2bdef49a6a9b92b32ecf555b6200e",
+      "draft_ids": [
+        2627,
+        2625,
+        2626,
+        2630,
+        2631,
+        2632
+      ],
+      "editorial_review_method": "direct_source_review",
+      "editorial_reviewed_at": "2026-11-16T11:02:29.672062Z"
+    },
+    "plan_id": 152,
+    "exploration_id": 18,
+    "story": 8,
+    "grid": {
+      "id": "in-marxs-capital-why-can-a-machine-that-saves-la-0922a7",
+      "tags": [],
+      "title": "In Marx’s Capital, why can a machine that saves labour make people work harder or longer?",
+      "url": "https://rationalgrid.ai/g/in-marxs-capital-why-can-a-machine-that-saves-la-0922a7",
+      "visibility": "private"
+    },
+    "public_verified": true,
+    "guided_status": "completed",
+    "guided_steps": 4,
+    "continuations": null
+  },
+  {
+    "question": "In Mrs Dalloway, does Clarissa’s party overcome loneliness or hide it behind perfect manners?",
+    "review": {
+      "asset_ids": [
+        771,
+        772,
+        773
+      ],
+      "checks": "Reviewed against saved source grids; concrete book or thinker, qualified claims, complete captions, three paced video beats, and platform limits checked.",
+      "delivery_media_fingerprint": "b97e5129e9fb56e3d02e71f7c34fe1632813fe91fa7509a1576e1a84ad847b9b",
+      "draft_ids": [
+        2635,
+        2633,
+        2634,
+        2638,
+        2639,
+        2640
+      ],
+      "editorial_review_method": "direct_source_review",
+      "editorial_reviewed_at": "2026-11-16T11:02:30.175075Z"
+    },
+    "plan_id": 153,
+    "exploration_id": 19,
+    "story": 9,
+    "grid": {
+      "id": "in-mrs-dalloway-does-clarissas-party-overcome-lo-bc5551",
+      "tags": [],
+      "title": "In Mrs Dalloway, does Clarissa’s party overcome loneliness or hide it behind perfect manners?",
+      "url": "https://rationalgrid.ai/g/in-mrs-dalloway-does-clarissas-party-overcome-lo-bc5551",
+      "visibility": "private"
+    },
+    "public_verified": true,
+    "guided_status": "completed",
+    "guided_steps": 4,
+    "continuations": null
+  },
+  {
+    "question": "In Being and Nothingness, why is Sartre’s waiter in bad faith if he really is a waiter?",
+    "review": {
+      "asset_ids": [
+        774,
+        775,
+        776
+      ],
+      "checks": "Reviewed against saved source grids; concrete book or thinker, qualified claims, complete captions, three paced video beats, and platform limits checked.",
+      "delivery_media_fingerprint": "93fd2cf5d7e7112848649188ba205619ea409194c4bfa709ee67da25487cff57",
+      "draft_ids": [
+        2643,
+        2641,
+        2642,
+        2646,
+        2647,
+        2648
+      ],
+      "editorial_review_method": "direct_source_review",
+      "editorial_reviewed_at": "2026-11-16T11:02:30.715089Z"
+    },
+    "plan_id": 154,
+    "exploration_id": 20,
+    "story": 10,
+    "grid": {
+      "id": "in-being-and-nothingness-why-is-sartres-waiter-i-afdd57",
+      "tags": [],
+      "title": "In Being and Nothingness, why is Sartre’s waiter in bad faith if he really is a waiter?",
+      "url": "https://rationalgrid.ai/g/in-being-and-nothingness-why-is-sartres-waiter-i-afdd57",
+      "visibility": "private"
+    },
+    "public_verified": true,
+    "guided_status": "completed",
+    "guided_steps": 4,
+    "continuations": null
+  }
+]

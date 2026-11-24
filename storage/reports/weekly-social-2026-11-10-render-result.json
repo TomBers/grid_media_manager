@@ -1,0 +1,856 @@
+{
+  "status": "complete",
+  "batch_id": 32,
+  "plans": [
+    {
+      "status": "complete",
+      "errors": [],
+      "topic": "Can a comfortable life make us less free?",
+      "plan_id": 135,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              1,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 1,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/139/718/1-d8d5a9172a84122d86453b55.png",
+                "sha256": "d8d5a9172a84122d86453b552f216ee60769951475644a0d236c2d7523dee2c2",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/139/718/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 718
+        },
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              2,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 2,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/139/719/2-34fc1bf6119d5cdd0b14e182.png",
+                "sha256": "34fc1bf6119d5cdd0b14e182e82a45995a4c92835a025fac7e63e3932d235323",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/139/719/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 719
+        },
+        {
+          "error": null,
+          "output": {
+            "path": "/var/folders/w3/dq5zbldn5vjfgsr0_f6h23rc0000gn/T/grid_media_manager/client_videos/client-TSVPT_9TDCUFNkwYdOnGRxxBsKLkAEhMC7G8GWSOtsI.mp4",
+            "output_type": "video",
+            "mime_type": "video/mp4",
+            "indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 721
+        }
+      ]
+    },
+    {
+      "status": "complete",
+      "errors": [],
+      "topic": "Can a song belong to a generation more than to its creator?",
+      "plan_id": 136,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              1,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 1,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/140/720/1-acd69ee4a402d971c38c09f4.png",
+                "sha256": "acd69ee4a402d971c38c09f4332c53837c7bf64c6319c036ec77693cb1b7fe43",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/140/720/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 720
+        },
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              2,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 2,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/140/722/2-2975613f6708a399f2d9f8dc.png",
+                "sha256": "2975613f6708a399f2d9f8dc4ec47de98b5698889258c530f5bb902ddc3ba165",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/140/722/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 722
+        },
+        {
+          "error": null,
+          "output": {
+            "path": "/var/folders/w3/dq5zbldn5vjfgsr0_f6h23rc0000gn/T/grid_media_manager/client_videos/client-dK-gVnq_EQU-gqX_xvhhaDDx3z9CTFoOIRMKgQ4SKzU.mp4",
+            "output_type": "video",
+            "mime_type": "video/mp4",
+            "indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 723
+        }
+      ]
+    },
+    {
+      "status": "complete",
+      "errors": [],
+      "topic": "If you are right by luck, do you really know?",
+      "plan_id": 137,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              1,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 1,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/141/725/1-c29637b11c16a6065fa305a4.png",
+                "sha256": "c29637b11c16a6065fa305a4cd8c357976e168c68d90e7e56e607cc3a8cd67ef",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/141/725/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 725
+        },
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              2,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 2,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/141/728/2-338a431f0a853e6712249df4.png",
+                "sha256": "338a431f0a853e6712249df44506ef1f59a2fbb588c382a1d4470ce6d5189f38",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/141/728/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 728
+        },
+        {
+          "error": null,
+          "output": {
+            "path": "/var/folders/w3/dq5zbldn5vjfgsr0_f6h23rc0000gn/T/grid_media_manager/client_videos/client-xeCimsRogm1Iwy6Lhtrasx6UQN87lc_c31pDxKY-2l0.mp4",
+            "output_type": "video",
+            "mime_type": "video/mp4",
+            "indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 729
+        }
+      ]
+    },
+    {
+      "status": "complete",
+      "errors": [],
+      "topic": "Can a job be well paid and still be pointless?",
+      "plan_id": 138,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              1,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 1,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/142/724/1-d4780ab4e8348d3686b71885.png",
+                "sha256": "d4780ab4e8348d3686b71885873f846c9c28ba4211cf0c7b90ad6ce24bcfce61",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/142/724/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 724
+        },
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              2,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 2,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/142/726/2-3374d0ec136450e9d83074a8.png",
+                "sha256": "3374d0ec136450e9d83074a87a182bcaa376437bd44b099c6835ef216f1937e3",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/142/726/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 726
+        },
+        {
+          "error": null,
+          "output": {
+            "path": "/var/folders/w3/dq5zbldn5vjfgsr0_f6h23rc0000gn/T/grid_media_manager/client_videos/client-m94np10lbxQkTGczRPky4I2MmP0ojS8JiN6VO7sVyTA.mp4",
+            "output_type": "video",
+            "mime_type": "video/mp4",
+            "indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 727
+        }
+      ]
+    },
+    {
+      "status": "complete",
+      "errors": [],
+      "topic": "Is it fair to judge someone for what they could not control?",
+      "plan_id": 139,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              1,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 1,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/143/730/1-d5f06087ad9a83aef57400ce.png",
+                "sha256": "d5f06087ad9a83aef57400ce760893aee20313a68634d812506cecf2d320ab8d",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/143/730/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 730
+        },
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              2,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 2,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/143/731/2-b78ce84eda584c7531bfaf79.png",
+                "sha256": "b78ce84eda584c7531bfaf79c708abb271599a6ad90d78f89b71b02295b6abaf",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/143/731/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 731
+        },
+        {
+          "error": null,
+          "output": {
+            "path": "/var/folders/w3/dq5zbldn5vjfgsr0_f6h23rc0000gn/T/grid_media_manager/client_videos/client-XinkXqJE5FO88aY5DxxnuhL6aKh3QC5wjyfoE6NdIiA.mp4",
+            "output_type": "video",
+            "mime_type": "video/mp4",
+            "indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 732
+        }
+      ]
+    },
+    {
+      "status": "complete",
+      "errors": [],
+      "topic": "Can you understand another person's pain without having felt it?",
+      "plan_id": 141,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              1,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 1,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/144/697/1-b4d93ff8e4bcf9f5e54cda29.png",
+                "sha256": "b4d93ff8e4bcf9f5e54cda2948f84d8d9636efd1c050c9a5784f1356176a6667",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/144/697/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 697
+        },
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              2,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 2,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/144/733/2-94d88ddf8d9195344893ae99.png",
+                "sha256": "94d88ddf8d9195344893ae994b0cb4b9547e245ce3d7727435c2bab59b98d29e",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/144/733/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 733
+        },
+        {
+          "error": null,
+          "output": {
+            "path": "/var/folders/w3/dq5zbldn5vjfgsr0_f6h23rc0000gn/T/grid_media_manager/client_videos/client-bXN2BF_Yzz9VdzJt1ajxhmwHV8s3rZQoUTFInLsi2vs.mp4",
+            "output_type": "video",
+            "mime_type": "video/mp4",
+            "indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 734
+        }
+      ]
+    },
+    {
+      "status": "complete",
+      "errors": [],
+      "topic": "When does loyalty become complicity?",
+      "plan_id": 140,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              1,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 1,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/145/735/1-8a1988e03bf59295f6a23740.png",
+                "sha256": "8a1988e03bf59295f6a23740c118180bcd51c6fa2efbc9ce1e6d3d41f7ad2b13",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/145/735/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 735
+        },
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              2,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 2,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/145/736/2-6a94607986b9a4f77a600d88.png",
+                "sha256": "6a94607986b9a4f77a600d88a0f2e4400dba755e81410acfc82901ec1bcb42d9",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/145/736/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 736
+        },
+        {
+          "error": null,
+          "output": {
+            "path": "/var/folders/w3/dq5zbldn5vjfgsr0_f6h23rc0000gn/T/grid_media_manager/client_videos/client-apGsJ5tT7pfS9VgQW5SLgPwoH90IKJxutrVl7U-C4B4.mp4",
+            "output_type": "video",
+            "mime_type": "video/mp4",
+            "indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 737
+        }
+      ]
+    },
+    {
+      "status": "complete",
+      "errors": [],
+      "topic": "Do we owe future generations a life as comfortable as our own?",
+      "plan_id": 143,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              1,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 1,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/146/738/1-4818f7ee8255df4e30b940bd.png",
+                "sha256": "4818f7ee8255df4e30b940bddd511c40f127397730ac92b85b079ee89dfbbeca",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/146/738/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 738
+        },
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              2,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 2,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/146/739/2-3920f15c2760b624a18f7100.png",
+                "sha256": "3920f15c2760b624a18f710002727d833e3b7139901b9f87731a0665b85b0f75",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/146/739/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 739
+        },
+        {
+          "error": null,
+          "output": {
+            "path": "/var/folders/w3/dq5zbldn5vjfgsr0_f6h23rc0000gn/T/grid_media_manager/client_videos/client-gikYTBGS3-HLSuGSoF3TCsJhTcF6dCpt8mL-9QqFnIY.mp4",
+            "output_type": "video",
+            "mime_type": "video/mp4",
+            "indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 740
+        }
+      ]
+    },
+    {
+      "status": "complete",
+      "errors": [],
+      "topic": "Can a small good deed matter when it changes nothing?",
+      "plan_id": 142,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              1,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 1,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/147/741/1-8556b572b808dedc8ea41326.png",
+                "sha256": "8556b572b808dedc8ea413260ac3cfdbf10b2f563dda0499533712fed229e846",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/147/741/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 741
+        },
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              2,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 2,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/147/742/2-656e62dc3082e5c5bafcf142.png",
+                "sha256": "656e62dc3082e5c5bafcf142571cf4089b0409aaa87708c6b5d163fffee1efb6",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/147/742/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 742
+        },
+        {
+          "error": null,
+          "output": {
+            "path": "/var/folders/w3/dq5zbldn5vjfgsr0_f6h23rc0000gn/T/grid_media_manager/client_videos/client-EJGnJs3mV_HKN58aYJtpLHUJgn_85tCKou9Y3AJBKGQ.mp4",
+            "output_type": "video",
+            "mime_type": "video/mp4",
+            "indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 743
+        }
+      ]
+    },
+    {
+      "status": "complete",
+      "errors": [],
+      "topic": "Can you change who you are without betraying yourself?",
+      "plan_id": 144,
+      "assets": [
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              1,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 1,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/148/744/1-b68aa12354f6585d874dc932.png",
+                "sha256": "b68aa12354f6585d874dc932345458a0ad4f1920dbe07685e41a38aea78109d7",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/148/744/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "long_form_post",
+          "mime_type": "image/png",
+          "asset_id": 744
+        },
+        {
+          "error": null,
+          "output": {
+            "output_type": "images",
+            "mime_type": "image/png",
+            "indexes": [
+              2,
+              3
+            ],
+            "artifacts": [
+              {
+                "index": 2,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/148/745/2-eeec19d20b85040b2850f394.png",
+                "sha256": "eeec19d20b85040b2850f394991aee32ed11729dc38cd0c5a29fee5645353b46",
+                "mime_type": "image/png"
+              },
+              {
+                "index": 3,
+                "path": "/Users/tomberman/Development/grid_media_manager/storage/artifacts/148/745/3-f47e14e689e8ccdfe5f18f17.png",
+                "sha256": "f47e14e689e8ccdfe5f18f17d1d19c9c3f1d0fa1a0c8253ed1c635e10053fa26",
+                "mime_type": "image/png"
+              }
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel",
+          "mime_type": "image/png",
+          "asset_id": 745
+        },
+        {
+          "error": null,
+          "output": {
+            "path": "/var/folders/w3/dq5zbldn5vjfgsr0_f6h23rc0000gn/T/grid_media_manager/client_videos/client-Mlg4UDDONCTjoycB35Lzxht5wpQJmMh2kyBxlXcEUL0.mp4",
+            "output_type": "video",
+            "mime_type": "video/mp4",
+            "indexes": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "status": "complete",
+          "kind": "curated_carousel_video",
+          "mime_type": "video/mp4",
+          "asset_id": 746
+        }
+      ]
+    }
+  ]
+}

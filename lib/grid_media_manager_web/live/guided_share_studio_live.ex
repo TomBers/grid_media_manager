@@ -2905,7 +2905,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp render_return_ready?(_socket), do: false
 
   defp render_return_to(path) when is_binary(path) do
-    if Regex.match?(~r{\A/automation/\d+/render\z}, path), do: path
+    if Regex.match?(~r{\A/(?:automation/\d+/render|weekly/\d+/render)\z}, path), do: path
   end
 
   defp render_return_to(_path), do: nil

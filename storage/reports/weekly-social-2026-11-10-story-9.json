@@ -1,0 +1,25 @@
+{
+  "confidence": 0.66,
+  "cover_brief": "A focused cover for readers: a human-scale moment suggesting moral choice and quiet consequence.",
+  "cover_mode": "photo",
+  "cover_search_query": "solitary person offering a small gift to another on a bench, soft afternoon light, shallow depth of field, candid human,",
+  "format_rationale": "The grid develops a short philosophical argument rather than a multi-part narrative; long_form lets us preserve the key claim, its important limitation, and a concrete follow-up question for readers to explore.",
+  "hook": "Can a tiny kindness still matter if nothing outwardly changes?",
+  "rationale": "Start with the human question, present the reconciliation that rescues small deeds from strict consequentialism, then show the limit where expressive acts decouple from outcomes and create hazards. Finish by inviting institutional or personal arbitration of expressive value against practical utility.",
+  "recommended_format": "long_form",
+  "selected_keys": [
+    "key_node:1",
+    "key_node:2",
+    "key_node:4",
+    "question:0spBPI9Ikf9ZF0D8"
+  ],
+  "text_visual_key": "key_node:4",
+  "text_visual_role": "evidence",
+  "video_script": [
+    "A small good deed can matter even if it yields no measurable, large-scale consequences; its value needn't be only outcome-based.",
+    "But treating expressive value as wholly separate from consequences risks a moral hazard: it lets symbolic acts replace obligations with real effects.",
+    "So how should institutions or personal ethics choose between high expressive value and maximum practical utility in real decisions?"
+  ],
+  "visual_rationale": "Use a photograph of two people in a modest, human exchange to signal intimacy and moral choice. The selected quote (limits of expressive detachment) reads clearly on neutral negative space and promises the grid's deeper trade-off analysis.",
+  "visual_style": "newsprint"
+}
