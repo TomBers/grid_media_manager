@@ -3,7 +3,7 @@ defmodule GridMediaManager.RationalGrid.MCP do
   alias GridMediaManager.RationalGrid.{Accounts, HTTP}
 
   @write_tools ~w(explore_question create_grid add_grid_idea apply_grid_action)
-  @read_tools ~w(get_operation read_grid list_my_grids search_public_grids)
+  @read_tools ~w(get_operation read_grid read_grid_node export_grid list_my_grids search_public_grids)
 
   def call(tool, arguments) when tool in @write_tools do
     case Ecto.UUID.cast(arguments["request_id"]) do

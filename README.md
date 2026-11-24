@@ -168,4 +168,5 @@ historical metric snapshots are a separate future improvement.
 
 Apply migrations with `mix ecto.migrate` before starting the worker. Tests disable it with
 `:weekly_worker_enabled`. No new posts are prepared or scheduled merely by opening the
-Weekly desk. MCP server proposals are in `docs/rationalgrid-mcp-improvements.md`.
+Weekly desk. Proposed MCP and Studio improvements are specified in
+[`docs/rationalgrid-mcp-editorial-spec.md`](docs/rationalgrid-mcp-editorial-spec.md).

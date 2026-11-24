@@ -1,5 +1,10 @@
 # RationalGrid MCP: fewer client interventions
 
+> Superseded by the [adaptive research and engaging publishing specification](rationalgrid-mcp-editorial-spec.md),
+> updated 16 November 2026. The notes below retain the initial 10 November proposal;
+> several suggested capabilities now exist in the server. Use the newer specification
+> for the current baseline, priorities and acceptance criteria.
+
 These are proposed server changes, not features the media manager assumes already exist.
 They are based on the local `dialectic/mcp/src/server.ts` and
 `dialectic/lib/dialectic/integrations/explorations.ex`, and the 10 November publishing run.
