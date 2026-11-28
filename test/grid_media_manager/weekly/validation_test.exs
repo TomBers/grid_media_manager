@@ -33,7 +33,7 @@ defmodule GridMediaManager.Weekly.ValidationTest do
       }
     }
 
-    assert Evidence.windows(data)["x"] == ["22:00", "23:00"]
+    assert Evidence.windows(data)["x"] == ["22:00"]
     assert Evidence.windows(%{})["tiktok"] == Evidence.defaults()["tiktok"]
   end
 
@@ -47,11 +47,7 @@ defmodule GridMediaManager.Weekly.ValidationTest do
     slots =
       Schedule.slots("x", 10, [%{due_at: "2026-11-11T18:50:00Z"}], run, ~U[2026-11-10 12:00:00Z])
 
-    assert Enum.map(slots, & &1.scheduled_for) == [
-             ~U[2026-11-11 23:00:00Z],
-             ~U[2026-11-12 19:00:00Z],
-             ~U[2026-11-12 23:00:00Z]
-           ]
+    assert Enum.map(slots, & &1.scheduled_for) == [~U[2026-11-12 19:00:00Z]]
   end
 
   test "malformed model output produces blocking issues rather than crashing" do

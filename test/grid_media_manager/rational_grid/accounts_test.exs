@@ -34,6 +34,9 @@ defmodule GridMediaManager.RationalGrid.AccountsTest do
     params = URI.decode_query(URI.parse(url).query)
     assert params["code_challenge_method"] == "S256"
 
+    assert MapSet.new(String.split(params["scope"])) ==
+             MapSet.new(~w(grids:create grids:read grids:append grids:visibility))
+
     callback = %{
       "code" => "code-1",
       "state" => params["state"],
@@ -49,6 +52,18 @@ defmodule GridMediaManager.RationalGrid.AccountsTest do
     assert {:ok, conn} = Accounts.finish_link(pending, callback)
     refute String.contains?(conn.credentials, "secret-access")
     assert {:ok, "secret-access"} = Accounts.access_token()
+  end
+
+  test "the connected studio can request visibility permission without disconnecting" do
+    connected()
+
+    assert {:ok, url, _pending} =
+             Accounts.begin_link("http://localhost:4001/rationalgrid/callback")
+
+    params = URI.decode_query(URI.parse(url).query)
+    assert params["client_id"] == "client-1"
+    assert "grids:visibility" in String.split(params["scope"])
+    assert {:ok, "access-1"} = Accounts.access_token()
   end
 
   test "renews once, stores both rotated tokens, and reuses the new access token" do

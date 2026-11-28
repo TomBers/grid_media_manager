@@ -155,7 +155,7 @@ defmodule GridMediaManagerWeb.WeeklyLive do
             <section class="rounded-3xl border border-indigo-500/20 bg-indigo-500/5 p-6 sm:p-8">
               <h2 class="text-xl font-semibold">Prepare this week’s posts</h2>
               <p class="mt-3 text-sm leading-6 text-base-content/65">
-                Checks live vacancies first. Creates up to ten distinct stories, enough to fill available slots across all six platforms, at up to two daily posts. Full queues require no new generation.
+                Checks live vacancies first and prepares enough stories to fill open dates across all six channels. Each channel gets one post per day.
               </p>
               <.form for={@form} id="weekly-run-form" phx-submit="prepare" class="mt-6 space-y-4">
                 <.input
@@ -244,7 +244,7 @@ defmodule GridMediaManagerWeb.WeeklyLive do
               id="weekly-publication-help"
               class="mt-4 text-sm text-base-content/65"
             >
-              Generation and media are finished. Publish the grids linked below in RationalGrid, then recheck access. The MCP server does not yet expose publication.
+              Generation and media are finished. Publish the grids linked below in RationalGrid, then recheck public access before scheduling.
             </p>
             <p :if={@run.status == "rendering"} class="mt-4 text-sm text-base-content/65">
               Keep this browser open during canvas rendering. Saved frames are skipped when you return.

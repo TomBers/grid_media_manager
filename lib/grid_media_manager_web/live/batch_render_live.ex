@@ -182,7 +182,7 @@ defmodule GridMediaManagerWeb.BatchRenderLive do
                 </button>
               </.form>
               <p class="mt-3 text-xs leading-5 text-base-content/60">
-                Starts no earlier than tomorrow, using two daily test windows: UK local time and US Eastern time, including weekends. Existing queued posts occupy the nearest window and are preserved. Packages need Editor approval or approval of all six drafts, plus pacing checks. See Results to assess what works.
+                Fills open dates starting tomorrow, including weekends, with one post per channel each day. Packages need Editor approval or approval of all six drafts, plus pacing checks. See Results to assess what works.
               </p>
             </div>
 

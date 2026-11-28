@@ -91,16 +91,16 @@ defmodule GridMediaManager.Social.PerformanceTest do
              "https://example.com/source"
   end
 
-  test "queue slots fill both markets daily, preserve occupied windows and respect lead time" do
+  test "queue slots skip occupied dates and never assign more than one post a day" do
     now = ~U[2026-10-13 09:00:00Z]
     queued = [%{due_at: "2026-10-14T08:30:00Z"}]
     slots = PostingSchedule.market_slots("x", 8, queued, now: now)
     assert hd(slots) == %{market: :us, scheduled_for: ~U[2026-10-13 13:00:00Z]}
-    assert Enum.at(slots, 1) == %{market: :us, scheduled_for: ~U[2026-10-14 13:00:00Z]}
+    assert Enum.at(slots, 1) == %{market: :uk, scheduled_for: ~U[2026-10-15 08:00:00Z]}
     assert Enum.any?(slots, &(Date.day_of_week(DateTime.to_date(&1.scheduled_for)) == 6))
 
     assert Enum.all?(Enum.frequencies_by(slots, &DateTime.to_date(&1.scheduled_for)), fn {_, n} ->
-             n <= 2
+             n == 1
            end)
 
     assert PostingSchedule.slots("x", 0, queued, now: now) == []
@@ -120,9 +120,15 @@ defmodule GridMediaManager.Social.PerformanceTest do
           {~D[2026-10-25], 9, 13},
           {~D[2026-11-01], 9, 14}
         ] do
-      [uk, us] = PostingSchedule.slots("x", 2, [], now: DateTime.new!(date, ~T[00:00:00]))
-      assert uk.hour == uk_hour
-      assert us.hour == us_hour
+      for {market, hour} <- [uk: uk_hour, us: us_hour] do
+        opts = [now: DateTime.new!(date, ~T[00:00:00])]
+
+        assert [%{scheduled_for: dt}] =
+                 PostingSchedule.assign_jobs("x", [%{market: market}], [], opts)
+
+        assert DateTime.to_date(dt) == date
+        assert dt.hour == hour
+      end
     end
   end
 
@@ -137,7 +143,11 @@ defmodule GridMediaManager.Social.PerformanceTest do
     queued = [%{due_at: "2026-10-14T08:00:00Z"}]
     opts = [now: ~U[2026-10-13 00:00:00Z], start_date: ~D[2026-10-14]]
     assigned = PostingSchedule.assign_jobs("x", jobs, queued, opts)
-    assert Enum.map(assigned, & &1.id) == [2, 1, 4, 3]
+    assert Enum.map(assigned, & &1.id) == [1, 2, 3, 4]
+
+    assert Enum.map(assigned, &DateTime.to_date(&1.scheduled_for)) ==
+             Enum.to_list(Date.range(~D[2026-10-15], ~D[2026-10-18]))
+
     first = hd(assigned)
     remaining = Enum.reject(jobs, &(&1.id == first.id))
 

@@ -3,12 +3,12 @@ defmodule GridMediaManager.Weekly.Evidence do
   alias GridMediaManager.Social.{Performance, Platforms}
 
   @defaults %{
-    "x" => ["19:00", "23:00"],
-    "linkedin" => ["15:30", "17:30"],
-    "facebook" => ["09:00", "16:30"],
-    "instagram" => ["15:30", "22:00"],
-    "tiktok" => ["18:00", "21:30"],
-    "youtube" => ["16:00", "23:00"]
+    "x" => ["19:00"],
+    "linkedin" => ["15:30"],
+    "facebook" => ["09:00"],
+    "instagram" => ["15:30"],
+    "tiktok" => ["18:00"],
+    "youtube" => ["16:00"]
   }
   def defaults, do: @defaults
 
@@ -39,29 +39,28 @@ defmodule GridMediaManager.Weekly.Evidence do
     end)
   end
 
-  # Keep two windows as an experiment. Only adjust the first to an observed window
-  # when it has at least five posts and actual engagement; never call it an optimum.
+  # Prefer an observed window only when it has at least five posts and actual engagement.
   def windows(evidence) do
-    Map.new(@defaults, fn {platform, [first, second]} ->
+    Map.new(@defaults, fn {platform, [default]} ->
       data = evidence[platform] || %{}
       bins = data["time_bins"] || data[:time_bins] || []
 
       eligible =
         Enum.filter(bins, fn b -> field(b, :sample_size) >= 5 and field(b, :actions) > 0 end)
 
-      first =
+      time =
         case Enum.max_by(eligible, fn b -> field(b, :actions) / field(b, :sample_size) end, fn ->
                nil
              end) do
           nil ->
-            first
+            default
 
           best ->
             hour = field(best, :utc_start_hour) + 1
             String.pad_leading(to_string(hour), 2, "0") <> ":00"
         end
 
-      {platform, Enum.sort(if(first == second, do: @defaults[platform], else: [first, second]))}
+      {platform, [time]}
     end)
   end
 

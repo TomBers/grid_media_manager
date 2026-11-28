@@ -5,7 +5,7 @@ defmodule GridMediaManager.RationalGrid.Accounts do
   alias GridMediaManager.RationalGrid.{Connection, HTTP}
   alias GridMediaManagerWeb.Endpoint
 
-  @scopes "grids:create grids:read grids:append"
+  @scopes "grids:create grids:read grids:append grids:visibility"
   def connection, do: Repo.get_by(Connection, key: "studio")
 
   def begin_link(callback) do

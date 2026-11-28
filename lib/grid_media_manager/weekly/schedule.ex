@@ -1,48 +1,25 @@
 defmodule GridMediaManager.Weekly.Schedule do
-  @moduledoc "Persists bounded UTC test slots while preserving the live queue."
+  @moduledoc "Picks one UTC slot per free day while preserving the live queue."
   def slots(platform, count, queued, run, now \\ DateTime.utc_now()) do
-    windows = Map.fetch!(run.windows, platform)
+    [time | _] = Map.fetch!(run.windows, platform)
+    {:ok, time} = Time.from_iso8601(time <> ":00")
 
     occupied =
       queued
       |> Enum.flat_map(fn post ->
         case DateTime.from_iso8601(post.due_at || "") do
-          {:ok, dt, _} -> [dt]
+          {:ok, dt, _} -> [DateTime.to_date(dt)]
           _ -> []
         end
       end)
-      |> Enum.group_by(&DateTime.to_date/1)
+      |> MapSet.new()
 
     Date.range(run.start_date, run.end_date)
-    |> Enum.flat_map(fn date ->
-      day =
-        windows
-        |> Enum.with_index()
-        |> Enum.map(fn {time, i} ->
-          {:ok, t} = Time.from_iso8601(time <> ":00")
-
-          %{
-            scheduled_for: DateTime.new!(date, t),
-            window: if(i == 0, do: "first", else: "second")
-          }
-        end)
-
-      day =
-        case Map.get(occupied, date, []) do
-          [] ->
-            day
-
-          [taken] ->
-            nearest = Enum.min_by(day, &abs(DateTime.diff(&1.scheduled_for, taken)))
-            Enum.reject(day, &(&1.window == nearest.window))
-
-          _ ->
-            []
-        end
-
-      Enum.filter(day, &(DateTime.compare(&1.scheduled_for, DateTime.add(now, 3600)) == :gt))
-    end)
+    |> Enum.reject(&MapSet.member?(occupied, &1))
+    |> Enum.map(&DateTime.new!(&1, time))
+    |> Enum.filter(&(DateTime.compare(&1, DateTime.add(now, 3600)) == :gt))
     |> Enum.take(count)
+    |> Enum.map(&%{scheduled_for: &1, window: "first"})
   end
 
   def match(post, delivery, draft) do

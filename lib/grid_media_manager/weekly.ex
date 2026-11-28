@@ -93,9 +93,12 @@ defmodule GridMediaManager.Weekly do
 
   defp step(%Run{status: "analysing"} = r, services) do
     with {:ok, %{queue: q, evidence: evidence}} <- services.snapshot() do
+      windows = Evidence.windows(evidence)
+      run = %{r | windows: windows}
+
       quotas =
         Map.new(q.platforms, fn {p, c} ->
-          {p, min(c.vacancies, 2 * (Date.diff(r.end_date, r.start_date) + 1))}
+          {p, length(Schedule.slots(p, c.vacancies, c.posts, run))}
         end)
 
       count = quotas |> Map.values() |> Enum.max(fn -> 0 end)
@@ -103,7 +106,7 @@ defmodule GridMediaManager.Weekly do
       save(r, %{
         quotas: quotas,
         evidence: json(evidence),
-        windows: Evidence.windows(evidence),
+        windows: windows,
         story_count: count,
         status: if(count == 0, do: "completed", else: "discovering"),
         next_run_at: now(),

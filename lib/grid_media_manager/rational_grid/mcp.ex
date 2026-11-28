@@ -2,7 +2,7 @@ defmodule GridMediaManager.RationalGrid.MCP do
   @moduledoc "Stateless Streamable HTTP MCP transport. Writes require a previously persisted UUID."
   alias GridMediaManager.RationalGrid.{Accounts, HTTP}
 
-  @write_tools ~w(explore_question create_grid add_grid_idea apply_grid_action)
+  @write_tools ~w(explore_question create_grid add_grid_idea apply_grid_action set_grid_visibility)
   @read_tools ~w(get_operation read_grid read_grid_node export_grid list_my_grids search_public_grids)
 
   def call(tool, arguments) when tool in @write_tools do

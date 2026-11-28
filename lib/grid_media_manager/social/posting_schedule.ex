@@ -1,5 +1,5 @@
 defmodule GridMediaManager.Social.PostingSchedule do
-  @moduledoc "Builds daily UK and US Eastern test slots around the live Buffer queue."
+  @moduledoc "Builds one daily slot per channel around the live Buffer queue."
 
   # Local wall times, not proven account optima. All windows are after the DST
   # transition hour and remain on the same UTC date in both seasons.
@@ -19,6 +19,47 @@ defmodule GridMediaManager.Social.PostingSchedule do
   end
 
   def market_slots(platform, count, queued_posts, opts \\ []) when count >= 0 do
+    platform
+    |> free_days(queued_posts, opts)
+    |> Stream.map(&hd/1)
+    |> Enum.take(count)
+  end
+
+  @doc "Uses the requested market's window while assigning at most one job per day."
+  def assign_jobs(platform, jobs, queued_posts, opts \\ []) do
+    jobs = Enum.filter(jobs, &(Map.get(&1, :market) in [nil, :uk, :us]))
+
+    platform
+    |> free_days(queued_posts, opts)
+    |> Enum.reduce_while({[], jobs}, fn
+      _slots, {assigned, []} ->
+        {:halt, {assigned, []}}
+
+      slots, {assigned, remaining} ->
+        case matching_job(slots, remaining) do
+          {index, slot} ->
+            {job, rest} = List.pop_at(remaining, index)
+            {:cont, {[Map.merge(job, slot) | assigned], rest}}
+
+          nil ->
+            {:cont, {assigned, remaining}}
+        end
+    end)
+    |> elem(0)
+    |> Enum.reverse()
+  end
+
+  defp matching_job(slots, jobs) do
+    jobs
+    |> Enum.with_index()
+    |> Enum.find_value(fn {job, index} ->
+      market = Map.get(job, :market)
+      slot = Enum.find(slots, &(is_nil(market) or &1.market == market))
+      if slot, do: {index, slot}
+    end)
+  end
+
+  defp free_days(platform, queued_posts, opts) do
     now = Keyword.get(opts, :now, DateTime.utc_now())
 
     start_date =
@@ -31,48 +72,20 @@ defmodule GridMediaManager.Social.PostingSchedule do
       queued_posts
       |> Enum.flat_map(fn post ->
         case DateTime.from_iso8601(post.due_at || "") do
-          {:ok, due_at, _} -> [due_at]
+          {:ok, due_at, _} -> [DateTime.to_date(due_at)]
           _ -> []
         end
       end)
-      |> Enum.group_by(&DateTime.to_date/1)
+      |> MapSet.new()
 
     Stream.iterate(start_date, &Date.add(&1, 1))
-    |> Stream.flat_map(fn date ->
-      day = day_slots(platform, date)
-
-      case Map.get(occupied, date, []) do
-        [] ->
-          day
-
-        [post] ->
-          nearest = Enum.min_by(day, &abs(DateTime.diff(&1.scheduled_for, post)))
-          Enum.reject(day, &(&1.market == nearest.market))
-
-        _ ->
-          []
-      end
+    |> Stream.reject(&MapSet.member?(occupied, &1))
+    |> Stream.map(fn date ->
+      platform
+      |> day_slots(date)
+      |> Enum.filter(&(DateTime.compare(&1.scheduled_for, DateTime.add(now, 3600)) == :gt))
     end)
-    |> Stream.filter(&(DateTime.compare(&1.scheduled_for, DateTime.add(now, 3600)) == :gt))
-    |> Enum.take(count)
-  end
-
-  @doc "Matches market-specific content to its window; unlabelled jobs can use either."
-  def assign_jobs(platform, jobs, queued_posts, opts \\ []) do
-    # Allow for one-market batches and existing posts occupying that market.
-    market_slots(platform, (length(jobs) + length(queued_posts)) * 2, queued_posts, opts)
-    |> Enum.reduce({[], jobs}, fn slot, {assigned, remaining} ->
-      case Enum.find_index(remaining, &(Map.get(&1, :market) in [nil, slot.market])) do
-        nil ->
-          {assigned, remaining}
-
-        index ->
-          {job, rest} = List.pop_at(remaining, index)
-          {[Map.merge(job, slot) | assigned], rest}
-      end
-    end)
-    |> elem(0)
-    |> Enum.reverse()
+    |> Stream.reject(&(&1 == []))
   end
 
   defp day_slots(platform, date) do
