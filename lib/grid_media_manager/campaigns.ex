@@ -170,7 +170,7 @@ defmodule GridMediaManager.Campaigns do
   end
 
   def store_client_artifact(%MediaAsset{} = asset, slide_index, body) when is_binary(body) do
-    store_client_artifact(asset, slide_index, body, ArtifactStore.renderer_version())
+    store_client_artifact(asset, slide_index, body, ArtifactStore.renderer_version(asset))
   end
 
   def store_client_artifact(%MediaAsset{} = asset, slide_index, body, renderer_version)
@@ -500,10 +500,9 @@ defmodule GridMediaManager.Campaigns do
 
   def generate_story_video(campaign, candidates, style, opts \\ [])
 
-  def generate_story_video(%Campaign{} = campaign, candidates, style, opts)
+  def generate_story_video(%Campaign{} = campaign, candidates, _style, opts)
       when is_list(candidates) and length(candidates) >= 1 do
     campaign = get_campaign!(campaign.id)
-    style = ShareCard.normalize_style(style)
     script = Keyword.get(opts, :video_script)
 
     slides =
@@ -516,10 +515,10 @@ defmodule GridMediaManager.Campaigns do
         SlideSequence.build(campaign, candidates, reading_mode: :short_video)
       end
 
-    token = curated_carousel_token(candidates, slides, style)
+    token = curated_carousel_token(candidates, slides, CarouselVideo.style())
 
     campaign
-    |> CarouselVideo.curated_asset_attr(token, slides, style)
+    |> CarouselVideo.curated_asset_attr(token, slides)
     |> then(&upsert_generated_asset_with_drafts(campaign, &1, opts))
   end
 
@@ -597,7 +596,7 @@ defmodule GridMediaManager.Campaigns do
     slides = Map.get(carousel.metadata || %{}, "slides", [])
 
     campaign
-    |> CarouselVideo.curated_asset_attr(carousel.source_id, slides, carousel.style,
+    |> CarouselVideo.curated_asset_attr(carousel.source_id, slides,
       selected_slide_indexes: Map.get(carousel.metadata || %{}, "selected_slide_indexes")
     )
     |> then(
@@ -885,7 +884,7 @@ defmodule GridMediaManager.Campaigns do
       metadata: invalidate_rendered_media(metadata),
       title_card_mode: title_card_mode(campaign),
       pexels_background: pexels_background(campaign),
-      renderer_version: ArtifactStore.renderer_version()
+      renderer_version: ArtifactStore.renderer_version(attrs)
     }
 
     signature =

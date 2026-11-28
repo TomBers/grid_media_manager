@@ -23,35 +23,53 @@ defmodule GridMediaManager.Promotion.CarouselVideo do
   @render_timeout 300_000
   @render_timeout_per_second 5_000
   @cache_version 30
+  @video_design "editorial"
+  @style "editorial_dark"
 
   def available?, do: is_binary(ffmpeg_path())
 
-  def curated_asset_attr(%Campaign{} = campaign, token, slides, style, opts \\ [])
+  def style, do: @style
+
+  def editorial?(%{mime_type: "video/mp4", metadata: %{"video_design" => @video_design}}),
+    do: true
+
+  def editorial?(_asset), do: false
+
+  def curated_asset_attr(%Campaign{} = campaign, token, slides, opts \\ [])
       when is_list(slides) and is_list(opts) do
+    token = "#{token}-#{@video_design}"
+    slides = Enum.map(slides, &video_slide/1)
     selection = Keyword.get(opts, :selected_slide_indexes)
     indexes = selected_slide_indexes(slides, selection)
 
     metadata =
       slides
       |> video_metadata()
+      |> Map.put("video_design", @video_design)
       |> Map.put("selected_slide_indexes", indexes)
       |> Map.put("duration_seconds", slides |> slide_durations(indexes) |> duration_seconds())
 
     %{
       title: "#{campaign.title} · Story Short",
       kind: "curated_carousel_video",
-      url: identity_url(campaign, "story", token, style),
+      url: identity_url(campaign, "story", token, @style),
       mime_type: "video/mp4",
       text: campaign.title,
       node_id: nil,
       highlight_id: nil,
       recommended_platforms: Platforms.video_ids(),
-      style: style,
+      style: @style,
       source_type: "curated_carousel_video",
       source_id: token,
       metadata: metadata
     }
   end
+
+  defp video_slide(%{"kind" => "cta"} = slide) do
+    Map.merge(slide, %{"title" => "Explore the full discussion", "body" => "rationalgrid.ai"})
+  end
+
+  defp video_slide(slide), do: slide
 
   def duration_seconds(durations) when is_list(durations) and durations != [] do
     durations |> Enum.sum() |> Float.round(2)

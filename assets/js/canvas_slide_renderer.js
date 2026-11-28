@@ -6,6 +6,13 @@ const UI_FONT = `"${CANVAS_FONT_NAME}", system-ui, -apple-system, BlinkMacSystem
 const QUOTE_FONT = UI_FONT
 const VIDEO_NODE_FONT_SIZES = [76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 18]
 const IMAGE_NODE_FONT_SIZES = [68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 18]
+const STORY_BODY_FONT_SIZES = [116, 110, 104, 98, 92, 86, 80, ...VIDEO_NODE_FONT_SIZES]
+const STORY_PALETTE = {
+  background: ["#111d2a", "#050f18"],
+  text: "#f6f3e9",
+  secondary: "#e0e7e6",
+  accent: "#a8eccb",
+}
 
 const PALETTES = {
   minimal_light: {
@@ -286,34 +293,39 @@ function hasReadableEnding(lines) {
   return lines.length <= 1 || lines.at(-1).split(/\s+/).length > 1
 }
 
-function blockStyle(block, fontSize, palette) {
+function blockStyle(block, fontSize, palette, storyContent) {
   if (block.type === "heading") {
-    const size = Math.min(fontSize + 8, 88)
+    const size = Math.min(fontSize + 8, storyContent ? 124 : 88)
     return {size, lineHeight: size * 1.18, gap: 24, weight: 800, color: palette.text, family: UI_FONT}
   }
+  const lineHeight = fontSize * (storyContent ? 1.22 : 1.36)
   if (block.type === "blockquote") {
-    return {size: fontSize, lineHeight: fontSize * 1.36, gap: 22, weight: 650, color: palette.secondary, family: QUOTE_FONT}
+    return {size: fontSize, lineHeight, gap: 22, weight: 650, color: palette.secondary, family: QUOTE_FONT}
   }
   if (block.type === "list_item") {
-    return {size: Math.max(fontSize - 1, 16), lineHeight: fontSize * 1.36, gap: 12, weight: 550, color: palette.secondary, family: UI_FONT}
+    return {size: Math.max(fontSize - 1, 16), lineHeight, gap: 12, weight: 550, color: palette.secondary, family: UI_FONT}
+  }
+  if (storyContent) {
+    return {size: fontSize, lineHeight, gap: 28, weight: 650, color: palette.text, family: UI_FONT}
   }
   return {size: fontSize, lineHeight: fontSize * 1.38, gap: 18, weight: 500, color: palette.secondary, family: UI_FONT}
 }
 
-function layoutBlocks(context, blocks, fontSize, palette, bodyWidth) {
+function layoutBlocks(context, blocks, fontSize, palette, frame) {
   let y = 0
   let fits = true
   const layout = []
 
   blocks.forEach(block => {
-    const style = blockStyle(block, fontSize, palette)
+    const style = blockStyle(block, fontSize, palette, frame.storyContent)
     context.font = `${style.weight} ${style.size}px ${style.family}`
     const markerGap = Math.max(Math.round(style.size * 0.34), 16)
     const indent = block.type === "list_item"
       ? Math.max(Math.ceil(context.measureText(block.marker).width + markerGap), 52)
       : 0
-    const lines = wrapText(context, block.text, bodyWidth - indent)
-    fits = fits && linesFit(context, lines, bodyWidth - indent) && hasReadableEnding(lines)
+    const width = frame.bodyWidth - indent
+    const lines = wrapText(context, block.text, width)
+    fits = fits && linesFit(context, lines, width) && hasReadableEnding(lines)
     layout.push({block, style, indent, lines, y})
     y += lines.length * style.lineHeight + style.gap
   })
@@ -323,12 +335,14 @@ function layoutBlocks(context, blocks, fontSize, palette, bodyWidth) {
 
 function nodeLayout(context, slide, palette, frame) {
   const blocks = normalizedBlocks(slide)
-  const fontSizes = frame.video ? VIDEO_NODE_FONT_SIZES : IMAGE_NODE_FONT_SIZES
-
-  return fontSizes
-    .map(fontSize => layoutBlocks(context, blocks, fontSize, palette, frame.bodyWidth))
-    .find(result => result.fits && result.height <= frame.bodyMaxY - frame.bodyStartY) ||
-    layoutBlocks(context, blocks, fontSizes.at(-1), palette, frame.bodyWidth)
+  const fontSizes = frame.storyContent ? STORY_BODY_FONT_SIZES
+    : frame.video ? VIDEO_NODE_FONT_SIZES : IMAGE_NODE_FONT_SIZES
+  let result
+  for (const size of fontSizes) {
+    result = layoutBlocks(context, blocks, size, palette, frame)
+    if (result.fits && result.height <= frame.bodyMaxY - frame.bodyStartY) break
+  }
+  return result
 }
 
 function drawNode(context, slide, palette, frame) {
@@ -348,17 +362,22 @@ function drawNode(context, slide, palette, frame) {
   layout.forEach(({block, style, indent, lines, y}) => {
     context.font = `${style.weight} ${style.size}px ${style.family}`
     context.fillStyle = style.color
-    context.globalAlpha = block.type === "blockquote" ? 0.96 : 0.94
+    context.globalAlpha = frame.storyContent ? 1 : block.type === "blockquote" ? 0.96 : 0.94
     lines.forEach((line, index) => {
       const quote = block.type === "blockquote" && index === 0 ? "“" : ""
       const closingQuote = block.type === "blockquote" && index === lines.length - 1 ? "”" : ""
-      const baseline = startY + y + index * style.lineHeight
+      const baseline = startY + y + index * style.lineHeight + (frame.storyContent ? style.size : 0)
 
       if (block.type === "list_item" && index === 0) {
         context.fillText(block.marker, frame.bodyX, baseline)
       }
 
-      context.fillText(`${quote}${line}${closingQuote}`, frame.bodyX + indent, baseline)
+      const text = `${quote}${line}${closingQuote}`
+      if (frame.storyContent) {
+        context.fillText(text, frame.bodyX + indent, baseline, frame.bodyWidth - indent)
+      } else {
+        context.fillText(text, frame.bodyX + indent, baseline)
+      }
     })
     context.globalAlpha = 1
     y += lines.length * style.lineHeight + style.gap
@@ -387,10 +406,11 @@ function supportingLayout(context, body, maxWidth, maxHeight, options = {}) {
   const sizes = options.sizes || [30, 28, 26, 24, 22, 20, 18]
   const family = options.family || UI_FONT
   const weight = options.weight || 600
+  const lineRatio = options.lineRatio || 1.42
   const text = cleanInlineMarkdown(body)
 
   for (const size of sizes) {
-    const lineHeight = size * 1.42
+    const lineHeight = size * lineRatio
     context.font = `${weight} ${size}px ${family}`
     const lines = wrapText(context, text, maxWidth)
     if (
@@ -403,7 +423,7 @@ function supportingLayout(context, body, maxWidth, maxHeight, options = {}) {
   }
 
   const size = sizes.at(-1)
-  const lineHeight = size * 1.42
+  const lineHeight = size * lineRatio
   context.font = `${weight} ${size}px ${family}`
   return {size, lineHeight, lines: wrapText(context, text, maxWidth), family, weight}
 }
@@ -514,6 +534,115 @@ function drawImageCover(context, image, width, height) {
   context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight)
 }
 
+function drawStoryGraph(context, x, y, color) {
+  const points = [[0, 200], [164, 48], [388, 124], [232, 332], [418, 414]]
+  const edges = [[0, 1], [0, 3], [1, 2], [1, 3], [2, 3], [2, 4], [3, 4]]
+
+  context.save()
+  context.translate(x, y)
+  context.strokeStyle = color
+  context.fillStyle = color
+  context.lineWidth = 3
+  context.globalAlpha = 0.38
+  context.beginPath()
+  edges.forEach(([from, to]) => {
+    context.moveTo(...points[from])
+    context.lineTo(...points[to])
+  })
+  context.stroke()
+  context.globalAlpha = 1
+  points.forEach(([nodeX, nodeY], index) => {
+    context.beginPath()
+    context.arc(nodeX, nodeY, index === 3 ? 13 : 6, 0, Math.PI * 2)
+    context.fill()
+  })
+  context.restore()
+}
+
+function drawStoryText(context, text, x, top, width, maxHeight, color, options) {
+  const layout = supportingLayout(context, text, width, maxHeight, options)
+  context.fillStyle = color
+  context.font = `${layout.weight} ${layout.size}px ${layout.family}`
+  layout.lines.forEach((line, index) => {
+    context.fillText(line, x, top + layout.size + index * layout.lineHeight, width)
+  })
+  return top + layout.lines.length * layout.lineHeight
+}
+
+function drawStoryVideo(canvas, slide, position, count, coverImage) {
+  canvas.width = WIDTH
+  canvas.height = VIDEO_HEIGHT
+  const context = canvas.getContext("2d")
+  const closing = slide.kind === "cta"
+  const opening = slide.kind === "cover" || slide.kind === "node_title"
+  const palette = STORY_PALETTE
+  const photo = opening && position === 1 && coverImage
+  const text = photo ? "#fffaf2" : palette.text
+  const {accent} = palette
+  const headline = {sizes: [116, 104, 94, 84, 74, 64, 54, 44, 34], weight: 800, lineRatio: 1.04}
+  const supporting = {sizes: [49, 43, 37, 32, 26], weight: 650, lineRatio: 1.18}
+
+  if (photo) {
+    drawImageCover(context, photo, WIDTH, VIDEO_HEIGHT)
+    const scrim = context.createLinearGradient(0, 0, 0, VIDEO_HEIGHT)
+    scrim.addColorStop(0, "rgba(5,15,24,0.72)")
+    scrim.addColorStop(0.2, "rgba(5,15,24,0.36)")
+    scrim.addColorStop(0.45, "rgba(5,15,24,0.76)")
+    scrim.addColorStop(1, "rgba(5,15,24,0.98)")
+    context.fillStyle = scrim
+    context.fillRect(0, 0, WIDTH, VIDEO_HEIGHT)
+  } else {
+    const gradient = context.createLinearGradient(0, 0, WIDTH, VIDEO_HEIGHT)
+    gradient.addColorStop(0, palette.background[0])
+    gradient.addColorStop(1, palette.background[1])
+    context.fillStyle = gradient
+    context.fillRect(0, 0, WIDTH, VIDEO_HEIGHT)
+  }
+
+  const label = 104
+  const storyWidth = 784
+  context.fillStyle = accent
+  context.fillRect(label, 239, 22, 22)
+  context.fillStyle = text
+  context.font = `800 40px ${UI_FONT}`
+  context.fillText("RationalGrid", label + 42, 264)
+
+  if (opening || closing) {
+    if (!photo) drawStoryGraph(context, 521, 346, accent)
+    const titleBottom = drawStoryText(
+      context, slide.title, label, 850, storyWidth, 475, text, headline
+    )
+    if (slide.body) {
+      drawStoryText(
+        context, slide.body, label, titleBottom + 36, storyWidth, 184, closing ? accent : text, supporting
+      )
+    }
+  } else {
+    const frame = {storyContent: true, bodyX: label, bodyWidth: 820, bodyStartY: 370, bodyMaxY: 1430}
+    if (slide.kind === "quote" || slide.kind === "highlight") {
+      drawStoryText(
+        context, slide.label, label, 412, frame.bodyWidth, 80, accent,
+        {sizes: [40, 34, 28], weight: 800}
+      )
+      const quoteFrame = {...frame, bodyStartY: 505}
+      drawNode(context, {body: slide.title}, palette, quoteFrame)
+    } else {
+      drawNode(context, slide, palette, frame)
+    }
+  }
+
+  if (!closing && position > 0) {
+    const gap = 10
+    const segment = (storyWidth - (count - 1) * gap) / count
+    context.fillStyle = accent
+    for (let index = 0; index < count; index += 1) {
+      context.globalAlpha = index < position ? 1 : 0.27
+      context.fillRect(label + index * (segment + gap), 1530, segment, 6)
+    }
+    context.globalAlpha = 1
+  }
+}
+
 function drawSlide(canvas, slide, slideIndex, slideCount, style, ctaImage, coverImage, video) {
   const context = canvas.getContext("2d")
   const palette = paletteFor(style)
@@ -531,7 +660,11 @@ function drawSlide(canvas, slide, slideIndex, slideCount, style, ctaImage, cover
   context.clearRect(0, 0, WIDTH, frame.height)
   context.fontKerning = "normal"
   if (slide.kind === "cta" || slide.label === "Learn more") {
-    drawCta(context, ctaImage, frame)
+    if (ctaImage) drawCta(context, ctaImage, frame)
+    else {
+      drawBackground(context, palette, frame)
+      drawCover(context, slide, palette, frame)
+    }
     return
   }
 
@@ -640,8 +773,10 @@ export const CanvasSlideRenderer = {
         "data-preview-slide",
         "data-style",
         "data-video-frame",
+        "data-editorial-video",
         "data-cover-image-url",
         "data-cta-image-src",
+        "data-renderer-version",
       ],
     })
     this.renderAll()
@@ -656,6 +791,14 @@ export const CanvasSlideRenderer = {
     this.renderAll()
   },
 
+  frameFingerprint() {
+    const data = this.root.dataset
+    return JSON.stringify([
+      data.slides, data.style, data.videoFrame, data.editorialVideo, data.coverImageUrl,
+      data.ctaImageSrc, data.rendererVersion, data.selectedIndexes,
+    ])
+  },
+
   async renderAll() {
     if (this.rendering) {
       this.renderAgain = true
@@ -665,11 +808,14 @@ export const CanvasSlideRenderer = {
     this.rendering = true
     try {
       if (!this.root) return
+      const fingerprint = this.frameFingerprint()
       const slides = JSON.parse(this.root.dataset.slides || "[]")
       const style = this.root.dataset.style || "editorial_dark"
       const video = this.root.dataset.videoFrame === "true"
+      const editorialVideo = this.root.dataset.editorialVideo === "true"
+      const selectedIndexes = JSON.parse(this.root.dataset.selectedIndexes || "[]")
       await loadCanvasFont()
-      const ctaImage = await loadImage(
+      const ctaImage = editorialVideo ? null : await loadImage(
         this.root.dataset.ctaImageSrc || (video
           ? "/images/rationalgrid-cta-story-participate.png"
           : "/images/rationalgrid-cta-carousel.png")
@@ -684,7 +830,12 @@ export const CanvasSlideRenderer = {
         const slide = slides[index - 1]
         const canvas = target
         if (!slide || !canvas) return
-        drawSlide(canvas, slide, index, slides.length, style, ctaImage, coverImage, video)
+        if (editorialVideo) {
+          const position = selectedIndexes.indexOf(index) + 1
+          drawStoryVideo(canvas, slide, position, selectedIndexes.length, coverImage)
+        } else {
+          drawSlide(canvas, slide, index, slides.length, style, ctaImage, coverImage, video)
+        }
       })
 
       const previewIndex = Number(this.root.dataset.previewSlide || 1)
@@ -695,7 +846,6 @@ export const CanvasSlideRenderer = {
       if (previewCanvas && mainPreview) copyCanvas(previewCanvas, mainPreview)
 
       const status = this.root.querySelector("[data-browser-render-status]")
-      const fingerprint = `${this.root.dataset.slides}|${style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.coverImageUrl || ""}|${this.root.dataset.ctaImageSrc || ""}|${this.root.dataset.rendererVersion || ""}|${this.root.dataset.selectedIndexes || ""}`
       if (this.root.dataset.artifactsReady === "true" && !this.uploadedFrameFingerprint) {
         this.uploadedFrameFingerprint = fingerprint
       }
@@ -742,7 +892,7 @@ export const CanvasSlideRenderer = {
     const uploadButton = this.root.querySelector("[data-browser-render-upload]")
     if (!uploadButton) return
     const automatic = options.automatic === true
-    const fingerprint = options.fingerprint || `${this.root.dataset.slides}|${this.root.dataset.style}|${this.root.dataset.videoFrame || ""}|${this.root.dataset.coverImageUrl || ""}|${this.root.dataset.ctaImageSrc || ""}|${this.root.dataset.rendererVersion || ""}|${this.root.dataset.selectedIndexes || ""}`
+    const fingerprint = options.fingerprint || this.frameFingerprint()
     const targets = this.root.querySelectorAll("[data-canvas-slide]")
     const selectedIndexes = JSON.parse(this.root.dataset.selectedIndexes || "[]").map(Number)
     const frameIndexes = Array.from(targets)

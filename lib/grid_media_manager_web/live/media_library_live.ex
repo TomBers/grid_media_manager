@@ -194,6 +194,7 @@ defmodule GridMediaManagerWeb.MediaLibraryLive do
               renderer_version: Map.get(artifact, "renderer_version", "unknown"),
               current?:
                 ArtifactStore.current_renderer_version?(
+                  asset,
                   Map.get(artifact, "renderer_version", "unknown")
                 ),
               summary: slides |> Enum.at(index - 1, %{}) |> slide_summary()

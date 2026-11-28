@@ -66,7 +66,11 @@ defmodule GridMediaManager.AutomationTest do
     first_plan = List.first(completed.plans)
     assert %{assets: assets, errors: []} = Automation.generate_plan_package(first_plan.id)
     assert assets != []
-    assert Enum.all?(assets, &(&1.style == "deep_ocean"))
+
+    assert Enum.all?(assets, fn
+             %{mime_type: "video/mp4", style: style} -> style == "editorial_dark"
+             %{style: style} -> style == "deep_ocean"
+           end)
   end
 
   test "accepts one to ten distinct explicit topics" do

@@ -128,7 +128,7 @@ defmodule GridMediaManager.Studio.Workflow do
   defp generate_combined_carousel(campaign, candidates, style, opts) do
     case Campaigns.generate_curated_carousel_bundle(campaign, candidates, style, opts) do
       {:ok, carousel} ->
-        case Campaigns.generate_curated_carousel_video(campaign, carousel) do
+        case Campaigns.generate_story_video(campaign, candidates, style, opts) do
           {:ok, video} ->
             %{assets: [carousel, video], errors: []}
 

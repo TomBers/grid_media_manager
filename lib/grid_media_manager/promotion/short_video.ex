@@ -13,12 +13,10 @@ defmodule GridMediaManager.Promotion.ShortVideo do
   end
 
   def script_slides(script) when is_list(script) do
-    script
-    |> Enum.with_index(1)
-    |> Enum.map(fn {text, index} ->
+    Enum.map(script, fn text ->
       %{
         "kind" => "node_text",
-        "label" => "#{index} / #{length(script)}",
+        "label" => "",
         "title" => "",
         "body" => text
       }
@@ -44,9 +42,9 @@ defmodule GridMediaManager.Promotion.ShortVideo do
     duration = slides |> CarouselVideo.slide_durations() |> CarouselVideo.duration_seconds()
 
     density ++
-      if(length(slides) in 4..6,
+      if(length(slides) in 3..6,
         do: [],
-        else: ["Use 4–6 frames, including the opening and closing."]
+        else: ["Use 3–6 frames, including the opening and closing."]
       ) ++
       if(duration <= 45,
         do: [],

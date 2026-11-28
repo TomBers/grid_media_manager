@@ -8,20 +8,29 @@ defmodule GridMediaManager.Promotion.ArtifactStore do
   """
 
   alias GridMediaManager.Campaigns.MediaAsset
+  alias GridMediaManager.Promotion.CarouselVideo
 
   @png_signature <<137, 80, 78, 71, 13, 10, 26, 10>>
   @renderer_version 18
+  @editorial_video_renderer_version 20
 
   def renderer_version, do: @renderer_version
 
-  def current_renderer_version?(version), do: to_string(version) == to_string(@renderer_version)
+  def renderer_version(asset) do
+    if CarouselVideo.editorial?(asset),
+      do: @editorial_video_renderer_version,
+      else: @renderer_version
+  end
 
-  def put_png(asset, index, body, renderer_version \\ @renderer_version)
+  def current_renderer_version?(asset, version),
+    do: to_string(version) == to_string(renderer_version(asset))
+
+  def put_png(asset, index, body), do: put_png(asset, index, body, renderer_version(asset))
 
   def put_png(%MediaAsset{} = asset, index, body, renderer_version)
       when is_integer(index) and index > 0 and is_binary(body) do
     with :ok <- validate_png(body),
-         true <- current_renderer_version?(renderer_version),
+         true <- current_renderer_version?(asset, renderer_version),
          directory <- asset_directory(asset),
          :ok <- File.mkdir_p(directory),
          digest <- sha256(body),
@@ -33,7 +42,7 @@ defmodule GridMediaManager.Promotion.ArtifactStore do
          "mime_type" => "image/png",
          "byte_size" => byte_size(body),
          "sha256" => digest,
-         "renderer_version" => @renderer_version
+         "renderer_version" => renderer_version(asset)
        }}
     else
       false -> {:error, :stale_renderer}
@@ -80,11 +89,12 @@ defmodule GridMediaManager.Promotion.ArtifactStore do
     end
   end
 
-  def artifact(%MediaAsset{metadata: metadata}, index) when is_map(metadata) do
+  def artifact(%MediaAsset{metadata: metadata} = asset, index) when is_map(metadata) do
     artifact = metadata |> Map.get("artifacts", %{}) |> Map.get(to_string(index))
+    version = renderer_version(asset)
 
     case artifact do
-      %{"renderer_version" => @renderer_version} -> artifact
+      %{"renderer_version" => ^version} -> artifact
       _stale_or_missing -> nil
     end
   end

@@ -775,6 +775,8 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   end
 
   defp render_studio(assigns) do
+    assigns = assign(assigns, :fixed_video_style?, assigns.content_mode in ["video", "bundle"])
+
     ~H"""
     <Layouts.app flash={@flash}>
       <div
@@ -1268,7 +1270,10 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   </button>
                 </div>
               </div>
-              <div class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 backdrop-blur md:p-7">
+              <div
+                :if={not @fixed_video_style?}
+                class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 backdrop-blur md:p-7"
+              >
                 <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-600 dark:text-orange-300">
                   02 · Visual style
                 </p>
@@ -1279,14 +1284,17 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                   One style keeps the package coherent across every selected moment.
                 </p>
 
-                <div id="guided-style-picker" class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div
+                  id="guided-style-picker"
+                  class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                >
                   <button
                     :for={style <- @card_styles}
                     id={"guided-style-#{style.id}"}
                     type="button"
                     phx-click="select_style"
                     phx-value-style={style.id}
-                    aria-pressed={@selected_style == style.id}
+                    aria-pressed={to_string(@selected_style == style.id)}
                     class={style_card_class(@selected_style == style.id)}
                   >
                     <span class={[
@@ -1316,7 +1324,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 class="rounded-[2rem] border border-base-content/10 bg-base-100/85 p-5 shadow-xl shadow-base-content/5 md:p-7"
               >
                 <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-600 dark:text-orange-300">
-                  03 · Opening frame
+                  {if(@fixed_video_style?, do: "02", else: "03")} · Opening frame
                 </p>
                 <h2 class="mt-2 text-xl font-semibold text-base-content">
                   Choose the opening frame.
@@ -1522,7 +1530,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p class="text-xs font-bold uppercase tracking-[0.15em] text-sky-700 dark:text-sky-200">
-                      04 · Destinations
+                      {if(@fixed_video_style?, do: "03", else: "04")} · Destinations
                     </p>
                     <h2 class="mt-1 text-xl font-semibold text-base-content">
                       Where should this package go?
@@ -1602,8 +1610,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
                 <dl class="mt-5 space-y-3 border-t border-base-content/10 pt-5 text-sm">
                   <div class="flex items-center justify-between gap-4">
                     <dt class="text-base-content/55">Visual style</dt>
-                    <dd class="font-semibold text-base-content">
-                      {style_label(@card_styles, @selected_style)}
+                    <dd id="design-style-summary" class="font-semibold text-base-content">
+                      {if(@fixed_video_style?,
+                        do: "Dark navy",
+                        else: style_label(@card_styles, @selected_style)
+                      )}
                     </dd>
                   </div>
                   <div class="flex items-center justify-between gap-4">
@@ -2096,17 +2107,19 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
         }
         data-style={@asset.style}
         data-video-frame={if(browser_canvas_video?(@asset), do: "true", else: "false")}
+        data-editorial-video={if(CarouselVideo.editorial?(@asset), do: "true")}
         data-cover-image-url={@cover_image_url}
         data-cta-image-src={
-          if(browser_canvas_video?(@asset),
-            do: ~p"/images/rationalgrid-cta-story-participate.png",
-            else: ~p"/images/rationalgrid-cta-carousel.png"
-          )
+          cond do
+            CarouselVideo.editorial?(@asset) -> nil
+            browser_canvas_video?(@asset) -> ~p"/images/rationalgrid-cta-story-participate.png"
+            true -> ~p"/images/rationalgrid-cta-carousel.png"
+          end
         }
         data-upload-url={client_artifact_upload_url(@asset)}
         data-asset-id={@asset.id}
         data-auto-save={if(@auto_save, do: "true", else: "false")}
-        data-renderer-version={ArtifactStore.renderer_version()}
+        data-renderer-version={ArtifactStore.renderer_version(@asset)}
         data-artifacts-ready={if(@artifacts_ready?, do: "true", else: "false")}
         class={[
           "mt-4 space-y-4 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-3",
@@ -2136,10 +2149,11 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               :if={browser_canvas_video?(@asset)}
               class="mt-1 text-xs leading-5 text-base-content/60"
             >
-              These Canvas frames are the finished visual source used to package the video.
+              Preview each frame and edit its text before exporting.
             </p>
             <p
               data-browser-render-status
+              role="status"
               class="mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-200"
             >
               Preparing editable preview…
@@ -2173,7 +2187,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
               data-carousel-preview
               data-preview-target={"guided-output-preview-#{@asset.id}"}
               data-preview-canvas={"canvas-curated-carousel-slide-#{@asset.id}-#{index}"}
-              aria-label={"Preview carousel slide #{index}"}
+              aria-label={
+                if(CarouselVideo.editorial?(@asset),
+                  do: "Frame #{index}: #{carousel_slide_summary(@asset, index)}",
+                  else: "Preview carousel slide #{index}"
+                )
+              }
               class={[
                 carousel_slide_link_class(@asset, index),
                 @preview_slide == index && "ring-2 ring-sky-400/80"
@@ -2346,9 +2365,18 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
           </span>
         </span>
       </button>
-      <div class={["mt-3 flex gap-2", @wide && "lg:col-start-1 lg:row-start-3"]}>
+      <div class={["mt-3 flex flex-wrap gap-2", @wide && "lg:col-start-1 lg:row-start-3"]}>
         <a
-          :if={@artifacts_ready?}
+          :if={@artifacts_ready? && browser_canvas_video?(@asset)}
+          id={"download-video-#{@asset.id}"}
+          href={client_video_url(@asset)}
+          download={"#{@campaign.slug}-#{@asset.id}.mp4"}
+          class="inline-flex items-center gap-1.5 rounded-full bg-base-content px-3 py-1.5 text-xs font-semibold text-base-100 transition hover:-translate-y-0.5"
+        >
+          <.icon name="hero-arrow-down-tray" class="size-3.5" /> Download MP4
+        </a>
+        <a
+          :if={@artifacts_ready? && not browser_canvas_video?(@asset)}
           href={client_asset_url(@asset, @preview_slide)}
           target="_blank"
           rel="noopener noreferrer"
@@ -2566,7 +2594,12 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
   defp start_package_generation(socket, content_mode) do
     socket = persist_studio_state(socket)
     campaign = socket.assigns.campaign
-    style = socket.assigns.selected_style
+
+    style =
+      if content_mode in ["video", "bundle"],
+        do: CarouselVideo.style(),
+        else: socket.assigns.selected_style
+
     all_candidates = socket.assigns.all_candidates
     selected_order = socket.assigns.selected_order
 
@@ -3367,7 +3400,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLive do
 
     cond do
       title != "" -> title
-      body != "" -> String.slice(body, 0, 72)
+      body != "" -> body
       true -> "Slide #{slide_index}"
     end
   end

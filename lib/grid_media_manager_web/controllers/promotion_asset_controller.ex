@@ -38,7 +38,7 @@ defmodule GridMediaManagerWeb.PromotionAssetController do
          {:ok, path} <- CarouselVideo.render_artifacts(asset, indexes) do
       conn
       |> put_resp_content_type("video/mp4")
-      |> put_resp_header("cache-control", "private, max-age=3600")
+      |> put_resp_header("cache-control", "private, no-cache")
       |> put_resp_header(
         "content-disposition",
         ~s(inline; filename="rationalgrid-#{asset.id}.mp4")

@@ -276,6 +276,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
 
     assert has_element?(view, "#stage-design")
     assert has_element?(view, "#guided-share-studio[data-step='design']")
+    view |> element("#content-mode-text") |> render_click()
     assert has_element?(view, "#guided-style-minimal_light", "Minimal light")
     assert has_element?(view, "#guided-style-minimal_dark", "Minimal dark")
     assert has_element?(view, "#content-mode-video")
@@ -316,11 +317,14 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     view |> element("#content-mode-video") |> render_click()
     assert has_element?(view, "#package-brief", "3 story moments")
 
+    assert has_element?(view, "#design-style-summary", "Dark navy")
+    refute has_element?(view, "#guided-style-picker")
+
+    view |> element("#content-mode-text") |> render_click()
+
     view
     |> element("#guided-style-warm_paper")
     |> render_click()
-
-    view |> element("#content-mode-text") |> render_click()
 
     view
     |> element("#create-story-package")
@@ -421,7 +425,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
            )
   end
 
-  test "combines multiple selected moments into one carousel output", %{conn: conn} do
+  test "creates one short video with the fixed style and a concise closing", %{conn: conn} do
     assert {:ok, campaign} = Campaigns.import_payload(simplified_payload(), "guided-combined")
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{campaign.id}/studio")
@@ -431,21 +435,31 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     view |> element("#select-aspect-key-node-1") |> render_click()
     view |> element("#continue-to-design") |> render_click()
     assert has_element?(view, "#content-mode-video")
+    view |> element("#content-mode-text") |> render_click()
+    view |> element("#guided-style-minimal_light") |> render_click()
     view |> element("#content-mode-video") |> render_click()
+    refute has_element?(view, "#guided-style-picker")
+
     view |> element("#create-story-package") |> render_click()
     await_generation(view)
 
     assets = Campaigns.list_media_assets(campaign)
     video = Enum.find(assets, &(&1.kind == "curated_carousel_video"))
     assert video
+    assert video.style == "editorial_dark"
     assert video.metadata["slide_count"] >= 4
     refute Enum.any?(assets, &(&1.kind == "curated_carousel"))
 
-    assert List.last(video.metadata["slides"])["title"] == "Challenge this idea."
+    assert List.last(video.metadata["slides"])["title"] == "Explore the full discussion"
 
     assert has_element?(
              view,
-             "#curated-carousel-slides-#{video.id}[data-cta-image-src='/images/rationalgrid-cta-story-participate.png']"
+             "#curated-carousel-slides-#{video.id}[data-editorial-video='true']:not([data-cta-image-src])"
+           )
+
+    assert has_element?(
+             view,
+             ~s(#curated-carousel-slide-#{video.id}-#{video.metadata["slide_count"]}[aria-label$="Explore the full discussion"])
            )
   end
 
@@ -461,6 +475,7 @@ defmodule GridMediaManagerWeb.GuidedShareStudioLiveTest do
     assert has_element?(view, "#content-mode-bundle", "Video + carousel")
     view |> element("#content-mode-bundle") |> render_click()
 
+    refute has_element?(view, "#guided-style-picker")
     assert has_element?(view, "#design-platform-summary", "Text cards will be posted")
     assert has_element?(view, "#create-story-package", "Create both")
 

@@ -152,7 +152,7 @@ defmodule GridMediaManager.CampaignsTest do
     refute Enum.any?(drafts, &String.contains?(&1.body, "> Good reasoning"))
   end
 
-  test "builds one ordered carousel sequence for image and video outputs" do
+  test "builds an image carousel and a short video from the same selection" do
     campaign = import_campaign("story-sequence")
     candidates = Workflow.candidates(campaign) |> Enum.take(2)
 
@@ -163,15 +163,25 @@ defmodule GridMediaManager.CampaignsTest do
     assert [carousel, video] = Enum.sort_by(result.assets, & &1.mime_type)
     assert carousel.mime_type == "image/png"
     assert video.mime_type == "video/mp4"
-    assert carousel.metadata["slides"] == video.metadata["slides"]
+    assert carousel.style == "deep_ocean"
+    assert video.style == "editorial_dark"
     assert List.first(carousel.metadata["slides"])["kind"] == "cover"
     assert List.last(carousel.metadata["slides"])["kind"] == "cta"
 
     assert List.last(carousel.metadata["slides"])["body"] =~
              "Say what you think at rationalgrid.ai."
 
+    assert List.last(video.metadata["slides"]) == %{
+             "kind" => "cta",
+             "label" => "RationalGrid",
+             "title" => "Explore the full discussion",
+             "body" => "rationalgrid.ai"
+           }
+
+    assert video.metadata["slide_count"] in 3..6
+
     assert video.metadata["selected_slide_indexes"] ==
-             carousel.metadata["selected_slide_indexes"]
+             Enum.to_list(1..video.metadata["slide_count"])
 
     assert video.metadata["frame_durations"] ==
              CarouselVideo.slide_durations(video.metadata["slides"])
@@ -198,6 +208,20 @@ defmodule GridMediaManager.CampaignsTest do
     assert List.first(video.metadata["slides"])["kind"] == "cover"
     assert List.last(video.metadata["slides"])["kind"] == "cta"
     refute Enum.any?(Campaigns.list_media_assets(campaign), &(&1.kind == "curated_carousel"))
+
+    previous_version = ArtifactStore.renderer_version()
+    legacy_video = %{video | metadata: Map.delete(video.metadata, "video_design")}
+    assert {:ok, old_frame} = ArtifactStore.put_png(legacy_video, 1, @png, previous_version)
+
+    stale_video = %{video | metadata: Map.put(video.metadata, "artifacts", %{"1" => old_frame})}
+    refute ArtifactStore.ready?(stale_video, [1])
+    assert ArtifactStore.uploaded_artifact(stale_video, 1) == old_frame
+
+    assert {:error, :stale_renderer} =
+             Campaigns.store_client_artifact(video, 1, @png, previous_version)
+
+    assert {:ok, video} = Campaigns.store_client_artifact(video, 1, @png)
+    assert ArtifactStore.ready?(video, [1])
   end
 
   test "stores selected browser artifacts and rejects unselected frames" do
